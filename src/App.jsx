@@ -7,26 +7,26 @@ import {
 import './App.css';
 import { auth, db, googleProvider } from './firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc } from 'firebase/firestore';
 
-// Initial Mock Data
+// Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
-  { id: 'p1', name: 'Fresh Kirana Atta (5kg)', price: 280, category: 'General Store', store: 'Pooja Kirana Store', image: '🌾' },
-  { id: 'p2', name: 'Organic Mustard Oil (1L)', price: 175, category: 'General Store', store: 'Pooja Kirana Store', image: '🛢️' },
-  { id: 'p3', name: 'Fresh Farm Tomatoes (1kg)', price: 40, category: 'Vegetable', store: 'Green Farms Veggies', image: '🍅' },
-  { id: 'p4', name: 'Alphonso Mangoes (1kg)', price: 250, category: 'Vegetable', store: 'Green Farms Veggies', image: '🥭' },
-  { id: 'p5', name: 'Creamy Paneer (200g)', price: 90, category: 'Dairy', store: 'Krishna Dairy', image: '🥛' },
-  { id: 'p6', name: 'Amul Salted Butter (100g)', price: 56, category: 'Dairy', store: 'Krishna Dairy', image: '🧈' },
-  { id: 'p7', name: 'Chocolate Fudge Cake', price: 650, category: 'Bakery', store: 'Bake House', image: '🎂' },
-  { id: 'p8', name: 'Garlic Bread Sticks', price: 120, category: 'Bakery', store: 'Bake House', image: '🥖' },
-  { id: 'p9', name: 'Crispy Veg Burger', price: 140, category: 'Fast Food', store: 'Burger Club', image: '🍔' },
-  { id: 'p10', name: 'Cheese Pizza (Medium)', price: 320, category: 'Fast Food', store: 'Pizza Corner', image: '🍕' },
-  { id: 'p11', name: 'Butter Chicken with Butter Naan', price: 380, category: 'Restaurant Cafe', store: 'Grand Plaza Restaurant', image: '🍛' },
-  { id: 'p12', name: 'Belgian Chocolate Waffle', price: 190, category: 'Restaurant Cafe', store: 'Sweet Treat Cafe', image: '🧇' },
-  { id: 'p13', name: 'Double Chocolate Ice Cream', price: 150, category: 'Icecream and dessert', store: 'Gelato Heaven', image: '🍨' },
-  { id: 'p14', name: 'Premium Multi-vitamins (60 Caps)', price: 890, category: 'Medical and fitness', store: 'Apollo Wellness', image: '💊' },
-  { id: 'p15', name: 'Fresh Orange Juice (500ml)', price: 110, category: 'Juice and drink', store: 'Juice Junction', image: '🍹' },
-  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: '☕' }
+  { id: 'p1', name: 'Fresh Kirana Atta (5kg)', price: 280, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=300&auto=format&fit=crop&q=60', emoji: '🌾' },
+  { id: 'p2', name: 'Organic Mustard Oil (1L)', price: 175, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=300&auto=format&fit=crop&q=60', emoji: '🛢️' },
+  { id: 'p3', name: 'Fresh Farm Tomatoes (1kg)', price: 40, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=300&auto=format&fit=crop&q=60', emoji: '🍅' },
+  { id: 'p4', name: 'Alphonso Mangoes (1kg)', price: 250, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&auto=format&fit=crop&q=60', emoji: '🥭' },
+  { id: 'p5', name: 'Creamy Paneer (200g)', price: 90, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=300&auto=format&fit=crop&q=60', emoji: '🥛' },
+  { id: 'p6', name: 'Amul Salted Butter (100g)', price: 56, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=300&auto=format&fit=crop&q=60', emoji: '🧈' },
+  { id: 'p7', name: 'Chocolate Fudge Cake', price: 650, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&auto=format&fit=crop&q=60', emoji: '🎂' },
+  { id: 'p8', name: 'Garlic Bread Sticks', price: 120, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1544982503-9f984c14501a?w=300&auto=format&fit=crop&q=60', emoji: '🥖' },
+  { id: 'p9', name: 'Crispy Veg Burger', price: 140, category: 'Fast Food', store: 'Burger Club', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&auto=format&fit=crop&q=60', emoji: '🍔' },
+  { id: 'p10', name: 'Cheese Pizza (Medium)', price: 320, category: 'Fast Food', store: 'Pizza Corner', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&auto=format&fit=crop&q=60', emoji: '🍕' },
+  { id: 'p11', name: 'Butter Chicken with Butter Naan', price: 380, category: 'Restaurant Cafe', store: 'Grand Plaza Restaurant', image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=300&auto=format&fit=crop&q=60', emoji: '🍛' },
+  { id: 'p12', name: 'Belgian Chocolate Waffle', price: 190, category: 'Restaurant Cafe', store: 'Sweet Treat Cafe', image: 'https://images.unsplash.com/photo-1562376502-6f769499887d?w=300&auto=format&fit=crop&q=60', emoji: '🧇' },
+  { id: 'p13', name: 'Double Chocolate Ice Cream', price: 150, category: 'Icecream and dessert', store: 'Gelato Heaven', image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&auto=format&fit=crop&q=60', emoji: '🍨' },
+  { id: 'p14', name: 'Premium Multi-vitamins (60 Caps)', price: 890, category: 'Medical and fitness', store: 'Apollo Wellness', image: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=300&auto=format&fit=crop&q=60', emoji: '💊' },
+  { id: 'p15', name: 'Fresh Orange Juice (500ml)', price: 110, category: 'Juice and drink', store: 'Juice Junction', image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=300&auto=format&fit=crop&q=60', emoji: '🍹' },
+  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&auto=format&fit=crop&q=60', emoji: '☕' }
 ];
 
 const INITIAL_SHOPS = [
@@ -92,7 +92,68 @@ const INITIAL_ORDERS = [
 ];
 
 function App() {
+  // --- STATE DECLARATIONS ---
   const [activeTab, setActiveTab] = useState('customer'); // customer | admin | delivery | merchant
+  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [shops, setShops] = useState(INITIAL_SHOPS);
+  const [deliveryPartners, setDeliveryPartners] = useState(INITIAL_DELIVERY_PARTNERS);
+  const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [commissionPercent, setCommissionPercent] = useState(10);
+  const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
+  const [perKmCharge, setPerKmCharge] = useState(5);
+  const [bankAccount, setBankAccount] = useState('SBI - A/C 98127391238 (IFSC: SBIN0007204)');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState('all'); // all | item | shop | category
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [cart, setCart] = useState([]);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [customerName, setCustomerName] = useState(() => localStorage.getItem('pixigo_customerName') || 'Raj Malhotra');
+  const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
+  const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
+  const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || 'Vaishali Nagar, Jaipur (RJ)');
+  const [selectedPayment, setSelectedPayment] = useState('ONLINE');
+  const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
+  const [uploadStatus, setUploadStatus] = useState({});
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [toast, setToast] = useState({ show: false, message: '' });
+  const [toastTimeoutId, setToastTimeoutId] = useState(null);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // --- HELPER FUNCTIONS ---
+  const showToast = (message) => {
+    if (toastTimeoutId) {
+      clearTimeout(toastTimeoutId);
+    }
+    setToast({ show: true, message });
+    const id = setTimeout(() => {
+      setToast({ show: false, message: '' });
+    }, 2500);
+    setToastTimeoutId(id);
+  };
+
+  const handleSaveProfile = (e) => {
+    e.preventDefault();
+    localStorage.setItem('pixigo_customerName', customerName);
+    localStorage.setItem('pixigo_customerPhone', customerPhone);
+    localStorage.setItem('pixigo_customerEmail', customerEmail);
+    localStorage.setItem('pixigo_customerAddress', customerAddress);
+    showToast('Profile settings saved successfully!');
+    setIsProfileOpen(false);
+  };
+
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    window.history.pushState(null, '', `/${tabName}`);
+  };
+
+  // --- SIDE EFFECTS (useEffect) ---
 
   // Simple Frontend URL Router
   useEffect(() => {
@@ -118,13 +179,16 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
+        const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
         setUser({
           uid: currentUser.uid,
           email: currentUser.email,
-          name: currentUser.displayName || currentUser.email.split('@')[0]
+          name: nameVal
         });
         setCustomerEmail(currentUser.email);
-        setCustomerName(currentUser.displayName || currentUser.email.split('@')[0]);
+        setCustomerName(nameVal);
+        localStorage.setItem('pixigo_customerEmail', currentUser.email);
+        localStorage.setItem('pixigo_customerName', nameVal);
       } else {
         setUser(null);
       }
@@ -132,47 +196,42 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleTabChange = (tabName) => {
-    setActiveTab(tabName);
-    window.history.pushState(null, '', `/${tabName}`);
-  };
-  
-  // Platform States
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
-  const [shops, setShops] = useState(INITIAL_SHOPS);
-  const [deliveryPartners, setDeliveryPartners] = useState(INITIAL_DELIVERY_PARTNERS);
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
-  
-  // Settings & Configuration States
-  const [commissionPercent, setCommissionPercent] = useState(10);
-  const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
-  const [perKmCharge, setPerKmCharge] = useState(5);
-  const [bankAccount, setBankAccount] = useState('SBI - A/C 98127391238 (IFSC: SBIN0007204)');
-  
-  // Customer View States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [cart, setCart] = useState([]);
-  const [couponCode, setCouponCode] = useState('');
-  const [appliedDiscount, setAppliedDiscount] = useState(0);
-  const [customerName, setCustomerName] = useState('Raj Malhotra');
-  const [customerPhone, setCustomerPhone] = useState('9251054064'); // Provided user contact
-  const [customerEmail, setCustomerEmail] = useState('pixigodelivery@gmail.com'); // Provided user email
-  const [customerAddress, setCustomerAddress] = useState('Vaishali Nagar, Jaipur (RJ)');
-  const [selectedPayment, setSelectedPayment] = useState('ONLINE');
-  const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
-  
-  // Document uploads for Delivery/Merchant
-  const [uploadStatus, setUploadStatus] = useState({});
+  // Fetch real-time orders from Firestore
+  useEffect(() => {
+    if (!user) {
+      setOrders(INITIAL_ORDERS);
+      return;
+    }
 
-  // Mobile / UI state enhancements
-  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
-  const [logoError, setLogoError] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [user, setUser] = useState(null); // Simulated authenticated user
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [isSignUp, setIsSignUp] = useState(false);
+    const ordersRef = collection(db, "orders");
+    const q = query(ordersRef, orderBy("createdAt", "desc"));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedOrders = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedOrders.push({
+          firestoreId: doc.id,
+          id: data.id || doc.id,
+          ...data
+        });
+      });
+
+      // Merge fetched orders with default INITIAL_ORDERS to keep mock orders visible
+      const mergedOrders = [...fetchedOrders];
+      INITIAL_ORDERS.forEach(mockOrder => {
+        if (!mergedOrders.some(o => o.id === mockOrder.id)) {
+          mergedOrders.push(mockOrder);
+        }
+      });
+      setOrders(mergedOrders);
+    }, (error) => {
+      console.warn("Firestore order subscription error/warning:", error.message);
+      setOrders(INITIAL_ORDERS);
+    });
+    
+    return () => unsubscribe();
+  }, [user]);
 
   const handleAuthAction = (e) => {
     e.preventDefault();
@@ -253,6 +312,7 @@ function App() {
     } else {
       setCart([...cart, { ...product, quantity: 1 }]);
     }
+    showToast(`${product.name} added to cart!`);
   };
 
   // Update Cart Quantity
@@ -333,15 +393,32 @@ function App() {
   };
 
   // Admin: Accept / Confirm Order
-  const handleAdminAcceptOrder = (orderId) => {
+  const handleAdminAcceptOrder = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Update local state first
     setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, { status: 'ACCEPTED' });
+      } catch (err) {
+        console.error("Error updating order status in Firestore:", err);
+      }
+    }
   };
 
   // Admin: Assign Rider to Order
-  const handleAdminAssignRider = (orderId, riderId) => {
+  const handleAdminAssignRider = async (orderId, riderId) => {
     const rider = deliveryPartners.find(d => d.id === riderId);
     if (!rider) return;
 
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Update local state first
     setOrders(orders.map(o => {
       if (o.id === orderId) {
         return {
@@ -354,8 +431,21 @@ function App() {
       return o;
     }));
 
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, {
+          status: 'ASSIGNED',
+          deliveryPartnerId: riderId,
+          deliveryPartnerName: rider.name
+        });
+      } catch (err) {
+        console.error("Error assigning rider in Firestore:", err);
+      }
+    }
+
     // Alert simulation
-    alert(`Delivery rider ${rider.name} assigned to Order ${orderId}. OTP ${orders.find(o => o.id === orderId).otp} generated.`);
+    alert(`Delivery rider ${rider.name} assigned to Order ${orderId}. OTP ${order.otp} generated.`);
   };
 
   // Admin: Verification Approvals
@@ -369,7 +459,7 @@ function App() {
 
   // Rider: Validate OTP and Deliver
   const [riderInputOTP, setRiderInputOTP] = useState('');
-  const handleRiderCompleteDelivery = (orderId) => {
+  const handleRiderCompleteDelivery = async (orderId) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
@@ -377,7 +467,7 @@ function App() {
       return alert('Invalid OTP Code! Please confirm with the customer.');
     }
 
-    // Update order status
+    // Update local state first
     setOrders(orders.map(o => {
       if (o.id === orderId) {
         return {
@@ -388,6 +478,18 @@ function App() {
       }
       return o;
     }));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, {
+          status: 'COMPLETED',
+          paymentStatus: 'PAID'
+        });
+      } catch (err) {
+        console.error("Error completing order in Firestore:", err);
+      }
+    }
 
     // Update Rider totals
     setDeliveryPartners(deliveryPartners.map(d => {
@@ -448,10 +550,24 @@ function App() {
     setProducts(products.filter(p => p.id !== id));
   };
 
-  // Filter products by search and category
+  // Filter products by search, mode, and category
   const filteredProducts = products.filter(p => {
-    const matchQuery = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                       p.store.toLowerCase().includes(searchQuery.toLowerCase());
+    let matchQuery = true;
+    if (searchQuery.trim() !== '') {
+      const queryLower = searchQuery.toLowerCase();
+      if (searchMode === 'shop') {
+        matchQuery = p.store.toLowerCase().includes(queryLower);
+      } else if (searchMode === 'item') {
+        matchQuery = p.name.toLowerCase().includes(queryLower);
+      } else if (searchMode === 'category') {
+        matchQuery = p.category.toLowerCase().includes(queryLower);
+      } else {
+        // 'all' mode
+        matchQuery = p.name.toLowerCase().includes(queryLower) || 
+                     p.store.toLowerCase().includes(queryLower) || 
+                     p.category.toLowerCase().includes(queryLower);
+      }
+    }
     const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
     return matchQuery && matchCat;
   });
@@ -656,13 +772,19 @@ function App() {
         {/* Header Actions (Auth & Mobile Cart) */}
         <div className="header-actions">
           {activeTab === 'customer' && (
-            <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)}>
+            <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)} title="View Cart">
               <ShoppingCart size={20} />
               {cart.length > 0 && (
                 <span className="cart-badge-count-header">
                   {cart.reduce((sum, item) => sum + item.quantity, 0)}
                 </span>
               )}
+            </button>
+          )}
+
+          {activeTab === 'customer' && (
+            <button className="cart-header-icon-btn" onClick={() => setIsProfileOpen(true)} title="My Profile & Orders">
+              <User size={20} />
             </button>
           )}
 
@@ -673,7 +795,7 @@ function App() {
             </div>
           ) : (
             <button className="neon-btn login-trigger-btn" onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
-              <User size={16} /> Sign In
+              Sign In
             </button>
           )}
         </div>
@@ -685,134 +807,6 @@ function App() {
         {/* ==================== CUSTOMER VIEW ==================== */}
         {activeTab === 'customer' && (
           <div className="customer-portal-layout fade-in">
-            {/* Order Status Tracking Widget (FULL WIDTH AT TOP) */}
-            {orders.length > 0 && (
-              <div className="tracking-card glass-panel mb-6">
-                <div className="panel-header">
-                  <h2 className="section-title"><Compass size={20} /> Live Order Status</h2>
-                  <div className="tracking-tabs">
-                    {orders.slice(0, 3).map((o, idx) => (
-                      <button 
-                        key={o.id} 
-                        className={`track-tab-btn ${currentOrderTracking === o.id || (!currentOrderTracking && idx === 0) ? 'active' : ''}`}
-                        onClick={() => setCurrentOrderTracking(o.id)}
-                      >
-                        {o.id}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {(() => {
-                  const trackedOrder = orders.find(o => o.id === (currentOrderTracking || orders[0].id));
-                  if (!trackedOrder) return null;
-
-                  return (
-                    <div className="tracked-order-detail fade-in">
-                      {/* Live Delivery ETA Header */}
-                      <div className="eta-banner">
-                        <div className="eta-icon-wrap">
-                          <Activity size={24} className="text-neon pulse-glow" />
-                        </div>
-                        <div>
-                          <span className="eta-label">Estimated Delivery Time</span>
-                          <h3 className="eta-countdown">
-                            {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
-                             trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~14 mins' :
-                             trackedOrder.status === 'ACCEPTED' ? 'Preparing order... ~22 mins' :
-                             'Awaiting Confirmation... ~30 mins'}
-                          </h3>
-                        </div>
-                      </div>
-
-                      {/* Interactive Vertical Timeline + Map Grid */}
-                      <div className="tracking-layout-grid">
-                        {/* Left: Vertical Timeline */}
-                        <div className="vertical-timeline">
-                          <div className={`timeline-item ${['PLACED', 'ACCEPTED', 'ASSIGNED', 'COMPLETED'].includes(trackedOrder.status) ? 'active' : ''}`}>
-                            <div className="timeline-marker"></div>
-                            <div className="timeline-content">
-                              <h4>Order Placed</h4>
-                            </div>
-                          </div>
-                          <div className={`timeline-item ${['ACCEPTED', 'ASSIGNED', 'COMPLETED'].includes(trackedOrder.status) ? 'active' : ''}`}>
-                            <div className="timeline-marker"></div>
-                            <div className="timeline-content">
-                              <h4>Shop Confirmed</h4>
-                            </div>
-                          </div>
-                          <div className={`timeline-item ${['ASSIGNED', 'COMPLETED'].includes(trackedOrder.status) ? 'active' : ''}`}>
-                            <div className="timeline-marker"></div>
-                            <div className="timeline-content">
-                              <h4>Courier Assigned</h4>
-                            </div>
-                          </div>
-                          <div className={`timeline-item ${trackedOrder.status === 'COMPLETED' ? 'active' : ''}`}>
-                            <div className="timeline-marker"></div>
-                            <div className="timeline-content">
-                              <h4>Delivered</h4>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Right: Map and Info */}
-                        <div className="tracking-map-meta">
-                          {/* Map Simulation */}
-                          <div className="leaflet-mock-map border-glow">
-                            <div className="map-grid-overlay"></div>
-                            <MapPin size={24} className="map-pin-merchant pulse" />
-                            <div className="map-route-line"></div>
-                            <Bike size={24} className={`map-rider-bike ${trackedOrder.status === 'ASSIGNED' ? 'riding' : ''} rider-pulse`} />
-                            <User size={24} className="map-pin-customer" />
-                            <span className="map-label-merchant">{trackedOrder.items[0]?.store || 'Merchant'}</span>
-                            <span className="map-label-customer">Home (Raj)</span>
-                          </div>
-
-                          <div className="tracked-order-info-pills">
-                            <span className="info-pill-item">
-                              <strong>Status:</strong> 
-                              <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
-                                {trackedOrder.status}
-                              </span>
-                            </span>
-                            <span className="info-pill-item">
-                              <strong>Payment:</strong> 
-                              <span className={`badge badge-info`}>
-                                {trackedOrder.paymentMethod} ({trackedOrder.paymentStatus})
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Delivery Boy details */}
-                      {trackedOrder.deliveryPartnerId ? (
-                        <div className="rider-card-info border-glow">
-                          <div className="rider-avatar">🛵</div>
-                          <div className="rider-desc">
-                            <div className="rider-header-line">
-                              <h4>{trackedOrder.deliveryPartnerName}</h4>
-                              <span className="rider-rating">⭐ 4.8</span>
-                            </div>
-                            <p>Rider Contact: {INITIAL_DELIVERY_PARTNERS.find(d => d.id === trackedOrder.deliveryPartnerId)?.phone || 'N/A'}</p>
-                            <p>Vehicle: {INITIAL_DELIVERY_PARTNERS.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle || 'N/A'}</p>
-                          </div>
-                          <div className="otp-pill pulse-glow-border">
-                            <span>OTP: <strong>{trackedOrder.otp}</strong></span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="rider-info-pending">
-                          <RefreshCw size={16} className="spin" />
-                          <span>Waiting for Admin to assign nearby delivery boy...</span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-
             <div className="customer-grid">
             {/* Storefront Layout */}
             <div className="catalog-section">
@@ -830,22 +824,55 @@ function App() {
               </div>
 
               {/* Search Bar */}
-              <div className="search-wrap">
-                <Search size={18} className="search-icon" />
-                <input 
-                  type="text" 
-                  placeholder="Search products or local shops..." 
-                  className="search-input" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+              <div className="search-container border-glow">
+                <div className="search-mode-select-wrap">
+                  <select 
+                    value={searchMode} 
+                    onChange={(e) => setSearchMode(e.target.value)}
+                    className="search-mode-select"
+                  >
+                    <option value="all">Search All</option>
+                    <option value="item">By Product</option>
+                    <option value="shop">By Shop</option>
+                    <option value="category">By Category</option>
+                  </select>
+                </div>
+                <div className="search-input-divider"></div>
+                <div className="search-input-wrap">
+                  <Search size={18} className="search-icon" />
+                  <input 
+                    type="text" 
+                    placeholder={
+                      searchMode === 'shop' ? 'Enter shop name (e.g., Bake House)...' :
+                      searchMode === 'item' ? 'Enter product name (e.g., Atta, Burger)...' :
+                      searchMode === 'category' ? 'Enter category (e.g., Dairy, Vegetable)...' :
+                      'Search products, shops, or categories...'
+                    }
+                    className="search-input" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                  {searchQuery && (
+                    <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Product Grid */}
               <div className="products-grid">
                 {filteredProducts.map(p => (
                   <div key={p.id} className="product-card glass-panel">
-                    <div className="prod-emoji">{p.image}</div>
+                    <div className="prod-img-wrap">
+                      {p.image && p.image.startsWith('http') ? (
+                        <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
+                          e.target.style.display = 'none';
+                        }} />
+                      ) : (
+                        <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
+                      )}
+                    </div>
                     <div className="prod-meta">
                       <span className="prod-store">{p.store}</span>
                       <h3 className="prod-title">{p.name}</h3>
@@ -863,12 +890,98 @@ function App() {
                   </div>
                 ))}
               </div>
-              {/* Shopping Cart & Checkout Sidebar (Desktop only) */}
-              <div className="checkout-sidebar desktop-only">
-                {renderCartContent(false)}
-              </div>
-            </div>
+            </div> {/* Closes .catalog-section */}
 
+            {/* Shopping Cart, Checkout & Live Status Sidebar (Right Side - Desktop only) */}
+            <div className="checkout-sidebar desktop-only">
+              {/* Live Order Status Sidebar Widget */}
+              {orders.length > 0 && (
+                <div className="tracking-sidebar-card glass-panel mb-6 border-glow">
+                  <div className="panel-header-sidebar">
+                    <h3 className="section-title-sidebar"><Compass size={18} /> Live Tracking</h3>
+                    <div className="tracking-tabs-sidebar">
+                      {orders.slice(0, 3).map((o, idx) => (
+                        <button 
+                          key={o.id} 
+                          className={`track-tab-btn-sidebar ${currentOrderTracking === o.id || (!currentOrderTracking && idx === 0) ? 'active' : ''}`}
+                          onClick={() => setCurrentOrderTracking(o.id)}
+                        >
+                          {o.id.replace('PG-', '')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const trackedOrder = orders.find(o => o.id === (currentOrderTracking || orders[0].id));
+                    if (!trackedOrder) return null;
+
+                    return (
+                      <div className="tracked-order-detail-sidebar fade-in">
+                        {/* Mini ETA banner */}
+                        <div className="eta-banner-sidebar">
+                          <span className="eta-countdown-sidebar">
+                            {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
+                             trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~14 mins' :
+                             trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~22 mins' :
+                             'Awaiting Confirmation'}
+                          </span>
+                        </div>
+
+                        {/* Mini Map */}
+                        <div className="leaflet-mock-map-sidebar border-glow">
+                          <div className="map-grid-overlay"></div>
+                          <MapPin size={16} className="map-pin-merchant pulse" />
+                          <div className="map-route-line-sidebar"></div>
+                          <Bike size={16} className={`map-rider-bike ${trackedOrder.status === 'ASSIGNED' ? 'riding' : ''} rider-pulse`} />
+                          <User size={16} className="map-pin-customer" />
+                        </div>
+
+                        {/* Sidebar Details Grid */}
+                        <div className="sidebar-details-grid">
+                          <div className="sidebar-detail-row">
+                            <span>Order:</span>
+                            <strong>{trackedOrder.id}</strong>
+                          </div>
+                          <div className="sidebar-detail-row">
+                            <span>Status:</span>
+                            <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                              {trackedOrder.status}
+                            </span>
+                          </div>
+                          <div className="sidebar-detail-row">
+                            <span>Payment:</span>
+                            <span className="badge badge-info">{trackedOrder.paymentMethod}</span>
+                          </div>
+                        </div>
+
+                        {/* Rider Information Panel */}
+                        {trackedOrder.deliveryPartnerId ? (
+                          <div className="rider-card-sidebar border-glow">
+                            <div className="rider-avatar-sidebar">🛵</div>
+                            <div className="rider-desc-sidebar">
+                              <h4>{trackedOrder.deliveryPartnerName}</h4>
+                              <p>Vehicle: {INITIAL_DELIVERY_PARTNERS.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}</p>
+                            </div>
+                            <div className="otp-badge-sidebar">
+                              <span>OTP: <strong>{trackedOrder.otp}</strong></span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="rider-pending-sidebar">
+                            <RefreshCw size={14} className="spin" />
+                            <span>Assigning courier...</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Main Cart & Checkout Form */}
+              {renderCartContent(false)}
+            </div>
           </div> {/* Closes .customer-grid */}
         </div> /* Closes .customer-portal-layout */
       )}
@@ -1422,6 +1535,121 @@ function App() {
               </button>
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Profile Modal */}
+      {isProfileOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsProfileOpen(false)}>
+          <div className="profile-modal glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsProfileOpen(false)}>
+              <X size={20} />
+            </button>
+            
+            <div className="profile-modal-grid">
+              {/* Left Column: Edit Profile */}
+              <div className="profile-left-col">
+                <div className="profile-avatar-section">
+                  <div className="profile-avatar-glow">
+                    <User size={40} style={{ color: 'var(--color-primary)' }} />
+                  </div>
+                  <h3>My Account</h3>
+                  <p className="profile-sub">{customerEmail}</p>
+                </div>
+                
+                <form onSubmit={handleSaveProfile} className="profile-form">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input 
+                      type="text" 
+                      value={customerName} 
+                      onChange={(e) => setCustomerName(e.target.value)} 
+                      className="custom-input"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Phone Number</label>
+                    <input 
+                      type="text" 
+                      value={customerPhone} 
+                      onChange={(e) => setCustomerPhone(e.target.value)} 
+                      className="custom-input"
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Delivery Address</label>
+                    <textarea 
+                      value={customerAddress} 
+                      onChange={(e) => setCustomerAddress(e.target.value)} 
+                      className="custom-input address-textarea"
+                      rows="3"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="neon-btn save-profile-btn">
+                    Save Settings
+                  </button>
+                </form>
+              </div>
+              
+              {/* Vertical Divider */}
+              <div className="profile-col-divider"></div>
+              
+              {/* Right Column: Order History */}
+              <div className="profile-right-col">
+                <h3>Order History</h3>
+                <div className="profile-orders-list">
+                  {orders.filter(o => o.customerEmail.toLowerCase() === customerEmail.toLowerCase()).length === 0 ? (
+                    <div className="no-past-orders">
+                      <ShoppingCart size={32} style={{ color: 'var(--color-text-muted)', opacity: 0.5 }} />
+                      <p>You haven't placed any orders yet.</p>
+                    </div>
+                  ) : (
+                    orders.filter(o => o.customerEmail.toLowerCase() === customerEmail.toLowerCase()).map(o => (
+                      <div key={o.id} className="profile-order-card">
+                        <div className="profile-order-header">
+                          <span className="order-id">Order ID: <strong>{o.id}</strong></span>
+                          <span className={`badge ${o.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                            {o.status}
+                          </span>
+                        </div>
+                        <div className="profile-order-body">
+                          <p className="order-items-summary">
+                            {o.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                          </p>
+                          <div className="order-meta-info">
+                            <span>Total: <strong>₹{o.totalAmount}</strong></span>
+                            <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                        {o.status !== 'COMPLETED' && (
+                          <button 
+                            className="track-now-btn" 
+                            onClick={() => {
+                              setCurrentOrderTracking(o.id);
+                              setIsProfileOpen(false);
+                            }}
+                          >
+                            Track Live Order
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="toast-notification fade-in">
+          <Check size={18} style={{ strokeWidth: 3, color: 'var(--color-primary)' }} />
+          <span>{toast.message}</span>
         </div>
       )}
     </div>
