@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, 
   FileText, Check, X, ArrowRight, Download, Search, Tag, 
-  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw
+  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw, Menu
 } from 'lucide-react';
 import './App.css';
 import { auth, db, googleProvider } from './firebase';
@@ -125,6 +125,10 @@ function App() {
   const [toast, setToast] = useState({ show: false, message: '' });
   const [toastTimeoutId, setToastTimeoutId] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(false);
+  const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
+  const [dbError, setDbError] = useState(null);
 
   // --- HELPER FUNCTIONS ---
   const showToast = (message) => {
@@ -217,6 +221,10 @@ function App() {
         });
       });
 
+      console.log("Firestore sync succeeded. Synced orders count:", fetchedOrders.length);
+      console.log("Synced orders details:", fetchedOrders.map(o => ({ id: o.id, email: o.customerEmail || o.email, status: o.status, userId: o.userId })));
+      setDbError(null);
+
       // Merge fetched orders with default INITIAL_ORDERS to keep mock orders visible
       const mergedOrders = [...fetchedOrders];
       INITIAL_ORDERS.forEach(mockOrder => {
@@ -226,7 +234,8 @@ function App() {
       });
       setOrders(mergedOrders);
     }, (error) => {
-      console.warn("Firestore order subscription error/warning:", error.message);
+      console.error("Firestore order subscription error/warning:", error.message);
+      setDbError(error.message);
       setOrders(INITIAL_ORDERS);
     });
     
@@ -386,6 +395,7 @@ function App() {
       setCouponCode('');
       setAppliedDiscount(0);
       setCurrentOrderTracking(newOrder.id);
+      setIsTrackingDrawerOpen(true);
       alert(`Order Placed Successfully! Order ID: ${newOrder.id}. Saved to Firebase Database.`);
     } catch (error) {
       alert(`Failed to save order to Database: ${error.message}`);
@@ -572,6 +582,18 @@ function App() {
     return matchQuery && matchCat;
   });
 
+  // Compute active orders for the current customer (excluding completed and delivered ones)
+  const activeCustomerOrders = orders.filter(o => {
+    const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
+    const targetEmail = customerEmail.trim().toLowerCase();
+    const isEmailMatch = emailVal === targetEmail;
+    const isUidMatch = user && o.userId && o.userId === user.uid;
+    const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
+    const isUserOrder = isEmailMatch || isUidMatch || isPhoneMatch;
+    const isActive = o.status && o.status.toUpperCase() !== 'COMPLETED' && o.status.toUpperCase() !== 'DELIVERED';
+    return isUserOrder && isActive;
+  });
+
   // Reusable cart content rendering (sidebar & mobile drawer)
   const renderCartContent = (isDrawer = false) => {
     return (
@@ -589,12 +611,29 @@ function App() {
           <div className="empty-cart-message">
             <AlertCircle size={36} className="text-muted" />
             <p>Your cart is empty. Add products from the catalog.</p>
+            <button className="neon-btn shop-now-btn" style={{ marginTop: '12px', width: '100%' }} onClick={() => {
+              setIsCartDrawerOpen(false);
+              setIsMobileMenuOpen(false);
+              setSelectedCategory('All');
+              const catalog = document.querySelector('.catalog-section');
+              if (catalog) catalog.scrollIntoView({ behavior: 'smooth' });
+            }}>
+              Shop Storefront Now
+            </button>
           </div>
         ) : (
           <div className="cart-items-list">
             {cart.map(item => (
               <div key={item.id} className="cart-row">
-                <span className="cart-item-emoji">{item.image}</span>
+                <div className="cart-item-img-wrap">
+                  {item.image && item.image.startsWith('http') ? (
+                    <img src={item.image} alt={item.name} className="cart-item-img" onError={(e) => {
+                      e.target.style.display = 'none';
+                    }} />
+                  ) : (
+                    <span className="cart-item-emoji">{item.image || item.emoji || '📦'}</span>
+                  )}
+                </div>
                 <div className="cart-item-detail">
                   <h4>{item.name}</h4>
                   <span className="cart-item-sub">{formatINR(item.price)} each</span>
@@ -733,8 +772,8 @@ function App() {
           </div>
         </div>
 
-        {/* Tab Controls */}
-        <nav className="header-nav">
+        {/* Tab Controls (Desktop only) */}
+        <nav className="header-nav desktop-only-nav">
           <button 
             className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
             onClick={() => handleTabChange('customer')}
@@ -769,7 +808,7 @@ function App() {
           )}
         </nav>
 
-        {/* Header Actions (Auth & Mobile Cart) */}
+        {/* Header Actions (Auth, Cart & Mobile Menu) */}
         <div className="header-actions">
           {activeTab === 'customer' && (
             <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)} title="View Cart">
@@ -789,15 +828,20 @@ function App() {
           )}
 
           {user ? (
-            <div className="user-profile-menu">
+            <div className="user-profile-menu desktop-only-auth">
               <span className="user-welcome">Hi, {user.name}</span>
               <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
             </div>
           ) : (
-            <button className="neon-btn login-trigger-btn" onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
+            <button className="neon-btn login-trigger-btn desktop-only-auth" onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
               Sign In
             </button>
           )}
+
+          {/* Hamburger Menu trigger for Mobile viewports */}
+          <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
+            <Menu size={20} />
+          </button>
         </div>
       </header>
 
@@ -839,7 +883,7 @@ function App() {
                 </div>
                 <div className="search-input-divider"></div>
                 <div className="search-input-wrap">
-                  <Search size={18} className="search-icon" />
+                  <Search size={18} className="search-bar-icon" />
                   <input 
                     type="text" 
                     placeholder={
@@ -894,26 +938,15 @@ function App() {
 
             {/* Shopping Cart, Checkout & Live Status Sidebar (Right Side - Desktop only) */}
             <div className="checkout-sidebar desktop-only">
-              {/* Live Order Status Sidebar Widget */}
-              {orders.length > 0 && (
+              {/* Live Order Status Sidebar Widget - Only active/live orders */}
+              {activeCustomerOrders.length > 0 && (
                 <div className="tracking-sidebar-card glass-panel mb-6 border-glow">
                   <div className="panel-header-sidebar">
                     <h3 className="section-title-sidebar"><Compass size={18} /> Live Tracking</h3>
-                    <div className="tracking-tabs-sidebar">
-                      {orders.slice(0, 3).map((o, idx) => (
-                        <button 
-                          key={o.id} 
-                          className={`track-tab-btn-sidebar ${currentOrderTracking === o.id || (!currentOrderTracking && idx === 0) ? 'active' : ''}`}
-                          onClick={() => setCurrentOrderTracking(o.id)}
-                        >
-                          {o.id.replace('PG-', '')}
-                        </button>
-                      ))}
-                    </div>
                   </div>
 
                   {(() => {
-                    const trackedOrder = orders.find(o => o.id === (currentOrderTracking || orders[0].id));
+                    const trackedOrder = activeCustomerOrders.find(o => o.id === currentOrderTracking) || activeCustomerOrders[0];
                     if (!trackedOrder) return null;
 
                     return (
@@ -1541,106 +1574,315 @@ function App() {
       {/* Profile Modal */}
       {isProfileOpen && (
         <div className="modal-backdrop fade-in" onClick={() => setIsProfileOpen(false)}>
-          <div className="profile-modal glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close-btn" onClick={() => setIsProfileOpen(false)}>
               <X size={20} />
             </button>
             
-            <div className="profile-modal-grid">
-              {/* Left Column: Edit Profile */}
-              <div className="profile-left-col">
-                <div className="profile-avatar-section">
-                  <div className="profile-avatar-glow">
-                    <User size={40} style={{ color: 'var(--color-primary)' }} />
-                  </div>
-                  <h3>My Account</h3>
-                  <p className="profile-sub">{customerEmail}</p>
-                </div>
-                
-                <form onSubmit={handleSaveProfile} className="profile-form">
-                  <div className="form-group">
-                    <label>Full Name</label>
-                    <input 
-                      type="text" 
-                      value={customerName} 
-                      onChange={(e) => setCustomerName(e.target.value)} 
-                      className="custom-input"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Phone Number</label>
-                    <input 
-                      type="text" 
-                      value={customerPhone} 
-                      onChange={(e) => setCustomerPhone(e.target.value)} 
-                      className="custom-input"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Delivery Address</label>
-                    <textarea 
-                      value={customerAddress} 
-                      onChange={(e) => setCustomerAddress(e.target.value)} 
-                      className="custom-input address-textarea"
-                      rows="3"
-                      required
-                    />
-                  </div>
-                  <button type="submit" className="neon-btn save-profile-btn">
-                    Save Settings
-                  </button>
-                </form>
+            <div className="profile-avatar-section">
+              <div className="profile-avatar-glow">
+                <User size={40} style={{ color: 'var(--color-primary)' }} />
               </div>
-              
-              {/* Vertical Divider */}
-              <div className="profile-col-divider"></div>
-              
-              {/* Right Column: Order History */}
-              <div className="profile-right-col">
-                <h3>Order History</h3>
-                <div className="profile-orders-list">
-                  {orders.filter(o => o.customerEmail.toLowerCase() === customerEmail.toLowerCase()).length === 0 ? (
-                    <div className="no-past-orders">
-                      <ShoppingCart size={32} style={{ color: 'var(--color-text-muted)', opacity: 0.5 }} />
-                      <p>You haven't placed any orders yet.</p>
-                    </div>
-                  ) : (
-                    orders.filter(o => o.customerEmail.toLowerCase() === customerEmail.toLowerCase()).map(o => (
-                      <div key={o.id} className="profile-order-card">
-                        <div className="profile-order-header">
-                          <span className="order-id">Order ID: <strong>{o.id}</strong></span>
-                          <span className={`badge ${o.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
-                            {o.status}
-                          </span>
-                        </div>
-                        <div className="profile-order-body">
-                          <p className="order-items-summary">
-                            {o.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
-                          </p>
-                          <div className="order-meta-info">
-                            <span>Total: <strong>₹{o.totalAmount}</strong></span>
-                            <span>{new Date(o.createdAt).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                        {o.status !== 'COMPLETED' && (
-                          <button 
-                            className="track-now-btn" 
-                            onClick={() => {
-                              setCurrentOrderTracking(o.id);
-                              setIsProfileOpen(false);
-                            }}
-                          >
-                            Track Live Order
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )}
+              <h3 className="section-title-premium">Edit Profile Settings</h3>
+              <p className="profile-sub">{customerEmail}</p>
+            </div>
+            
+            <form onSubmit={handleSaveProfile} className="profile-form-premium">
+              <div className="form-group-premium">
+                <label className="form-label-premium">Full Name</label>
+                <input 
+                  type="text" 
+                  value={customerName} 
+                  onChange={(e) => setCustomerName(e.target.value)} 
+                  className="custom-input-premium"
+                  required
+                />
+              </div>
+              <div className="form-group-premium">
+                <label className="form-label-premium">Phone Number</label>
+                <input 
+                  type="text" 
+                  value={customerPhone} 
+                  onChange={(e) => setCustomerPhone(e.target.value)} 
+                  className="custom-input-premium"
+                  required
+                />
+              </div>
+              <div className="form-group-premium">
+                <label className="form-label-premium">Delivery Address Coordinates</label>
+                <textarea 
+                  value={customerAddress} 
+                  onChange={(e) => setCustomerAddress(e.target.value)} 
+                  className="custom-input-premium address-textarea-premium"
+                  rows="3"
+                  required
+                />
+              </div>
+              <button type="submit" className="neon-btn save-profile-btn-premium">
+                Save & Apply Settings
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Past Orders Modal */}
+      {isPastOrdersOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsPastOrdersOpen(false)}>
+          <div className="past-orders-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsPastOrdersOpen(false)}>
+              <X size={20} />
+            </button>
+            
+            <div className="modal-header-premium">
+              <h3 className="section-title-premium" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}><FileText size={22} className="text-neon" /> Past Orders History</h3>
+              <p className="profile-sub">Review your completed deliveries</p>
+            </div>
+
+            <div className="past-orders-list-premium">
+              {orders.filter(o => {
+                const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
+                const targetEmail = customerEmail.trim().toLowerCase();
+                const isEmailMatch = emailVal === targetEmail;
+                const isUidMatch = user && o.userId && o.userId === user.uid;
+                const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
+                const isCompleted = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED');
+                return (isEmailMatch || isUidMatch || isPhoneMatch) && isCompleted;
+              }).length === 0 ? (
+                <div className="no-past-orders-premium">
+                  <ShoppingCart size={40} style={{ color: 'var(--color-text-muted)', opacity: 0.4 }} />
+                  <p>You have no past completed orders.</p>
                 </div>
+              ) : (
+                orders.filter(o => {
+                  const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
+                  const targetEmail = customerEmail.trim().toLowerCase();
+                  const isEmailMatch = emailVal === targetEmail;
+                  const isUidMatch = user && o.userId && o.userId === user.uid;
+                  const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
+                  const isCompleted = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED');
+                  return (isEmailMatch || isUidMatch || isPhoneMatch) && isCompleted;
+                }).map(o => (
+                  <div key={o.id} className="past-order-card-premium border-glow">
+                    <div className="past-order-header-premium">
+                      <span className="order-id-premium">Order ID: <strong>{o.id}</strong></span>
+                      <span className="badge badge-success">Delivered</span>
+                    </div>
+                    <div className="past-order-body-premium">
+                      <p className="order-items-summary-premium">
+                        {o.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                      </p>
+                      <div className="order-meta-info-premium">
+                        <span>Paid: <strong>₹{o.totalAmount}</strong></span>
+                        <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Sidebar Navigation Menu */}
+      {isMobileMenuOpen && (
+        <div className="drawer-backdrop fade-in" onClick={() => setIsMobileMenuOpen(false)}>
+          <div className="mobile-menu-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="mobile-menu-header">
+              <div className="mobile-menu-logo">
+                <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
+              </div>
+              <button className="close-drawer-btn" onClick={() => setIsMobileMenuOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="divider"></div>
+
+            {/* Profile Summary in Menu */}
+            <div className="mobile-menu-profile-summary">
+              <div className="mobile-avatar-circle">
+                <User size={24} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <div className="mobile-profile-info">
+                <h4>{user ? user.name : 'Guest Customer'}</h4>
+                <p>{user ? user.email : 'Log in to place orders'}</p>
               </div>
             </div>
+            
+            <div className="divider"></div>
+ 
+            {/* Primary Customer Actions */}
+            <div className="mobile-menu-links">
+              <h3 className="menu-group-title">Menu Options</h3>
+              
+              <button 
+                className="mobile-menu-link" 
+                onClick={() => { setIsProfileOpen(true); setIsMobileMenuOpen(false); }}
+              >
+                <User size={18} className="text-neon" />
+                <span>My Profile</span>
+              </button>
+
+              <button 
+                className="mobile-menu-link" 
+                onClick={() => {
+                  const customerOrders = orders.filter(o => {
+                    const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
+                    const targetEmail = customerEmail.trim().toLowerCase();
+                    const isEmailMatch = emailVal === targetEmail;
+                    const isUidMatch = user && o.userId && o.userId === user.uid;
+                    const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
+                    return isEmailMatch || isUidMatch || isPhoneMatch;
+                  });
+                  const activeOrdersList = customerOrders.filter(o => !o.status || (o.status.toUpperCase() !== 'COMPLETED' && o.status.toUpperCase() !== 'DELIVERED'));
+                  if (activeOrdersList.length > 0) {
+                    setCurrentOrderTracking(activeOrdersList[0].id);
+                    setIsTrackingDrawerOpen(true);
+                  } else {
+                    showToast("No active orders tracking at the moment!");
+                  }
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Compass size={18} className="text-neon" />
+                <span>My Orders</span>
+              </button>
+
+              <button 
+                className="mobile-menu-link" 
+                onClick={() => { 
+                  setIsPastOrdersOpen(true); 
+                  setIsMobileMenuOpen(false); 
+                }}
+              >
+                <FileText size={18} className="text-neon" />
+                <span>My Past Orders</span>
+              </button>
+
+              <button 
+                className="mobile-menu-link" 
+                onClick={() => { setIsCartDrawerOpen(true); setIsMobileMenuOpen(false); }}
+              >
+                <ShoppingCart size={18} className="text-neon" />
+                <span>My Cart</span>
+                {cart.length > 0 && (
+                  <span className="cart-badge-count-mobile">
+                    {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <div className="divider" style={{ marginTop: 'auto' }}></div>
+
+            {/* Actions (Logout / Log In) */}
+            <div className="mobile-menu-actions">
+              {user ? (
+                <button 
+                  className="mobile-menu-action-btn logout-action-btn" 
+                  onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                >
+                  <ArrowRight size={18} />
+                  <span>Logout</span>
+                </button>
+              ) : (
+                <button 
+                  className="neon-btn mobile-menu-login-btn" 
+                  onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); setIsMobileMenuOpen(false); }}
+                >
+                  Sign In
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Tracking Drawer Overlay */}
+      {isTrackingDrawerOpen && currentOrderTracking && (
+        <div className="drawer-backdrop fade-in" onClick={() => setIsTrackingDrawerOpen(false)}>
+          <div className="cart-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="cart-header-row">
+              <h2 className="section-title"><Compass size={20} /> Order Tracking</h2>
+              <button className="close-drawer-btn" onClick={() => setIsTrackingDrawerOpen(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            {(() => {
+              const trackedOrder = orders.find(o => o.id === currentOrderTracking);
+              if (!trackedOrder) return <p className="text-muted">Order not found.</p>;
+
+              return (
+                <div className="tracked-order-detail-sidebar fade-in" style={{ gap: '16px', display: 'flex', flexDirection: 'column' }}>
+                  {/* ETA banner */}
+                  <div className="eta-banner-sidebar">
+                    <span className="eta-countdown-sidebar">
+                      {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
+                       trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~14 mins' :
+                       trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~22 mins' :
+                       'Awaiting Confirmation'}
+                    </span>
+                  </div>
+
+                  {/* Map */}
+                  <div className="leaflet-mock-map-sidebar border-glow">
+                    <div className="map-grid-overlay"></div>
+                    <MapPin size={16} className="map-pin-merchant pulse" />
+                    <div className="map-route-line-sidebar"></div>
+                    <Bike size={16} className={`map-rider-bike ${trackedOrder.status === 'ASSIGNED' ? 'riding' : ''} rider-pulse`} />
+                    <User size={16} className="map-pin-customer" />
+                  </div>
+
+                  {/* Details Grid */}
+                  <div className="sidebar-details-grid">
+                    <div className="sidebar-detail-row">
+                      <span>Order ID:</span>
+                      <strong>{trackedOrder.id}</strong>
+                    </div>
+                    <div className="sidebar-detail-row">
+                      <span>Status:</span>
+                      <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                        {trackedOrder.status}
+                      </span>
+                    </div>
+                    <div className="sidebar-detail-row">
+                      <span>Payment Method:</span>
+                      <span className="badge badge-info">{trackedOrder.paymentMethod}</span>
+                    </div>
+                    <div className="sidebar-detail-row">
+                      <span>Total Amount:</span>
+                      <strong>{formatINR(trackedOrder.totalAmount)}</strong>
+                    </div>
+                    <div className="sidebar-detail-row">
+                      <span>Delivery Address:</span>
+                      <span className="address-val" style={{ maxWidth: '180px', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{trackedOrder.customerLocation}</span>
+                    </div>
+                  </div>
+
+                  {/* Rider Information Panel */}
+                  {trackedOrder.deliveryPartnerId ? (
+                    <div className="rider-card-sidebar border-glow">
+                      <div className="rider-avatar-sidebar">🛵</div>
+                      <div className="rider-desc-sidebar">
+                        <h4>{trackedOrder.deliveryPartnerName}</h4>
+                        <p>Vehicle: {INITIAL_DELIVERY_PARTNERS.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}</p>
+                      </div>
+                      <div className="otp-badge-sidebar">
+                        <span>OTP: <strong>{trackedOrder.otp}</strong></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rider-pending-sidebar">
+                      <RefreshCw size={14} className="spin" />
+                      <span>Assigning courier...</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}
