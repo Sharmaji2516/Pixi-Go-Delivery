@@ -2896,3 +2896,39 @@
   margin-left: auto; /* Push to the right */
 }
 
+/* ==================== LEFT-SIDE MOBILE HAMBURGER & DRAWER STYLES ==================== */
+.mobile-menu-backdrop {
+  justify-content: flex-start !important;
+}
+
+.mobile-menu-drawer {
+  animation: slideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  box-shadow: 15px 0 30px rgba(0, 0, 0, 0.7) !important;
+  border-right: 1px solid var(--color-border) !important;
+  border-left: none !important;
+}
+
+@keyframes slideRight {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@media (max-width: 1024px) {
+  .app-header {
+    display: grid !important;
+    grid-template-columns: auto 1fr auto !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .header-logo {
+    justify-content: center !important;
+    margin: 0 auto !important;
+  }
+
+  .header-actions {
+    justify-content: flex-end !important;
+    gap: 12px !important;
+  }
+}
+

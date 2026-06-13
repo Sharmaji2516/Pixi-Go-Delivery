@@ -751,6 +751,11 @@ function App() {
     <div className="app-container">
       {/* Header Banner */}
       <header className="app-header glass-panel">
+        {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
+        <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
+          <Menu size={20} />
+        </button>
+
         <div className="header-logo">
           {logoError ? (
             <div className="logo-fallback-icon-wrap">
@@ -838,10 +843,6 @@ function App() {
             </button>
           )}
 
-          {/* Hamburger Menu trigger for Mobile viewports */}
-          <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
-            <Menu size={20} />
-          </button>
         </div>
       </header>
 
@@ -1687,7 +1688,7 @@ function App() {
 
       {/* Mobile Sidebar Navigation Menu */}
       {isMobileMenuOpen && (
-        <div className="drawer-backdrop fade-in" onClick={() => setIsMobileMenuOpen(false)}>
+        <div className="drawer-backdrop mobile-menu-backdrop fade-in" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="mobile-menu-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
             <div className="mobile-menu-header">
               <div className="mobile-menu-logo">
