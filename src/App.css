@@ -7,6 +7,8 @@
   max-width: 1400px;
   margin: 0 auto;
   gap: 20px;
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .app-header {
@@ -124,6 +126,7 @@
   padding-bottom: 8px;
   margin-bottom: 16px;
   -webkit-overflow-scrolling: touch;
+  max-width: 100%;
 }
 
 .cat-tab {
@@ -484,6 +487,12 @@
   gap: 6px;
   margin-bottom: 12px;
   overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+}
+
+.tracking-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .track-tab-btn {
@@ -1229,19 +1238,19 @@
 /* Tablet Viewports (max-width: 1024px) */
 @media (max-width: 1024px) {
   .customer-grid {
-    grid-template-columns: 1fr !important; /* Force single column on smaller screens */
+    grid-template-columns: minmax(0, 1fr) !important; /* Force single column with minmax to prevent horizontal overflow */
   }
   
   .merchant-management-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   
   .admin-onboarding-panel {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
   
   .admin-configs-grid {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: minmax(0, 1fr) !important;
   }
 }
 
@@ -1250,6 +1259,8 @@
   .app-container {
     padding: 12px;
     gap: 12px;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   
   .app-header {
@@ -1355,6 +1366,12 @@
   }
   
   /* Additional Mobile Fixes */
+  .eta-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
   .header-nav svg {
     display: none !important;
   }
