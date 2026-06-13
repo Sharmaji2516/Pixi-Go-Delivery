@@ -8,7 +8,7 @@ import {
 import './App.css';
 import { auth, db, googleProvider } from './firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -144,12 +144,28 @@ function App() {
     setToastTimeoutId(id);
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     localStorage.setItem('pixigo_customerName', customerName);
     localStorage.setItem('pixigo_customerPhone', customerPhone);
     localStorage.setItem('pixigo_customerEmail', customerEmail);
     localStorage.setItem('pixigo_customerAddress', customerAddress);
+
+    // Save profile to Firestore /customers Collection (fallback to guest ID for unauthenticated testers)
+    const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
+    try {
+      const customerDocRef = doc(db, "customers", customerId);
+      await setDoc(customerDocRef, {
+        name: customerName,
+        phone: customerPhone,
+        email: customerEmail,
+        address: customerAddress,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error("Error saving customer profile to Firestore:", err);
+    }
+
     showToast('Profile settings saved successfully!');
     setIsProfileOpen(false);
   };
@@ -183,7 +199,7 @@ function App() {
 
   // Listen to Firebase Auth state changes
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
         setUser({
@@ -191,10 +207,103 @@ function App() {
           email: currentUser.email,
           name: nameVal
         });
-        setCustomerEmail(currentUser.email);
-        setCustomerName(nameVal);
-        localStorage.setItem('pixigo_customerEmail', currentUser.email);
-        localStorage.setItem('pixigo_customerName', nameVal);
+
+        // Retrieve local storage values first
+        let localName = localStorage.getItem('pixigo_customerName') || nameVal;
+        let localPhone = localStorage.getItem('pixigo_customerPhone') || '';
+        let localEmail = localStorage.getItem('pixigo_customerEmail') || currentUser.email;
+        let localAddress = localStorage.getItem('pixigo_customerAddress') || '';
+
+        try {
+          const timestamp = new Date().toISOString();
+          const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+
+          // 1. Sync with Customer collection
+          const customerDocRef = doc(db, "customers", currentUser.uid);
+          const custSnap = await getDoc(customerDocRef);
+          if (custSnap.exists()) {
+            const data = custSnap.data();
+            localName = data.name || localName;
+            localPhone = data.phone || localPhone;
+            localEmail = data.email || localEmail;
+            localAddress = data.address || localAddress;
+
+            localStorage.setItem('pixigo_customerName', localName);
+            localStorage.setItem('pixigo_customerPhone', localPhone);
+            localStorage.setItem('pixigo_customerEmail', localEmail);
+            localStorage.setItem('pixigo_customerAddress', localAddress);
+          } else {
+            // Document doesn't exist yet, auto-create
+            await setDoc(customerDocRef, {
+              name: localName,
+              email: localEmail,
+              phone: localPhone,
+              address: localAddress,
+              createdAt: timestamp
+            });
+          }
+
+          // 2. Sync with Admin collection if on admin page
+          if (currentTab === 'admin') {
+            const adminDocRef = doc(db, "admins", currentUser.uid);
+            const adminSnap = await getDoc(adminDocRef);
+            if (!adminSnap.exists()) {
+              await setDoc(adminDocRef, {
+                id: currentUser.uid,
+                name: localName,
+                email: localEmail,
+                role: 'admin',
+                createdAt: timestamp
+              });
+            }
+          }
+
+          // 3. Sync with Rider collection if on delivery/rider page
+          if (currentTab === 'delivery' || currentTab === 'rider') {
+            const riderDocRef = doc(db, "delivery_boys", currentUser.uid);
+            const riderSnap = await getDoc(riderDocRef);
+            if (!riderSnap.exists()) {
+              await setDoc(riderDocRef, {
+                id: currentUser.uid,
+                name: localName,
+                email: localEmail,
+                phone: localPhone,
+                vehicle: 'Activa (Not verified)',
+                active: true,
+                verified: false,
+                totalDeliveries: 0,
+                pendingPayout: 0,
+                createdAt: timestamp
+              });
+            }
+          }
+
+          // 4. Sync with Merchant collection if on merchant/shop page
+          if (currentTab === 'merchant' || currentTab === 'shop') {
+            const merchantDocRef = doc(db, "merchants", currentUser.uid);
+            const merchantSnap = await getDoc(merchantDocRef);
+            if (!merchantSnap.exists()) {
+              await setDoc(merchantDocRef, {
+                id: currentUser.uid,
+                name: localName,
+                email: localEmail,
+                storeName: `${localName}'s Store`,
+                category: 'General Store',
+                phone: localPhone,
+                verified: false,
+                docs: 'Pending',
+                createdAt: timestamp
+              });
+            }
+          }
+        } catch (e) {
+          console.error("Error auto-syncing Firestore user profiles:", e);
+        }
+
+        setCustomerEmail(localEmail);
+        setCustomerName(localName);
+        setCustomerPhone(localPhone);
+        setCustomerAddress(localAddress);
       } else {
         setUser(null);
       }
@@ -244,6 +353,89 @@ function App() {
     return () => unsubscribe();
   }, [user]);
 
+  // Fetch real-time products from Firestore
+  useEffect(() => {
+    const productsRef = collection(db, "products");
+    const unsubscribe = onSnapshot(productsRef, (snapshot) => {
+      const fetchedProducts = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedProducts.push({
+          firestoreId: doc.id,
+          id: data.id || doc.id,
+          ...data
+        });
+      });
+      // Merge with INITIAL_PRODUCTS to keep mock ones visible
+      const mergedProducts = [...fetchedProducts];
+      INITIAL_PRODUCTS.forEach(mockProd => {
+        if (!mergedProducts.some(p => p.id === mockProd.id)) {
+          mergedProducts.push(mockProd);
+        }
+      });
+      setProducts(mergedProducts);
+    }, (error) => {
+      console.error("Firestore products subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time merchants from Firestore
+  useEffect(() => {
+    const merchantsRef = collection(db, "merchants");
+    const unsubscribe = onSnapshot(merchantsRef, (snapshot) => {
+      const fetchedShops = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedShops.push({
+          firestoreId: doc.id,
+          id: data.id || doc.id,
+          name: data.storeName || data.name || 'Store',
+          ...data
+        });
+      });
+      // Merge with INITIAL_SHOPS to keep mock ones visible
+      const mergedShops = [...fetchedShops];
+      INITIAL_SHOPS.forEach(mockShop => {
+        if (!mergedShops.some(s => s.id === mockShop.id)) {
+          mergedShops.push(mockShop);
+        }
+      });
+      setShops(mergedShops);
+    }, (error) => {
+      console.error("Firestore merchants subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time delivery partners from Firestore
+  useEffect(() => {
+    const ridersRef = collection(db, "delivery_boys");
+    const unsubscribe = onSnapshot(ridersRef, (snapshot) => {
+      const fetchedRiders = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedRiders.push({
+          firestoreId: doc.id,
+          id: data.id || doc.id,
+          name: data.riderName || data.name || 'Rider',
+          ...data
+        });
+      });
+      // Merge with INITIAL_DELIVERY_PARTNERS to keep mock ones visible
+      const mergedRiders = [...fetchedRiders];
+      INITIAL_DELIVERY_PARTNERS.forEach(mockRider => {
+        if (!mergedRiders.some(r => r.id === mockRider.id)) {
+          mergedRiders.push(mockRider);
+        }
+      });
+      setDeliveryPartners(mergedRiders);
+    }, (error) => {
+      console.error("Firestore delivery partners subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleAuthAction = (e) => {
     e.preventDefault();
     if (!authEmail || !authPassword) {
@@ -253,7 +445,71 @@ function App() {
     
     if (isSignUp) {
       createUserWithEmailAndPassword(auth, authEmail, authPassword)
-        .then((userCredential) => {
+        .then(async (userCredential) => {
+          const uid = userCredential.user.uid;
+          const email = authEmail;
+          const name = email.split('@')[0];
+          const timestamp = new Date().toISOString();
+          const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+
+          try {
+            // 1. Initialize customer document in Firestore
+            const customerDocRef = doc(db, "customers", uid);
+            await setDoc(customerDocRef, {
+              name: name,
+              email: email,
+              phone: '',
+              address: '',
+              createdAt: timestamp
+            });
+
+            // 2. Sync with Admin collection if on admin page
+            if (currentTab === 'admin') {
+              const adminDocRef = doc(db, "admins", uid);
+              await setDoc(adminDocRef, {
+                id: uid,
+                name: name,
+                email: email,
+                role: 'admin',
+                createdAt: timestamp
+              });
+            }
+
+            // 3. Sync with Rider collection if on delivery/rider page
+            if (currentTab === 'delivery' || currentTab === 'rider') {
+              const riderDocRef = doc(db, "delivery_boys", uid);
+              await setDoc(riderDocRef, {
+                id: uid,
+                name: name,
+                email: email,
+                phone: '',
+                vehicle: 'Activa (Not verified)',
+                active: true,
+                verified: false,
+                totalDeliveries: 0,
+                pendingPayout: 0,
+                createdAt: timestamp
+              });
+            }
+
+            // 4. Sync with Merchant collection if on merchant/shop page
+            if (currentTab === 'merchant' || currentTab === 'shop') {
+              const merchantDocRef = doc(db, "merchants", uid);
+              await setDoc(merchantDocRef, {
+                id: uid,
+                name: name,
+                email: email,
+                storeName: `${name}'s Store`,
+                category: 'General Store',
+                phone: '',
+                verified: false,
+                docs: 'Pending',
+                createdAt: timestamp
+              });
+            }
+          } catch (e) {
+            console.error("Error creating user documents in Firestore:", e);
+          }
           alert(`Sign Up Successful for ${userCredential.user.email}!`);
           setIsAuthModalOpen(false);
           setAuthEmail('');
@@ -365,6 +621,9 @@ function App() {
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
 
+    const storeName = cart[0]?.store || 'Store';
+    const merchantId = 'merch_' + storeName.replace(/\s+/g, '_').toLowerCase();
+
     const newOrder = {
       id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName,
@@ -384,12 +643,32 @@ function App() {
       deliveryPartnerId: null,
       deliveryPartnerName: '',
       userId: auth.currentUser ? auth.currentUser.uid : 'anonymous',
+      customerId: auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`, // Relational link
+      merchantId: merchantId, // Relational link
+      merchantName: storeName,
       createdAt: new Date().toISOString()
     };
 
     try {
       // Save order to Firestore Database
       await addDoc(collection(db, "orders"), newOrder);
+
+      // Auto-sync merchant profile doc if it does not exist
+      try {
+        const merchantDocRef = doc(db, "merchants", merchantId);
+        const merchSnap = await getDoc(merchantDocRef);
+        if (!merchSnap.exists()) {
+          await setDoc(merchantDocRef, {
+            storeName: storeName,
+            category: cart[0]?.category || 'General',
+            address: 'Store Address, Jaipur',
+            status: 'active',
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch (err) {
+        console.error("Error auto-syncing merchant document:", err);
+      }
       
       // Update local state for immediate UI tracking feedback
       setOrders([newOrder, ...orders]);
@@ -449,11 +728,26 @@ function App() {
         await updateDoc(orderRef, {
           status: 'ASSIGNED',
           deliveryPartnerId: riderId,
-          deliveryPartnerName: rider.name
+          deliveryPartnerName: rider.name,
+          riderId: riderId // Normalized link
         });
       } catch (err) {
         console.error("Error assigning rider in Firestore:", err);
       }
+    }
+
+    // Sync busy status to delivery_boys collection
+    try {
+      const riderDocRef = doc(db, "delivery_boys", riderId);
+      await setDoc(riderDocRef, {
+        riderName: rider.name,
+        riderPhone: rider.phone || '9251054064',
+        vehicleNo: rider.vehicle || 'RJ-14-AB-1234',
+        status: 'busy',
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error("Error updating delivery boy status to busy in Firestore:", err);
     }
 
     // Alert simulation
@@ -461,10 +755,28 @@ function App() {
   };
 
   // Admin: Verification Approvals
-  const handleAdminVerifyUser = (type, id, status) => {
+  const handleAdminVerifyUser = async (type, id, status) => {
     if (type === 'merchant') {
+      const merchant = shops.find(s => s.id === id);
+      if (merchant && merchant.firestoreId) {
+        try {
+          const docRef = doc(db, "merchants", merchant.firestoreId);
+          await updateDoc(docRef, { verified: status, docs: status ? 'Approved' : 'Rejected' });
+        } catch (err) {
+          console.error("Error updating merchant verification in Firestore:", err);
+        }
+      }
       setShops(shops.map(s => s.id === id ? { ...s, verified: status, docs: status ? 'Approved' : 'Rejected' } : s));
     } else {
+      const rider = deliveryPartners.find(d => d.id === id);
+      if (rider && rider.firestoreId) {
+        try {
+          const docRef = doc(db, "delivery_boys", rider.firestoreId);
+          await updateDoc(docRef, { verified: status });
+        } catch (err) {
+          console.error("Error updating rider verification in Firestore:", err);
+        }
+      }
       setDeliveryPartners(deliveryPartners.map(d => d.id === id ? { ...d, verified: status } : d));
     }
   };
@@ -503,6 +815,19 @@ function App() {
       }
     }
 
+    // Sync available status to delivery_boys collection
+    if (order.deliveryPartnerId) {
+      try {
+        const riderDocRef = doc(db, "delivery_boys", order.deliveryPartnerId);
+        await setDoc(riderDocRef, {
+          status: 'available',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.error("Error updating delivery boy status to available in Firestore:", err);
+      }
+    }
+
     // Update Rider totals
     setDeliveryPartners(deliveryPartners.map(d => {
       if (d.id === order.deliveryPartnerId) {
@@ -517,6 +842,21 @@ function App() {
 
     setRiderInputOTP('');
     alert(`Order ${orderId} delivered successfully! Payment captures and commissions computed.`);
+  };
+
+  const handleUploadDocument = async (docType) => {
+    if (!user) return alert('Please sign in first.');
+    try {
+      const riderDocRef = doc(db, "delivery_boys", user.uid);
+      const updateData = {};
+      updateData[`${docType}Uploaded`] = true;
+      updateData['updatedAt'] = new Date().toISOString();
+      await setDoc(riderDocRef, updateData, { merge: true });
+      alert(`${docType.toUpperCase()} document uploaded successfully!`);
+    } catch (err) {
+      console.error(`Error uploading document ${docType}:`, err);
+      alert(`Failed to upload: ${err.message}`);
+    }
   };
 
   // Export database logs as CSV
@@ -542,24 +882,43 @@ function App() {
   const [newProductCategory, setNewProductCategory] = useState('Bakery');
   const [merchantShopSelect, setMerchantShopSelect] = useState('Bake House');
 
-  const handleMerchantAddProduct = () => {
+  const handleMerchantAddProduct = async () => {
     if (!newProductName || !newProductPrice) return alert('Please fill in product name and price!');
     const newProd = {
-      id: `p${products.length + 1}`,
+      id: `p_${Date.now()}`,
       name: newProductName,
       price: parseFloat(newProductPrice),
       category: newProductCategory,
       store: merchantShopSelect,
-      image: '🍔'
+      image: '🍔',
+      createdAt: new Date().toISOString()
     };
-    setProducts([...products, newProd]);
-    setNewProductName('');
-    setNewProductPrice('');
-    alert('Product added to listing catalog!');
+    try {
+      await addDoc(collection(db, "products"), newProd);
+      setNewProductName('');
+      setNewProductPrice('');
+      alert('Product added to listing catalog!');
+    } catch (e) {
+      console.error("Error adding product to Firestore:", e);
+      alert(`Failed to add product: ${e.message}`);
+    }
   };
 
-  const handleMerchantDeleteProduct = (id) => {
-    setProducts(products.filter(p => p.id !== id));
+  const handleMerchantDeleteProduct = async (id) => {
+    const prod = products.find(p => p.id === id);
+    if (!prod) return;
+
+    if (prod.firestoreId) {
+      try {
+        await deleteDoc(doc(db, "products", prod.firestoreId));
+        alert('Product deleted successfully!');
+      } catch (err) {
+        console.error("Error deleting product from Firestore:", err);
+        alert(`Failed to delete product: ${err.message}`);
+      }
+    } else {
+      setProducts(products.filter(p => p.id !== id));
+    }
   };
 
   // Filter products by search, mode, and category
@@ -1337,104 +1696,231 @@ function App() {
         ))}
 
         {/* ==================== DELIVERY RIDER PORTAL ==================== */}
-        {activeTab === 'delivery' && renderPortalGuard('Delivery Rider', (
-          <div className="delivery-portal-wrap fade-in">
-            <div className="delivery-layout glass-panel">
-              <div className="rider-onboarding-section">
-                <h2>Rider Document Verification Hub</h2>
-                <p className="sub-text">Please upload your documents to be approved by PixiGo Admins.</p>
-                <div className="document-upload-grid">
-                  <div className="doc-uploader">
-                    <span>Aadhaar Card Front/Back</span>
-                    <button className="upload-box-btn" onClick={() => alert('Mock Aadhaar uploaded successfully!')}>
-                      Select Document
-                    </button>
-                  </div>
-                  <div className="doc-uploader">
-                    <span>Driving Licence (DL)</span>
-                    <button className="upload-box-btn" onClick={() => alert('Mock DL uploaded successfully!')}>
-                      Select Document
-                    </button>
-                  </div>
-                  <div className="doc-uploader">
-                    <span>Vehicle RC</span>
-                    <button className="upload-box-btn" onClick={() => alert('Mock RC uploaded successfully!')}>
-                      Select Document
-                    </button>
-                  </div>
-                  <div className="doc-uploader">
-                    <span>PAN Card</span>
-                    <button className="upload-box-btn" onClick={() => alert('Mock PAN uploaded successfully!')}>
-                      Select Document
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="divider"></div>
-
-              {/* Rider Active Orders */}
-              <div className="rider-orders-section">
-                <h2>Assigned Delivery Jobs</h2>
-                {orders.filter(o => o.deliveryPartnerId === 'd1' && o.status !== 'COMPLETED').length === 0 ? (
-                  <div className="no-jobs-card">
-                    <Bike size={32} className="text-muted" />
-                    <p>No active delivery runs assigned to you at the moment.</p>
-                  </div>
-                ) : (
-                  orders.filter(o => o.deliveryPartnerId === 'd1' && o.status !== 'COMPLETED').map(o => (
-                    <div key={o.id} className="job-card glass-panel">
-                      <div className="job-header">
-                        <h3>Order {o.id}</h3>
-                        <span className="badge badge-warning">{o.status}</span>
+        {activeTab === 'delivery' && renderPortalGuard('Delivery Rider', (() => {
+          const currentRider = deliveryPartners.find(d => d.id === user?.uid);
+          
+          const isAadhaarUploaded = currentRider?.aadhaarUploaded || false;
+          const isDlUploaded = currentRider?.dlUploaded || false;
+          const isRcUploaded = currentRider?.rcUploaded || false;
+          const isPanUploaded = currentRider?.panUploaded || false;
+          const isAllUploaded = isAadhaarUploaded && isDlUploaded && isRcUploaded && isPanUploaded;
+          
+          const activeJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status !== 'COMPLETED');
+          const completedJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status === 'COMPLETED');
+          
+          return (
+            <div className="delivery-portal-wrap fade-in">
+              <div className="delivery-layout glass-panel">
+                <div className="rider-onboarding-section">
+                  <h2>Rider Document Verification Hub</h2>
+                  <p className="sub-text">Please upload your documents to be approved by PixiGo Admins.</p>
+                  
+                  {isAllUploaded ? (
+                    <div className="rider-verified-banner" style={{
+                      background: currentRider?.verified ? 'rgba(104, 166, 0, 0.12)' : 'rgba(217, 119, 6, 0.12)',
+                      border: currentRider?.verified ? '1px solid rgba(104, 166, 0, 0.3)' : '1px solid rgba(217, 119, 6, 0.3)',
+                      padding: '20px',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '16px',
+                      marginTop: '15px'
+                    }}>
+                      <div style={{
+                        width: '48px',
+                        height: '48px',
+                        borderRadius: '50%',
+                        background: currentRider?.verified ? 'rgba(104, 166, 0, 0.2)' : 'rgba(217, 119, 6, 0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '24px',
+                        color: currentRider?.verified ? 'var(--color-primary)' : 'var(--color-warning)',
+                        fontWeight: 'bold'
+                      }}>
+                        {currentRider?.verified ? '✓' : '⌛'}
                       </div>
-
-                      <div className="job-info-grid">
-                        <div className="job-meta-box">
-                          <h4>🏪 Merchant Pickup</h4>
-                          <p><strong>Shop:</strong> {o.items[0]?.store}</p>
-                          <p><strong>Location:</strong> Vaishali Market Area, Jaipur</p>
-                          <a href={`tel:9251054064`} className="phone-link-btn">
-                            <Phone size={14} /> Call Shop Owner
-                          </a>
-                        </div>
-
-                        <div className="job-meta-box">
-                          <h4>🏠 Customer Delivery</h4>
-                          <p><strong>Name:</strong> {o.customerName}</p>
-                          <p><strong>Address:</strong> {o.customerLocation}</p>
-                          <a href={`tel:${o.customerPhone}`} className="phone-link-btn">
-                            <Phone size={14} /> Call Customer
-                          </a>
-                        </div>
-                      </div>
-
-                      <div className="leaflet-mock-map select-rider-map">
-                        <MapPin size={20} className="map-pin-merchant" />
-                        <div className="map-route-line"></div>
-                        <Bike size={20} className="map-rider-bike riding" />
-                        <User size={20} className="map-pin-customer" />
-                      </div>
-
-                      <div className="job-otp-form">
-                        <input 
-                          type="text" 
-                          placeholder="Enter Customer Delivery OTP" 
-                          value={riderInputOTP}
-                          onChange={(e) => setRiderInputOTP(e.target.value)}
-                          className="custom-input"
-                        />
-                        <button className="neon-btn" onClick={() => handleRiderCompleteDelivery(o.id)}>
-                          Complete Delivery & Collect Cash
-                        </button>
+                      <div style={{ textAlign: 'left' }}>
+                        <h3 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '16px' }}>
+                          {currentRider?.verified ? 'Profile Verification Approved!' : 'Verification In Progress'}
+                        </h3>
+                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                          {currentRider?.verified 
+                            ? 'Your documents have been verified. You are an active PixiGo delivery rider.' 
+                            : 'Our admins are currently reviewing your uploaded documents. This normally takes 1-2 hours.'}
+                        </p>
                       </div>
                     </div>
-                  ))
+                  ) : (
+                    <div className="document-upload-grid">
+                      <div className="doc-uploader">
+                        <span>Aadhaar Card Front/Back</span>
+                        {isAadhaarUploaded ? (
+                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
+                        ) : (
+                          <button className="upload-box-btn" onClick={() => handleUploadDocument('aadhaar')}>
+                            Select Document
+                          </button>
+                        )}
+                      </div>
+                      <div className="doc-uploader">
+                        <span>Driving Licence (DL)</span>
+                        {isDlUploaded ? (
+                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
+                        ) : (
+                          <button className="upload-box-btn" onClick={() => handleUploadDocument('dl')}>
+                            Select Document
+                          </button>
+                        )}
+                      </div>
+                      <div className="doc-uploader">
+                        <span>Vehicle RC</span>
+                        {isRcUploaded ? (
+                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
+                        ) : (
+                          <button className="upload-box-btn" onClick={() => handleUploadDocument('rc')}>
+                            Select Document
+                          </button>
+                        )}
+                      </div>
+                      <div className="doc-uploader">
+                        <span>PAN Card</span>
+                        {isPanUploaded ? (
+                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
+                        ) : (
+                          <button className="upload-box-btn" onClick={() => handleUploadDocument('pan')}>
+                            Select Document
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="divider"></div>
+
+                {/* Rider Stats Bar */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                  gap: '16px',
+                  marginBottom: '24px'
+                }}>
+                  <div className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                      {activeJobs.length}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Active Runs</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--color-info)' }}>
+                      {completedJobs.length}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Completed Jobs</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--color-success)' }}>
+                      {formatINR(completedJobs.reduce((sum, o) => sum + (o.deliveryCharge || 0), 0))}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Earnings (Payouts)</div>
+                  </div>
+                </div>
+
+                {/* Rider Active Orders */}
+                <div className="rider-orders-section">
+                  <h2>Assigned Delivery Jobs ({activeJobs.length})</h2>
+                  {activeJobs.length === 0 ? (
+                    <div className="no-jobs-card">
+                      <Bike size={32} className="text-muted" />
+                      <p>No active delivery runs assigned to you at the moment.</p>
+                    </div>
+                  ) : (
+                    activeJobs.map(o => (
+                      <div key={o.id} className="job-card glass-panel">
+                        <div className="job-header">
+                          <h3>Order {o.id}</h3>
+                          <span className="badge badge-warning">{o.status}</span>
+                        </div>
+
+                        <div className="job-info-grid">
+                          <div className="job-meta-box">
+                            <h4>🏪 Merchant Pickup</h4>
+                            <p><strong>Shop:</strong> {o.items[0]?.store}</p>
+                            <p><strong>Location:</strong> Vaishali Market Area, Jaipur</p>
+                            <a href={`tel:9251054064`} className="phone-link-btn">
+                              <Phone size={14} /> Call Shop Owner
+                            </a>
+                          </div>
+
+                          <div className="job-meta-box">
+                            <h4>🏠 Customer Delivery</h4>
+                            <p><strong>Name:</strong> {o.customerName}</p>
+                            <p><strong>Address:</strong> {o.customerLocation}</p>
+                            <a href={`tel:${o.customerPhone}`} className="phone-link-btn">
+                              <Phone size={14} /> Call Customer
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="leaflet-mock-map select-rider-map">
+                          <MapPin size={20} className="map-pin-merchant" />
+                          <div className="map-route-line"></div>
+                          <Bike size={20} className="map-rider-bike riding" />
+                          <User size={20} className="map-pin-customer" />
+                        </div>
+
+                        <div className="job-otp-form">
+                          <input 
+                            type="text" 
+                            placeholder="Enter Customer Delivery OTP" 
+                            value={riderInputOTP}
+                            onChange={(e) => setRiderInputOTP(e.target.value)}
+                            className="custom-input"
+                          />
+                          <button className="neon-btn" onClick={() => handleRiderCompleteDelivery(o.id)}>
+                            Complete Delivery & Collect Cash
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Rider Completed Orders */}
+                {completedJobs.length > 0 && (
+                  <div className="rider-orders-section" style={{ marginTop: '32px' }}>
+                    <h2>Completed Deliveries ({completedJobs.length})</h2>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {completedJobs.map(o => (
+                        <div key={o.id} className="glass-panel" style={{
+                          padding: '14px 18px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          borderRadius: '12px'
+                        }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <h4 style={{ margin: 0, color: 'var(--color-text-main)' }}>Order {o.id}</h4>
+                            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                              Store: {o.items[0]?.store} | Customer: {o.customerName}
+                            </span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <span className="badge badge-success" style={{ display: 'inline-block', marginBottom: '4px' }}>Delivered ✓</span>
+                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                              +{formatINR(o.deliveryCharge || 0)}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 )}
+
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })())}
 
         {/* ==================== MERCHANT DASHBOARD ==================== */}
         {activeTab === 'merchant' && renderPortalGuard('Merchant Dashboard', (
