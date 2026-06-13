@@ -1185,54 +1185,59 @@ function App() {
       {/* Header Banner */}
       <header className="app-header glass-panel">
         {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
-        <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
-          <Menu size={20} />
-        </button>
+        {activeTab !== 'delivery' && (
+          <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
+            <Menu size={20} />
+          </button>
+        )}
 
         <div className="header-logo">
           <div className="logo-text">
             <div className="logo-brand-name">
               <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
+              {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
             </div>
             <p className="tagline">Quick Home Delivery Service</p>
           </div>
         </div>
 
         {/* Tab Controls (Desktop only) */}
-        <nav className="header-nav desktop-only-nav">
-          <button 
-            className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
-            onClick={() => handleTabChange('customer')}
-          >
-            <ShoppingCart size={18} />
-            Customer View
-          </button>
-          {activeTab !== 'customer' && (
-            <>
-              <button 
-                className={`nav-link ${activeTab === 'admin' ? 'active font-neon' : ''}`}
-                onClick={() => handleTabChange('admin')}
-              >
-                <Shield size={18} />
-                Admin Console
-              </button>
-              <button 
-                className={`nav-link ${activeTab === 'delivery' ? 'active' : ''}`}
-                onClick={() => handleTabChange('delivery')}
-              >
-                <Bike size={18} />
-                Delivery Rider
-              </button>
-              <button 
-                className={`nav-link ${activeTab === 'merchant' ? 'active' : ''}`}
-                onClick={() => handleTabChange('merchant')}
-              >
-                <Store size={18} />
-                Merchant Shop
-              </button>
-            </>
-          )}
-        </nav>
+        {activeTab !== 'delivery' && (
+          <nav className="header-nav desktop-only-nav">
+            <button 
+              className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
+              onClick={() => handleTabChange('customer')}
+            >
+              <ShoppingCart size={18} />
+              Customer View
+            </button>
+            {activeTab !== 'customer' && (
+              <>
+                <button 
+                  className={`nav-link ${activeTab === 'admin' ? 'active font-neon' : ''}`}
+                  onClick={() => handleTabChange('admin')}
+                >
+                  <Shield size={18} />
+                  Admin Console
+                </button>
+                <button 
+                  className={`nav-link ${activeTab === 'delivery' ? 'active' : ''}`}
+                  onClick={() => handleTabChange('delivery')}
+                >
+                  <Bike size={18} />
+                  Delivery Rider
+                </button>
+                <button 
+                  className={`nav-link ${activeTab === 'merchant' ? 'active' : ''}`}
+                  onClick={() => handleTabChange('merchant')}
+                >
+                  <Store size={18} />
+                  Merchant Shop
+                </button>
+              </>
+            )}
+          </nav>
+        )}
 
         {/* Header Actions (Auth, Cart & Mobile Menu) */}
         <div className="header-actions">
@@ -1260,12 +1265,12 @@ function App() {
           )}
 
           {user ? (
-            <div className="user-profile-menu desktop-only-auth">
-              <span className="user-welcome">Hi, {user.name}</span>
+            <div className={`user-profile-menu ${activeTab === 'delivery' ? '' : 'desktop-only-auth'}`}>
+              <span className="user-welcome">Hi, {user.name.split('@')[0]}</span>
               <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
             </div>
           ) : (
-            <button className="neon-btn login-trigger-btn desktop-only-auth" onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
+            <button className={`neon-btn login-trigger-btn ${activeTab === 'delivery' ? '' : 'desktop-only-auth'}`} onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
               Sign In
             </button>
           )}
