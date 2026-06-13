@@ -144,6 +144,54 @@ function App() {
   // Document uploads for Delivery/Merchant
   const [uploadStatus, setUploadStatus] = useState({});
 
+  // Mobile / UI state enhancements
+  const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [user, setUser] = useState(null); // Simulated authenticated user
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+
+  const handleAuthAction = (e) => {
+    e.preventDefault();
+    if (!authEmail || !authPassword) {
+      alert('Please fill in both email and password!');
+      return;
+    }
+    
+    // FIREBASE INTEGRATION POINT:
+    // If you want to connect Firebase Auth, replace this mock with:
+    // import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+    // const auth = getAuth();
+    // if (isSignUp) {
+    //   createUserWithEmailAndPassword(auth, authEmail, authPassword).then(...).catch(...)
+    // } else {
+    //   signInWithEmailAndPassword(auth, authEmail, authPassword).then(...).catch(...)
+    // }
+
+    if (isSignUp) {
+      alert(`Sign Up Successful for ${authEmail}! (Firebase Integration Ready)`);
+    } else {
+      alert(`Login Successful! Welcome back, ${authEmail.split('@')[0]}!`);
+    }
+
+    setUser({
+      email: authEmail,
+      name: authEmail.split('@')[0]
+    });
+    setCustomerEmail(authEmail);
+    setCustomerName(authEmail.split('@')[0]);
+    setIsAuthModalOpen(false);
+    setAuthEmail('');
+    setAuthPassword('');
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    alert('Logged out successfully!');
+  };
+
   // Active Category list
   const categories = [
     'All', 'General Store', 'Vegetable', 'Dairy', 'Bakery', 'Fast Food', 
@@ -374,17 +422,163 @@ function App() {
     return matchQuery && matchCat;
   });
 
+  // Reusable cart content rendering (sidebar & mobile drawer)
+  const renderCartContent = (isDrawer = false) => {
+    return (
+      <div className={`cart-card ${!isDrawer ? 'glass-panel' : ''}`}>
+        <div className="cart-header-row">
+          <h2 className="section-title"><ShoppingCart size={20} /> My Cart</h2>
+          {isDrawer && (
+            <button className="close-drawer-btn" onClick={() => setIsCartDrawerOpen(false)}>
+              <X size={20} />
+            </button>
+          )}
+        </div>
+        
+        {cart.length === 0 ? (
+          <div className="empty-cart-message">
+            <AlertCircle size={36} className="text-muted" />
+            <p>Your cart is empty. Add products from the catalog.</p>
+          </div>
+        ) : (
+          <div className="cart-items-list">
+            {cart.map(item => (
+              <div key={item.id} className="cart-row">
+                <span className="cart-item-emoji">{item.image}</span>
+                <div className="cart-item-detail">
+                  <h4>{item.name}</h4>
+                  <span className="cart-item-sub">{formatINR(item.price)} each</span>
+                </div>
+                <div className="cart-item-qty">
+                  <button onClick={() => handleUpdateQty(item.id, -1)}>-</button>
+                  <span>{item.quantity}</span>
+                  <button onClick={() => handleUpdateQty(item.id, 1)}>+</button>
+                </div>
+                <button className="cart-item-remove" onClick={() => handleRemoveItem(item.id)}>
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+            
+            <div className="divider"></div>
+
+            {/* Coupons and Promos */}
+            <div className="coupon-box">
+              <input 
+                type="text" 
+                placeholder="Coupon (e.g. WELCOME100)" 
+                value={couponCode} 
+                onChange={(e) => setCouponCode(e.target.value)} 
+                className="custom-input coupon-input"
+              />
+              <button className="neon-btn coupon-btn" onClick={handleApplyCoupon}>
+                Apply
+              </button>
+            </div>
+
+            {/* Pricing summary */}
+            <div className="price-summary">
+              <div className="summary-row">
+                <span>Items Subtotal</span>
+                <span>{formatINR(cart.reduce((acc, i) => acc + (i.price * i.quantity), 0))}</span>
+              </div>
+              <div className="summary-row">
+                <span>Delivery Fee</span>
+                <span>{formatINR(baseDeliveryCharge + perKmCharge * 3)}</span>
+              </div>
+              {appliedDiscount > 0 && (
+                <div className="summary-row discount-row">
+                  <span>Coupon Discount</span>
+                  <span>-{formatINR(appliedDiscount)}</span>
+                </div>
+              )}
+              <div className="divider"></div>
+              <div className="summary-row total-row">
+                <span>Grand Total</span>
+                <span>
+                  {formatINR(
+                    cart.reduce((acc, i) => acc + (i.price * i.quantity), 0) + 
+                    (baseDeliveryCharge + perKmCharge * 3) - 
+                    appliedDiscount
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="policy-notice">
+              <AlertCircle size={16} className="text-warning" />
+              <span><strong>Policies:</strong> Non-refundable & Non-returnable order.</span>
+            </div>
+
+            <div className="divider"></div>
+
+            {/* Delivery Form Info */}
+            <div className="delivery-info-form">
+              <h3 className="sub-header-title">Delivery Coordinates</h3>
+              <input 
+                type="text" 
+                placeholder="Name" 
+                value={customerName} 
+                onChange={(e) => setCustomerName(e.target.value)} 
+                className="custom-input"
+              />
+              <input 
+                type="text" 
+                placeholder="Delivery Location Pin / Address" 
+                value={customerAddress} 
+                onChange={(e) => setCustomerAddress(e.target.value)} 
+                className="custom-input"
+              />
+              <div className="payment-select-grid">
+                <button 
+                  className={`pay-btn ${selectedPayment === 'ONLINE' ? 'active' : ''}`}
+                  onClick={() => setSelectedPayment('ONLINE')}
+                >
+                  <DollarSign size={16} /> Online Pay (Razorpay)
+                </button>
+                <button 
+                  className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
+                  onClick={() => setSelectedPayment('COD')}
+                >
+                  <MapPin size={16} /> Cash on Delivery (COD)
+                </button>
+              </div>
+            </div>
+
+            {/* Checkout Button */}
+            <button className="neon-btn checkout-btn" onClick={() => {
+              handlePlaceOrder();
+              if (isDrawer) setIsCartDrawerOpen(false);
+            }}>
+              Confirm & Place Order <ArrowRight size={18} />
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="app-container">
       {/* Header Banner */}
       <header className="app-header glass-panel">
         <div className="header-logo">
-          <img src="/logo.png" alt="PixiGo Logo" className="brand-logo" onError={(e) => {
-            // Fallback if logo not found
-            e.target.style.display = 'none';
-          }} />
+          {logoError ? (
+            <div className="logo-fallback-icon-wrap">
+              <Bike size={28} className="text-neon" />
+            </div>
+          ) : (
+            <img 
+              src="/logo.png" 
+              alt="PixiGo Logo" 
+              className="brand-logo" 
+              onError={() => setLogoError(true)} 
+            />
+          )}
           <div className="logo-text">
-            <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
+            <div className="logo-brand-name">
+              <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
+            </div>
             <p className="tagline">Quick Home Delivery Service</p>
           </div>
         </div>
@@ -424,6 +618,31 @@ function App() {
             </>
           )}
         </nav>
+
+        {/* Header Actions (Auth & Mobile Cart) */}
+        <div className="header-actions">
+          {activeTab === 'customer' && (
+            <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)}>
+              <ShoppingCart size={20} />
+              {cart.length > 0 && (
+                <span className="cart-badge-count-header">
+                  {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                </span>
+              )}
+            </button>
+          )}
+
+          {user ? (
+            <div className="user-profile-menu">
+              <span className="user-welcome">Hi, {user.name}</span>
+              <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
+            </div>
+          ) : (
+            <button className="neon-btn login-trigger-btn" onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
+              <User size={16} /> Sign In
+            </button>
+          )}
+        </div>
       </header>
 
       {/* Main Portals Container */}
@@ -610,132 +829,12 @@ function App() {
                   </div>
                 ))}
               </div>
+              {/* Shopping Cart & Checkout Sidebar (Desktop only) */}
+              <div className="checkout-sidebar desktop-only">
+                {renderCartContent(false)}
+              </div>
             </div>
 
-            {/* Shopping Cart & Checkout Sidebar */}
-            <div className="checkout-sidebar">
-              <div className="cart-card glass-panel">
-                <h2 className="section-title"><ShoppingCart size={20} /> My Cart</h2>
-                
-                {cart.length === 0 ? (
-                  <div className="empty-cart-message">
-                    <AlertCircle size={36} className="text-muted" />
-                    <p>Your cart is empty. Add products from the catalog.</p>
-                  </div>
-                ) : (
-                  <div className="cart-items-list">
-                    {cart.map(item => (
-                      <div key={item.id} className="cart-row">
-                        <span className="cart-item-emoji">{item.image}</span>
-                        <div className="cart-item-detail">
-                          <h4>{item.name}</h4>
-                          <span className="cart-item-sub">{formatINR(item.price)} each</span>
-                        </div>
-                        <div className="cart-item-qty">
-                          <button onClick={() => handleUpdateQty(item.id, -1)}>-</button>
-                          <span>{item.quantity}</span>
-                          <button onClick={() => handleUpdateQty(item.id, 1)}>+</button>
-                        </div>
-                        <button className="cart-item-remove" onClick={() => handleRemoveItem(item.id)}>
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    ))}
-                    
-                    <div className="divider"></div>
-
-                    {/* Coupons and Promos */}
-                    <div className="coupon-box">
-                      <input 
-                        type="text" 
-                        placeholder="Coupon (e.g. WELCOME100)" 
-                        value={couponCode} 
-                        onChange={(e) => setCouponCode(e.target.value)} 
-                        className="custom-input coupon-input"
-                      />
-                      <button className="neon-btn coupon-btn" onClick={handleApplyCoupon}>
-                        Apply
-                      </button>
-                    </div>
-
-                    {/* Pricing summary */}
-                    <div className="price-summary">
-                      <div className="summary-row">
-                        <span>Items Subtotal</span>
-                        <span>{formatINR(cart.reduce((acc, i) => acc + (i.price * i.quantity), 0))}</span>
-                      </div>
-                      <div className="summary-row">
-                        <span>Delivery Fee</span>
-                        <span>{formatINR(baseDeliveryCharge + perKmCharge * 3)}</span>
-                      </div>
-                      {appliedDiscount > 0 && (
-                        <div className="summary-row discount-row">
-                          <span>Coupon Discount</span>
-                          <span>-{formatINR(appliedDiscount)}</span>
-                        </div>
-                      )}
-                      <div className="divider"></div>
-                      <div className="summary-row total-row">
-                        <span>Grand Total</span>
-                        <span>
-                          {formatINR(
-                            cart.reduce((acc, i) => acc + (i.price * i.quantity), 0) + 
-                            (baseDeliveryCharge + perKmCharge * 3) - 
-                            appliedDiscount
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="policy-notice">
-                      <AlertCircle size={16} className="text-warning" />
-                      <span><strong>Policies:</strong> Non-refundable & Non-returnable order.</span>
-                    </div>
-
-                    <div className="divider"></div>
-
-                    {/* Delivery Form Info */}
-                    <div className="delivery-info-form">
-                      <h3 className="sub-header-title">Delivery Coordinates</h3>
-                      <input 
-                        type="text" 
-                        placeholder="Name" 
-                        value={customerName} 
-                        onChange={(e) => setCustomerName(e.target.value)} 
-                        className="custom-input"
-                      />
-                      <input 
-                        type="text" 
-                        placeholder="Delivery Location Pin / Address" 
-                        value={customerAddress} 
-                        onChange={(e) => setCustomerAddress(e.target.value)} 
-                        className="custom-input"
-                      />
-                      <div className="payment-select-grid">
-                        <button 
-                          className={`pay-btn ${selectedPayment === 'ONLINE' ? 'active' : ''}`}
-                          onClick={() => setSelectedPayment('ONLINE')}
-                        >
-                          <DollarSign size={16} /> Online Pay (Razorpay)
-                        </button>
-                        <button 
-                          className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
-                          onClick={() => setSelectedPayment('COD')}
-                        >
-                          <MapPin size={16} /> Cash on Delivery (COD)
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Checkout Button */}
-                    <button className="neon-btn checkout-btn" onClick={handlePlaceOrder}>
-                      Confirm & Place Order <ArrowRight size={18} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-            </div> {/* Closes .checkout-sidebar */}
           </div> {/* Closes .customer-grid */}
         </div> /* Closes .customer-portal-layout */
       )}
@@ -1205,6 +1304,89 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* Mobile Cart Drawer Overlay */}
+      {isCartDrawerOpen && (
+        <div className="drawer-backdrop fade-in" onClick={() => setIsCartDrawerOpen(false)}>
+          <div className="cart-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
+            {renderCartContent(true)}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Mobile Cart Button */}
+      {activeTab === 'customer' && cart.length > 0 && (
+        <button className="floating-cart-btn mobile-only pulse-glow" onClick={() => setIsCartDrawerOpen(true)}>
+          <ShoppingCart size={24} />
+          <span className="cart-badge-count-floating">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
+        </button>
+      )}
+
+      {/* Firebase Authentication Modal */}
+      {isAuthModalOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsAuthModalOpen(false)}>
+          <div className="auth-modal glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsAuthModalOpen(false)}>
+              <X size={20} />
+            </button>
+            <div className="auth-modal-header">
+              <h2>{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
+              <p className="auth-subtitle">Sign {isSignUp ? 'up' : 'in'} to order from local shops instantly</p>
+            </div>
+            
+            <form onSubmit={handleAuthAction} className="auth-form">
+              <div className="form-group">
+                <label>Email Address</label>
+                <input 
+                  type="email" 
+                  placeholder="Enter your email" 
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="custom-input"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Password</label>
+                <input 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="custom-input"
+                  required
+                />
+              </div>
+              
+              <button type="submit" className="neon-btn auth-submit-btn">
+                {isSignUp ? 'Sign Up' : 'Sign In'}
+              </button>
+            </form>
+
+            <div className="divider"></div>
+
+            <button 
+              className="google-auth-btn" 
+              onClick={() => {
+                alert('Google Sign-In Placeholder clicked! (Firebase integration point: signInWithPopup)');
+                setUser({ email: 'googleuser@gmail.com', name: 'Google User' });
+                setCustomerEmail('googleuser@gmail.com');
+                setCustomerName('Google User');
+                setIsAuthModalOpen(false);
+              }}
+            >
+              <span className="google-icon">G</span> Sign in with Google
+            </button>
+
+            <p className="auth-toggle-text">
+              {isSignUp ? 'Already have an account?' : "Don't have an account?"} {' '}
+              <button className="toggle-btn-link" onClick={() => setIsSignUp(!isSignUp)}>
+                {isSignUp ? 'Sign In' : 'Sign Up Now'}
+              </button>
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
