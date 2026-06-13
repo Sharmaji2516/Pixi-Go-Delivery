@@ -831,18 +831,6 @@ function App() {
         </button>
 
         <div className="header-logo">
-          {logoError ? (
-            <div className="logo-fallback-icon-wrap">
-              <Bike size={28} className="text-neon" />
-            </div>
-          ) : (
-            <img 
-              src="/logo.png" 
-              alt="PixiGo Logo" 
-              className="brand-logo" 
-              onError={() => setLogoError(true)} 
-            />
-          )}
           <div className="logo-text">
             <div className="logo-brand-name">
               <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
