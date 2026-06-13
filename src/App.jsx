@@ -1711,93 +1711,16 @@ function App() {
           return (
             <div className="delivery-portal-wrap fade-in">
               <div className="delivery-layout glass-panel">
-                <div className="rider-onboarding-section">
-                  <h2>Rider Document Verification Hub</h2>
-                  <p className="sub-text">Please upload your documents to be approved by PixiGo Admins.</p>
-                  
-                  {isAllUploaded ? (
-                    <div className="rider-verified-banner" style={{
-                      background: currentRider?.verified ? 'rgba(104, 166, 0, 0.12)' : 'rgba(217, 119, 6, 0.12)',
-                      border: currentRider?.verified ? '1px solid rgba(104, 166, 0, 0.3)' : '1px solid rgba(217, 119, 6, 0.3)',
-                      padding: '20px',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '16px',
-                      marginTop: '15px'
-                    }}>
-                      <div style={{
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '50%',
-                        background: currentRider?.verified ? 'rgba(104, 166, 0, 0.2)' : 'rgba(217, 119, 6, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '24px',
-                        color: currentRider?.verified ? 'var(--color-primary)' : 'var(--color-warning)',
-                        fontWeight: 'bold'
-                      }}>
-                        {currentRider?.verified ? '✓' : '⌛'}
-                      </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <h3 style={{ margin: 0, color: 'var(--color-text-main)', fontSize: '16px' }}>
-                          {currentRider?.verified ? 'Profile Verification Approved!' : 'Verification In Progress'}
-                        </h3>
-                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--color-text-muted)' }}>
-                          {currentRider?.verified 
-                            ? 'Your documents have been verified. You are an active PixiGo delivery rider.' 
-                            : 'Our admins are currently reviewing your uploaded documents. This normally takes 1-2 hours.'}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="document-upload-grid">
-                      <div className="doc-uploader">
-                        <span>Aadhaar Card Front/Back</span>
-                        {isAadhaarUploaded ? (
-                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
-                        ) : (
-                          <button className="upload-box-btn" onClick={() => handleUploadDocument('aadhaar')}>
-                            Select Document
-                          </button>
-                        )}
-                      </div>
-                      <div className="doc-uploader">
-                        <span>Driving Licence (DL)</span>
-                        {isDlUploaded ? (
-                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
-                        ) : (
-                          <button className="upload-box-btn" onClick={() => handleUploadDocument('dl')}>
-                            Select Document
-                          </button>
-                        )}
-                      </div>
-                      <div className="doc-uploader">
-                        <span>Vehicle RC</span>
-                        {isRcUploaded ? (
-                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
-                        ) : (
-                          <button className="upload-box-btn" onClick={() => handleUploadDocument('rc')}>
-                            Select Document
-                          </button>
-                        )}
-                      </div>
-                      <div className="doc-uploader">
-                        <span>PAN Card</span>
-                        {isPanUploaded ? (
-                          <span className="badge badge-success" style={{ padding: '8px 12px', borderRadius: '6px' }}>Uploaded ✓</span>
-                        ) : (
-                          <button className="upload-box-btn" onClick={() => handleUploadDocument('pan')}>
-                            Select Document
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                
+                {/* Rider Welcome Info */}
+                <div style={{ textAlign: 'left', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
+                  <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
+                    Welcome, {user?.name || user?.email}
+                  </h2>
+                  <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                    Logged in as: <strong>{user?.email}</strong>
+                  </p>
                 </div>
-
-                <div className="divider"></div>
 
                 {/* Rider Stats Bar */}
                 <div style={{
@@ -1836,40 +1759,35 @@ function App() {
                     </div>
                   ) : (
                     activeJobs.map(o => (
-                      <div key={o.id} className="job-card glass-panel">
+                      <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px' }}>
                         <div className="job-header">
                           <h3>Order {o.id}</h3>
                           <span className="badge badge-warning">{o.status}</span>
                         </div>
 
                         <div className="job-info-grid">
-                          <div className="job-meta-box">
+                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
                             <h4>🏪 Merchant Pickup</h4>
                             <p><strong>Shop:</strong> {o.items[0]?.store}</p>
                             <p><strong>Location:</strong> Vaishali Market Area, Jaipur</p>
-                            <a href={`tel:9251054064`} className="phone-link-btn">
-                              <Phone size={14} /> Call Shop Owner
+                            <a href={`tel:9251054064`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
+                              <Phone size={14} style={{ marginRight: '6px' }} /> Call Shop Owner
                             </a>
                           </div>
 
-                          <div className="job-meta-box">
+                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
                             <h4>🏠 Customer Delivery</h4>
                             <p><strong>Name:</strong> {o.customerName}</p>
                             <p><strong>Address:</strong> {o.customerLocation}</p>
-                            <a href={`tel:${o.customerPhone}`} className="phone-link-btn">
-                              <Phone size={14} /> Call Customer
+                            <p><strong>Phone:</strong> {o.customerPhone || '9251054064'}</p>
+                            <p><strong>Collect Payment:</strong> <span style={{ color: 'var(--color-success)', fontWeight: 'bold' }}>{formatINR(o.totalAmount)}</span> ({o.paymentMethod})</p>
+                            <a href={`tel:${o.customerPhone || '9251054064'}`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
+                              <Phone size={14} style={{ marginRight: '6px' }} /> Call Customer
                             </a>
                           </div>
                         </div>
 
-                        <div className="leaflet-mock-map select-rider-map">
-                          <MapPin size={20} className="map-pin-merchant" />
-                          <div className="map-route-line"></div>
-                          <Bike size={20} className="map-rider-bike riding" />
-                          <User size={20} className="map-pin-customer" />
-                        </div>
-
-                        <div className="job-otp-form">
+                        <div className="job-otp-form" style={{ marginTop: '20px' }}>
                           <input 
                             type="text" 
                             placeholder="Enter Customer Delivery OTP" 
