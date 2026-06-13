@@ -131,6 +131,9 @@ function App() {
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
+  const [adminSubView, setAdminSubView] = useState('orders'); // orders | shops | riders
+  const [isMerchantApprovalsOpen, setIsMerchantApprovalsOpen] = useState(false);
+  const [isRiderApprovalsOpen, setIsRiderApprovalsOpen] = useState(false);
 
   // --- HELPER FUNCTIONS ---
   const showToast = (message) => {
@@ -1185,7 +1188,7 @@ function App() {
       {/* Header Banner */}
       <header className="app-header glass-panel">
         {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
-        {activeTab !== 'delivery' && (
+        {activeTab !== 'delivery' && activeTab !== 'admin' && (
           <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
             <Menu size={20} />
           </button>
@@ -1196,13 +1199,14 @@ function App() {
             <div className="logo-brand-name">
               <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
               {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
+              {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Admin Console</span>}
             </div>
             <p className="tagline">Quick Home Delivery Service</p>
           </div>
         </div>
 
         {/* Tab Controls (Desktop only) */}
-        {activeTab !== 'delivery' && (
+        {activeTab !== 'delivery' && activeTab !== 'admin' && (
           <nav className="header-nav desktop-only-nav">
             <button 
               className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
@@ -1265,12 +1269,12 @@ function App() {
           )}
 
           {user ? (
-            <div className={`user-profile-menu ${activeTab === 'delivery' ? '' : 'desktop-only-auth'}`}>
+            <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
               <span className="user-welcome">Hi, {user.name.split('@')[0]}</span>
               <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
             </div>
           ) : (
-            <button className={`neon-btn login-trigger-btn ${activeTab === 'delivery' ? '' : 'desktop-only-auth'}`} onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
+            <button className={`neon-btn login-trigger-btn ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`} onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
               Sign In
             </button>
           )}
@@ -1456,31 +1460,48 @@ function App() {
         {activeTab === 'admin' && renderPortalGuard('Admin Console', (
           <div className="admin-grid fade-in">
             {/* Metric widgets */}
-            <div className="metrics-container">
-              <div className="metric-card glass-panel">
+            <div className="metrics-container" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+              <div 
+                className="metric-card glass-panel"
+                style={{ 
+                  cursor: 'pointer', 
+                  transition: 'all 0.2s ease',
+                  border: adminSubView === 'orders' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  boxShadow: adminSubView === 'orders' ? '0 0 15px var(--color-primary-glow-strong)' : 'none'
+                }}
+                onClick={() => setAdminSubView('orders')}
+              >
                 <ShoppingCart size={24} className="metric-icon" />
                 <div className="metric-val">{stats.totalOrders}</div>
                 <div className="metric-label">Total Orders</div>
               </div>
-              <div className="metric-card glass-panel">
+              <div 
+                className="metric-card glass-panel"
+                style={{ 
+                  cursor: 'pointer', 
+                  transition: 'all 0.2s ease',
+                  border: adminSubView === 'shops' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  boxShadow: adminSubView === 'shops' ? '0 0 15px var(--color-primary-glow-strong)' : 'none'
+                }}
+                onClick={() => setAdminSubView('shops')}
+              >
                 <Store size={24} className="metric-icon text-primary" />
                 <div className="metric-val">{stats.activeMerchants}</div>
                 <div className="metric-label">Active Shops</div>
               </div>
-              <div className="metric-card glass-panel">
+              <div 
+                className="metric-card glass-panel"
+                style={{ 
+                  cursor: 'pointer', 
+                  transition: 'all 0.2s ease',
+                  border: adminSubView === 'riders' ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+                  boxShadow: adminSubView === 'riders' ? '0 0 15px var(--color-primary-glow-strong)' : 'none'
+                }}
+                onClick={() => setAdminSubView('riders')}
+              >
                 <Bike size={24} className="metric-icon text-info" />
                 <div className="metric-val">{stats.activeRiders}</div>
                 <div className="metric-label">Active Riders</div>
-              </div>
-              <div className="metric-card glass-panel">
-                <Activity size={24} className="metric-icon text-success" />
-                <div className="metric-val">{formatINR(stats.totalSales)}</div>
-                <div className="metric-label">Total Sales</div>
-              </div>
-              <div className="metric-card glass-panel">
-                <Tag size={24} className="metric-icon text-warning" />
-                <div className="metric-val">{formatINR(stats.totalDiscounts)}</div>
-                <div className="metric-label">Total Discounts</div>
               </div>
               <div className="metric-card glass-panel highlight-profit">
                 <DollarSign size={24} className="metric-icon text-neon" />
@@ -1489,155 +1510,263 @@ function App() {
               </div>
             </div>
 
-            {/* Orders Queue Table */}
-            <div className="admin-orders-table glass-panel">
-              <div className="panel-header">
-                <h2>Active Order Operations</h2>
-                <button className="neon-btn csv-btn" onClick={handleExportCSV}>
-                  <Download size={16} /> Export to Excel
-                </button>
-              </div>
+            {/* Dynamic Dashboard Subview Content */}
+            {adminSubView === 'orders' && (
+              <div className="admin-orders-table glass-panel fade-in">
+                <div className="panel-header">
+                  <h2>Active Order Operations</h2>
+                  <button className="neon-btn csv-btn" onClick={handleExportCSV}>
+                    <Download size={16} /> Export to Excel
+                  </button>
+                </div>
 
-              <div className="table-responsive">
-                <table className="order-log-table">
-                  <thead>
-                    <tr>
-                      <th>Order ID</th>
-                      <th>Customer Info</th>
-                      <th>Shop Info</th>
-                      <th>Total Amt</th>
-                      <th>Payment</th>
-                      <th>Assigned Rider</th>
-                      <th>OTP</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.map(o => (
-                      <tr key={o.id}>
-                        <td><strong>{o.id}</strong></td>
-                        <td>
-                          <div>{o.customerName}</div>
-                          <div className="sub-text">{o.customerPhone}</div>
-                        </td>
-                        <td>
-                          <div>{o.items[0]?.store}</div>
-                          <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
-                        </td>
-                        <td>{formatINR(o.totalAmount)}</td>
-                        <td>
-                          <span className={`badge ${o.paymentStatus === 'PAID' ? 'badge-success' : 'badge-warning'}`}>
-                            {o.paymentMethod} ({o.paymentStatus})
-                          </span>
-                        </td>
-                        <td>
-                          {o.deliveryPartnerName ? (
-                            <div className="badge badge-primary">{o.deliveryPartnerName}</div>
-                          ) : (
-                            <select 
-                              className="rider-select"
-                              onChange={(e) => handleAdminAssignRider(o.id, e.target.value)}
-                              defaultValue=""
-                            >
-                              <option value="" disabled>Assign Rider...</option>
-                              {deliveryPartners.filter(d => d.verified && d.active).map(d => (
-                                <option key={d.id} value={d.id}>{d.name}</option>
-                              ))}
-                            </select>
-                          )}
-                        </td>
-                        <td><strong>{o.otp}</strong></td>
-                        <td className="action-td">
-                          {o.status === 'PLACED' && (
-                            <button className="neon-btn small-btn" onClick={() => handleAdminAcceptOrder(o.id)}>
-                              Confirm Order
-                            </button>
-                          )}
-                          <a 
-                            href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="whatsapp-link-btn"
-                            title="WhatsApp Customer"
-                          >
-                            <MessageCircle size={18} />
-                          </a>
-                        </td>
+                <div className="table-responsive">
+                  <table className="order-log-table">
+                    <thead>
+                      <tr>
+                        <th>Order ID</th>
+                        <th>Customer Info</th>
+                        <th>Shop Info</th>
+                        <th>Total Amt</th>
+                        <th>Payment</th>
+                        <th>Assigned Rider</th>
+                        <th>OTP</th>
+                        <th>Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {orders.map(o => (
+                        <tr key={o.id}>
+                          <td><strong>{o.id}</strong></td>
+                          <td>
+                            <div>{o.customerName}</div>
+                            <div className="sub-text">{o.customerPhone}</div>
+                          </td>
+                          <td>
+                            <div>{o.items[0]?.store}</div>
+                            <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
+                          </td>
+                          <td>{formatINR(o.totalAmount)}</td>
+                          <td>
+                            <span className={`badge ${o.paymentStatus === 'PAID' ? 'badge-success' : 'badge-warning'}`}>
+                              {o.paymentMethod} ({o.paymentStatus})
+                            </span>
+                          </td>
+                          <td>
+                            {o.deliveryPartnerName ? (
+                              <div className="badge badge-primary">{o.deliveryPartnerName}</div>
+                            ) : (
+                              <select 
+                                className="rider-select"
+                                onChange={(e) => handleAdminAssignRider(o.id, e.target.value)}
+                                defaultValue=""
+                              >
+                                <option value="" disabled>Assign Rider...</option>
+                                {deliveryPartners.filter(d => d.verified && d.active).map(d => (
+                                  <option key={d.id} value={d.id}>{d.name}</option>
+                                ))}
+                              </select>
+                            )}
+                          </td>
+                          <td><strong>{o.otp}</strong></td>
+                          <td className="action-td">
+                            {o.status === 'PLACED' && (
+                              <button className="neon-btn small-btn" onClick={() => handleAdminAcceptOrder(o.id)}>
+                                Confirm Order
+                              </button>
+                            )}
+                            <a 
+                              href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="whatsapp-link-btn"
+                              title="WhatsApp Customer"
+                            >
+                              <MessageCircle size={18} />
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            )}
+
+            {adminSubView === 'shops' && (
+              <div className="admin-orders-table glass-panel fade-in">
+                <div className="panel-header">
+                  <h2>Registered Shops Directory ({shops.length})</h2>
+                  <button className="neon-btn csv-btn" onClick={() => setAdminSubView('orders')}>
+                    ← Back to Orders
+                  </button>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="order-log-table">
+                    <thead>
+                      <tr>
+                        <th>Shop ID</th>
+                        <th>Shop Name / Owner</th>
+                        <th>Category</th>
+                        <th>Phone Number</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shops.map(s => (
+                        <tr key={s.id}>
+                          <td><strong>{s.id}</strong></td>
+                          <td>{s.name}</td>
+                          <td><span className="badge badge-info">{s.category}</span></td>
+                          <td>{s.phone || 'N/A'}</td>
+                          <td>
+                            <span className={`badge ${s.verified ? 'badge-success' : 'badge-warning'}`}>
+                              {s.verified ? 'Verified & Active' : 'Pending Verification'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {adminSubView === 'riders' && (
+              <div className="admin-orders-table glass-panel fade-in">
+                <div className="panel-header">
+                  <h2>Registered Riders Directory ({deliveryPartners.length})</h2>
+                  <button className="neon-btn csv-btn" onClick={() => setAdminSubView('orders')}>
+                    ← Back to Orders
+                  </button>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="order-log-table">
+                    <thead>
+                      <tr>
+                        <th>Rider ID</th>
+                        <th>Rider Name</th>
+                        <th>Vehicle</th>
+                        <th>Phone Number</th>
+                        <th>Total Deliveries</th>
+                        <th>Pending Payout</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deliveryPartners.map(d => (
+                        <tr key={d.id}>
+                          <td><strong>{d.id}</strong></td>
+                          <td>{d.name}</td>
+                          <td>{d.vehicle || 'N/A'}</td>
+                          <td>{d.phone || 'N/A'}</td>
+                          <td>{d.totalDeliveries || 0}</td>
+                          <td><strong>{formatINR(d.pendingPayout || 0)}</strong></td>
+                          <td>
+                            <span className={`badge ${d.verified ? 'badge-success' : 'badge-warning'}`}>
+                              {d.verified ? 'Verified & Active' : 'Pending Verification'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Document Onboarding Grid */}
             <div className="admin-onboarding-panel">
               <div className="approval-card glass-panel">
-                <h2>Merchant Verification Applications</h2>
-                <div className="approval-list">
-                  {shops.map(s => (
-                    <div key={s.id} className="approval-item">
-                      <div className="approval-meta">
-                        <h4>{s.name}</h4>
-                        <p>Category: {s.category} | Mob: {s.phone}</p>
-                        <div className="doc-pills">
-                          <span className="doc-pill">Aadhaar Card</span>
-                          <span className="doc-pill">PAN Card</span>
-                          <span className="doc-pill">FSSAI Licence</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2 style={{ margin: 0, fontSize: '18px' }}>Merchant Verification Applications ({shops.filter(s => s.docs === 'Pending').length})</h2>
+                  <button 
+                    className="neon-btn small-btn" 
+                    onClick={() => setIsMerchantApprovalsOpen(!isMerchantApprovalsOpen)}
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                  >
+                    {isMerchantApprovalsOpen ? 'Hide' : 'Show'} Applications
+                  </button>
+                </div>
+                {isMerchantApprovalsOpen && (
+                  <div className="approval-list fade-in">
+                    {shops.map(s => (
+                      <div key={s.id} className="approval-item">
+                        <div className="approval-meta">
+                          <h4>{s.name}</h4>
+                          <p>Category: {s.category} | Mob: {s.phone}</p>
+                          <div className="doc-pills">
+                            <span className="doc-pill">Aadhaar Card</span>
+                            <span className="doc-pill">PAN Card</span>
+                            <span className="doc-pill">FSSAI Licence</span>
+                          </div>
+                        </div>
+                        <div className="approval-actions">
+                          {s.docs === 'Pending' ? (
+                            <>
+                              <button className="approve-btn" onClick={() => handleAdminVerifyUser('merchant', s.id, true)}>
+                                <Check size={16} /> Approve
+                              </button>
+                              <button className="reject-btn" onClick={() => handleAdminVerifyUser('merchant', s.id, false)}>
+                                <X size={16} /> Reject
+                              </button>
+                            </>
+                          ) : (
+                            <span className={`badge ${s.verified ? 'badge-success' : 'badge-danger'}`}>
+                              {s.docs}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <div className="approval-actions">
-                        {s.docs === 'Pending' ? (
-                          <>
-                            <button className="approve-btn" onClick={() => handleAdminVerifyUser('merchant', s.id, true)}>
-                              <Check size={16} /> Approve
-                            </button>
-                            <button className="reject-btn" onClick={() => handleAdminVerifyUser('merchant', s.id, false)}>
-                              <X size={16} /> Reject
-                            </button>
-                          </>
-                        ) : (
-                          <span className={`badge ${s.verified ? 'badge-success' : 'badge-danger'}`}>
-                            {s.docs}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="approval-card glass-panel">
-                <h2>Delivery Boy Onboarding Verification</h2>
-                <div className="approval-list">
-                  {deliveryPartners.map(d => (
-                    <div key={d.id} className="approval-item">
-                      <div className="approval-meta">
-                        <h4>{d.name}</h4>
-                        <p>Vehicle: {d.vehicle} | Mob: {d.phone}</p>
-                        <div className="doc-pills">
-                          <span className="doc-pill">Driving Licence</span>
-                          <span className="doc-pill">Vehicle RC</span>
-                          <span className="doc-pill">PAN Card</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2 style={{ margin: 0, fontSize: '18px' }}>Delivery Boy Onboarding Verification ({deliveryPartners.filter(d => !d.verified).length})</h2>
+                  <button 
+                    className="neon-btn small-btn" 
+                    onClick={() => setIsRiderApprovalsOpen(!isRiderApprovalsOpen)}
+                    style={{ fontSize: '12px', padding: '6px 12px' }}
+                  >
+                    {isRiderApprovalsOpen ? 'Hide' : 'Show'} Applications
+                  </button>
+                </div>
+                {isRiderApprovalsOpen && (
+                  <div className="approval-list fade-in">
+                    {deliveryPartners.map(d => (
+                      <div key={d.id} className="approval-item">
+                        <div className="approval-meta">
+                          <h4>{d.name}</h4>
+                          <p>Vehicle: {d.vehicle} | Mob: {d.phone}</p>
+                          <div className="doc-pills">
+                            <span className="doc-pill">Driving Licence</span>
+                            <span className="doc-pill">Vehicle RC</span>
+                            <span className="doc-pill">PAN Card</span>
+                          </div>
+                        </div>
+                        <div className="approval-actions">
+                          {!d.verified ? (
+                            <>
+                              <button className="approve-btn" onClick={() => handleAdminVerifyUser('rider', d.id, true)}>
+                                <Check size={16} /> Approve
+                              </button>
+                              <button className="reject-btn" onClick={() => handleAdminVerifyUser('rider', d.id, false)}>
+                                <X size={16} /> Reject
+                              </button>
+                            </>
+                          ) : (
+                            <span className="badge badge-success">Approved & Active</span>
+                          )}
                         </div>
                       </div>
-                      <div className="approval-actions">
-                        {!d.verified ? (
-                          <>
-                            <button className="approve-btn" onClick={() => handleAdminVerifyUser('rider', d.id, true)}>
-                              <Check size={16} /> Approve
-                            </button>
-                            <button className="reject-btn" onClick={() => handleAdminVerifyUser('rider', d.id, false)}>
-                              <X size={16} /> Reject
-                            </button>
-                          </>
-                        ) : (
-                          <span className="badge badge-success">Approved & Active</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
