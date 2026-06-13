@@ -5,6 +5,9 @@ import {
   MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw
 } from 'lucide-react';
 import './App.css';
+import { auth, db, googleProvider } from './firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
 
 // Initial Mock Data
 const INITIAL_PRODUCTS = [
@@ -111,6 +114,24 @@ function App() {
     return () => window.removeEventListener('popstate', handleLocationChange);
   }, []);
 
+  // Listen to Firebase Auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          name: currentUser.displayName || currentUser.email.split('@')[0]
+        });
+        setCustomerEmail(currentUser.email);
+        setCustomerName(currentUser.displayName || currentUser.email.split('@')[0]);
+      } else {
+        setUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleTabChange = (tabName) => {
     setActiveTab(tabName);
     window.history.pushState(null, '', `/${tabName}`);
@@ -160,36 +181,40 @@ function App() {
       return;
     }
     
-    // FIREBASE INTEGRATION POINT:
-    // If you want to connect Firebase Auth, replace this mock with:
-    // import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
-    // const auth = getAuth();
-    // if (isSignUp) {
-    //   createUserWithEmailAndPassword(auth, authEmail, authPassword).then(...).catch(...)
-    // } else {
-    //   signInWithEmailAndPassword(auth, authEmail, authPassword).then(...).catch(...)
-    // }
-
     if (isSignUp) {
-      alert(`Sign Up Successful for ${authEmail}! (Firebase Integration Ready)`);
+      createUserWithEmailAndPassword(auth, authEmail, authPassword)
+        .then((userCredential) => {
+          alert(`Sign Up Successful for ${userCredential.user.email}!`);
+          setIsAuthModalOpen(false);
+          setAuthEmail('');
+          setAuthPassword('');
+        })
+        .catch((error) => {
+          alert(`Sign Up Error: ${error.message}`);
+        });
     } else {
-      alert(`Login Successful! Welcome back, ${authEmail.split('@')[0]}!`);
+      signInWithEmailAndPassword(auth, authEmail, authPassword)
+        .then((userCredential) => {
+          alert(`Login Successful! Welcome back, ${userCredential.user.email.split('@')[0]}!`);
+          setIsAuthModalOpen(false);
+          setAuthEmail('');
+          setAuthPassword('');
+        })
+        .catch((error) => {
+          alert(`Login Error: ${error.message}`);
+        });
     }
-
-    setUser({
-      email: authEmail,
-      name: authEmail.split('@')[0]
-    });
-    setCustomerEmail(authEmail);
-    setCustomerName(authEmail.split('@')[0]);
-    setIsAuthModalOpen(false);
-    setAuthEmail('');
-    setAuthPassword('');
   };
 
   const handleLogout = () => {
-    setUser(null);
-    alert('Logged out successfully!');
+    signOut(auth)
+      .then(() => {
+        setUser(null);
+        alert('Logged out successfully!');
+      })
+      .catch((error) => {
+        alert(`Logout Error: ${error.message}`);
+      });
   };
 
   // Active Category list
@@ -260,7 +285,7 @@ function App() {
   };
 
   // Checkout and Order Placement
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (cart.length === 0) return alert('Your cart is empty!');
     if (!customerAddress) return alert('Please input your delivery coordinates / address!');
 
@@ -287,15 +312,24 @@ function App() {
       otp: Math.floor(1000 + Math.random() * 9000).toString(),
       deliveryPartnerId: null,
       deliveryPartnerName: '',
+      userId: auth.currentUser ? auth.currentUser.uid : 'anonymous',
       createdAt: new Date().toISOString()
     };
 
-    setOrders([newOrder, ...orders]);
-    setCart([]);
-    setCouponCode('');
-    setAppliedDiscount(0);
-    setCurrentOrderTracking(newOrder.id);
-    alert(`Order Placed Successfully! Order ID: ${newOrder.id}. Please switch to the "Admin Console" tab to manage & assign this order.`);
+    try {
+      // Save order to Firestore Database
+      await addDoc(collection(db, "orders"), newOrder);
+      
+      // Update local state for immediate UI tracking feedback
+      setOrders([newOrder, ...orders]);
+      setCart([]);
+      setCouponCode('');
+      setAppliedDiscount(0);
+      setCurrentOrderTracking(newOrder.id);
+      alert(`Order Placed Successfully! Order ID: ${newOrder.id}. Saved to Firebase Database.`);
+    } catch (error) {
+      alert(`Failed to save order to Database: ${error.message}`);
+    }
   };
 
   // Admin: Accept / Confirm Order
@@ -1368,11 +1402,14 @@ function App() {
             <button 
               className="google-auth-btn" 
               onClick={() => {
-                alert('Google Sign-In Placeholder clicked! (Firebase integration point: signInWithPopup)');
-                setUser({ email: 'googleuser@gmail.com', name: 'Google User' });
-                setCustomerEmail('googleuser@gmail.com');
-                setCustomerName('Google User');
-                setIsAuthModalOpen(false);
+                signInWithPopup(auth, googleProvider)
+                  .then((result) => {
+                    alert(`Login Successful via Google! Welcome, ${result.user.displayName || result.user.email}!`);
+                    setIsAuthModalOpen(false);
+                  })
+                  .catch((error) => {
+                    alert(`Google Sign-In Error: ${error.message}`);
+                  });
               }}
             >
               <span className="google-icon">G</span> Sign in with Google
