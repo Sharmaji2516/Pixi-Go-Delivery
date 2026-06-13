@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, 
   FileText, Check, X, ArrowRight, Download, Search, Tag, 
-  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw, Menu
+  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw, Menu,
+  Mail
 } from 'lucide-react';
 import './App.css';
 import { auth, db, googleProvider } from './firebase';
@@ -129,6 +130,7 @@ function App() {
   const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(false);
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
+  const [isContactOpen, setIsContactOpen] = useState(false);
 
   // --- HELPER FUNCTIONS ---
   const showToast = (message) => {
@@ -747,6 +749,78 @@ function App() {
     );
   };
 
+  const renderPortalGuard = (portalName, children) => {
+    if (!user) {
+      return (
+        <div className="portal-auth-wrapper fade-in">
+          <div className="portal-auth-card glass-panel border-glow">
+            <div className="auth-icon-badge">
+              {portalName === 'Admin Console' ? <Shield size={36} className="text-neon" /> :
+               portalName === 'Delivery Rider' ? <Bike size={36} className="text-neon" /> :
+               <Store size={36} className="text-neon" />}
+            </div>
+            <h2 className="auth-portal-title">{portalName}</h2>
+            <p className="auth-portal-subtitle">Authentication Required to Access Staff Panel</p>
+            
+            <form onSubmit={handleAuthAction} className="auth-form-premium">
+              <div className="form-group-premium">
+                <label className="form-label-premium">Email Address</label>
+                <input 
+                  type="email" 
+                  placeholder="Enter email address" 
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="custom-input-premium"
+                  required
+                />
+              </div>
+              <div className="form-group-premium">
+                <label className="form-label-premium">Password</label>
+                <input 
+                  type="password" 
+                  placeholder="••••••••" 
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="custom-input-premium"
+                  required
+                />
+              </div>
+              
+              <button type="submit" className="neon-btn auth-submit-btn-premium">
+                {isSignUp ? 'Register Staff Account' : 'Sign In to Panel'}
+              </button>
+            </form>
+
+            <div className="divider"></div>
+
+            <button 
+              className="google-auth-btn-premium" 
+              onClick={() => {
+                signInWithPopup(auth, googleProvider)
+                  .then((result) => {
+                    showToast(`Logged in successfully as ${result.user.displayName || result.user.email}!`);
+                  })
+                  .catch((error) => {
+                    alert(`Google Sign-In Error: ${error.message}`);
+                  });
+              }}
+            >
+              <span className="google-icon-premium">G</span> Sign In with Google
+            </button>
+
+            <p className="auth-toggle-text-premium">
+              {isSignUp ? 'Already registered?' : 'Need a new panel account?'} {' '}
+              <button className="toggle-btn-link-premium" onClick={() => setIsSignUp(!isSignUp)}>
+                {isSignUp ? 'Sign In Instead' : 'Create Account'}
+              </button>
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return children;
+  };
+
   return (
     <div className="app-container">
       {/* Header Banner */}
@@ -829,6 +903,12 @@ function App() {
           {activeTab === 'customer' && (
             <button className="cart-header-icon-btn" onClick={() => setIsProfileOpen(true)} title="My Profile & Orders">
               <User size={20} />
+            </button>
+          )}
+
+          {activeTab === 'customer' && (
+            <button className="cart-header-icon-btn" onClick={() => setIsContactOpen(true)} title="Contact Us">
+              <Phone size={20} />
             </button>
           )}
 
@@ -1021,7 +1101,7 @@ function App() {
       )}
 
         {/* ==================== ADMIN PORTAL ==================== */}
-        {activeTab === 'admin' && (
+        {activeTab === 'admin' && renderPortalGuard('Admin Console', (
           <div className="admin-grid fade-in">
             {/* Metric widgets */}
             <div className="metrics-container">
@@ -1266,10 +1346,10 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+        ))}
 
         {/* ==================== DELIVERY RIDER PORTAL ==================== */}
-        {activeTab === 'delivery' && (
+        {activeTab === 'delivery' && renderPortalGuard('Delivery Rider', (
           <div className="delivery-portal-wrap fade-in">
             <div className="delivery-layout glass-panel">
               <div className="rider-onboarding-section">
@@ -1366,10 +1446,10 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+        ))}
 
         {/* ==================== MERCHANT DASHBOARD ==================== */}
-        {activeTab === 'merchant' && (
+        {activeTab === 'merchant' && renderPortalGuard('Merchant Dashboard', (
           <div className="merchant-portal-wrap fade-in">
             <div className="merchant-layout glass-panel">
               <div className="merchant-onboarding">
@@ -1483,7 +1563,7 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+        ))}
       </main>
 
       {/* Mobile Cart Drawer Overlay */}
@@ -1506,48 +1586,53 @@ function App() {
       {/* Firebase Authentication Modal */}
       {isAuthModalOpen && (
         <div className="modal-backdrop fade-in" onClick={() => setIsAuthModalOpen(false)}>
-          <div className="auth-modal glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+          <div className="auth-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
             <button className="modal-close-btn" onClick={() => setIsAuthModalOpen(false)}>
               <X size={20} />
             </button>
-            <div className="auth-modal-header">
-              <h2>{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
-              <p className="auth-subtitle">Sign {isSignUp ? 'up' : 'in'} to order from local shops instantly</p>
+            
+            <div className="auth-icon-badge">
+              <User size={36} className="text-neon" />
             </div>
             
-            <form onSubmit={handleAuthAction} className="auth-form">
-              <div className="form-group">
-                <label>Email Address</label>
+            <div className="auth-modal-header" style={{ textAlign: 'center', marginBottom: '8px' }}>
+              <h2 className="auth-portal-title">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
+              <p className="auth-portal-subtitle">Access your PixiGo Delivery dashboard</p>
+            </div>
+            
+            <form onSubmit={handleAuthAction} className="auth-form-premium">
+              <div className="form-group-premium">
+                <label className="form-label-premium">Email Address</label>
                 <input 
                   type="email" 
                   placeholder="Enter your email" 
                   value={authEmail}
                   onChange={(e) => setAuthEmail(e.target.value)}
-                  className="custom-input"
+                  className="custom-input-premium"
                   required
                 />
               </div>
-              <div className="form-group">
-                <label>Password</label>
+              <div className="form-group-premium">
+                <label className="form-label-premium">Password</label>
                 <input 
                   type="password" 
                   placeholder="••••••••" 
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
-                  className="custom-input"
+                  className="custom-input-premium"
                   required
                 />
               </div>
               
-              <button type="submit" className="neon-btn auth-submit-btn">
-                {isSignUp ? 'Sign Up' : 'Sign In'}
+              <button type="submit" className="neon-btn auth-submit-btn-premium">
+                {isSignUp ? 'Create PixiGo Account' : 'Sign In'}
               </button>
             </form>
 
             <div className="divider"></div>
 
             <button 
-              className="google-auth-btn" 
+              className="google-auth-btn-premium" 
               onClick={() => {
                 signInWithPopup(auth, googleProvider)
                   .then((result) => {
@@ -1559,13 +1644,13 @@ function App() {
                   });
               }}
             >
-              <span className="google-icon">G</span> Sign in with Google
+              <span className="google-icon-premium">G</span> Sign In with Google
             </button>
 
-            <p className="auth-toggle-text">
-              {isSignUp ? 'Already have an account?' : "Don't have an account?"} {' '}
-              <button className="toggle-btn-link" onClick={() => setIsSignUp(!isSignUp)}>
-                {isSignUp ? 'Sign In' : 'Sign Up Now'}
+            <p className="auth-toggle-text-premium">
+              {isSignUp ? 'Already registered?' : 'Need a new account?'} {' '}
+              <button className="toggle-btn-link-premium" onClick={() => setIsSignUp(!isSignUp)}>
+                {isSignUp ? 'Sign In Instead' : 'Sign Up Now'}
               </button>
             </p>
           </div>
@@ -1774,6 +1859,14 @@ function App() {
                   </span>
                 )}
               </button>
+
+              <button 
+                className="mobile-menu-link" 
+                onClick={() => { setIsContactOpen(true); setIsMobileMenuOpen(false); }}
+              >
+                <Phone size={18} className="text-neon" />
+                <span>Contact Us</span>
+              </button>
             </div>
 
             <div className="divider" style={{ marginTop: 'auto' }}></div>
@@ -1884,6 +1977,89 @@ function App() {
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Contact Us Modal */}
+      {isContactOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsContactOpen(false)}>
+          <div className="contact-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsContactOpen(false)}>
+              <X size={20} />
+            </button>
+            
+            <div className="contact-modal-header">
+              <div className="contact-icon-glow">
+                <MessageCircle size={36} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium">Contact Support Desk</h3>
+              <p className="profile-sub">We are active 24/7 to assist you</p>
+            </div>
+            
+            <div className="contact-methods-grid">
+              <a 
+                href="https://wa.me/919251054064" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="contact-method-card border-glow"
+              >
+                <div className="contact-method-icon whatsapp-color">
+                  <MessageCircle size={24} />
+                </div>
+                <div className="contact-method-details">
+                  <h4>WhatsApp Chat</h4>
+                  <p>+91 9251054064</p>
+                </div>
+                <ArrowRight size={16} className="contact-arrow" />
+              </a>
+
+              <a 
+                href="mailto:pixigodelivery@gmail.com" 
+                className="contact-method-card border-glow"
+              >
+                <div className="contact-method-icon email-color">
+                  <Mail size={24} />
+                </div>
+                <div className="contact-method-details">
+                  <h4>Email Support</h4>
+                  <p>pixigodelivery@gmail.com</p>
+                </div>
+                <ArrowRight size={16} className="contact-arrow" />
+              </a>
+
+              <a 
+                href="https://instagram.com/pixigo_" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="contact-method-card border-glow"
+              >
+                <div className="contact-method-icon instagram-color">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-instagram"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                </div>
+                <div className="contact-method-details">
+                  <h4>Instagram</h4>
+                  <p>@pixigo_</p>
+                </div>
+                <ArrowRight size={16} className="contact-arrow" />
+              </a>
+
+              <a 
+                href="https://facebook.com/pixigo" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="contact-method-card border-glow"
+              >
+                <div className="contact-method-icon facebook-color">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-facebook"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                </div>
+                <div className="contact-method-details">
+                  <h4>Facebook</h4>
+                  <p>pixigo</p>
+                </div>
+                <ArrowRight size={16} className="contact-arrow" />
+              </a>
+            </div>
           </div>
         </div>
       )}

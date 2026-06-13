@@ -4,25 +4,25 @@
   --font-heading: 'Outfit', sans-serif;
   --font-body: 'Plus Jakarta Sans', sans-serif;
   
-  /* Color Palette matching the PixiGo neon-green logo */
-  --color-primary: #adff2f;       /* Neon Lime Green */
-  --color-primary-dark: #8ad21a;
-  --color-primary-glow: rgba(173, 255, 47, 0.15);
-  --color-primary-glow-strong: rgba(173, 255, 47, 0.4);
+  /* Color Palette matching the PixiGo lime-green logo, optimized for light background visibility */
+  --color-primary: #68a600;       /* Vibrant Lime Green */
+  --color-primary-dark: #528200;
+  --color-primary-glow: rgba(104, 166, 0, 0.1);
+  --color-primary-glow-strong: rgba(104, 166, 0, 0.25);
   
-  --color-dark-bg: #090d16;        /* Deep Slate black */
-  --color-card-bg: #121824;        /* Slate dark card */
-  --color-border: #1e293b;
-  --color-text-main: #f8fafc;      /* Pure white-slate */
-  --color-text-muted: #94a3b8;     /* Gray slate */
+  --color-dark-bg: #f8fafc;        /* Slate light-gray page background */
+  --color-card-bg: #ffffff;        /* Pure white cards */
+  --color-border: #e2e8f0;         /* Slate 200 border */
+  --color-text-main: #0f172a;      /* Slate 900 text */
+  --color-text-muted: #64748b;     /* Slate 500 gray text */
   
   --color-success: #10b981;
-  --color-warning: #f59e0b;
-  --color-danger: #ef4444;
-  --color-info: #3b82f6;
+  --color-warning: #d97706;        /* Slightly darker warning for contrast */
+  --color-danger: #dc2626;         /* Slightly darker danger for contrast */
+  --color-info: #2563eb;           /* Slightly darker info for contrast */
   
-  --glass-bg: rgba(18, 24, 36, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.05);
+  --glass-bg: rgba(255, 255, 255, 0.85); /* Frosty white glass background */
+  --glass-border: rgba(15, 23, 42, 0.08); /* Dark slate thin border */
 }
 
 * {
@@ -47,7 +47,7 @@ html, body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
   font-weight: 700;
-  color: #ffffff;
+  color: var(--color-text-main);
 }
 
 /* Scrollbar styling */
@@ -59,7 +59,7 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--color-dark-bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
@@ -73,11 +73,11 @@ h1, h2, h3, h4, h5, h6 {
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--glass-border);
   border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  box-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.06);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #ffffff 30%, var(--color-primary) 100%);
+  background: linear-gradient(135deg, var(--color-text-main) 30%, var(--color-primary-dark) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -85,7 +85,7 @@ h1, h2, h3, h4, h5, h6 {
 .neon-btn {
   background-color: var(--color-primary);
   color: #000000;
-  font-weight: 600;
+  font-weight: 700;
   font-family: var(--font-heading);
   border: none;
   padding: 10px 20px;
@@ -100,9 +100,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .neon-btn:hover {
-  background-color: #ffffff;
+  background-color: var(--color-text-main);
+  color: #ffffff;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px 0 rgba(255, 255, 255, 0.25);
+  box-shadow: 0 6px 20px 0 rgba(15, 23, 42, 0.15);
 }
 
 .neon-btn:active {
@@ -115,7 +116,7 @@ h1, h2, h3, h4, h5, h6 {
   border: 1px solid var(--color-border);
   padding: 10px 20px;
   border-radius: 10px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
@@ -125,13 +126,13 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .secondary-btn:hover {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: rgba(15, 23, 42, 0.05);
   border-color: var(--color-text-muted);
 }
 
 /* Custom interactive input elements */
 .custom-input {
-  background: rgba(30, 41, 59, 0.4);
+  background: rgba(15, 23, 42, 0.03);
   border: 1px solid var(--color-border);
   color: var(--color-text-main);
   padding: 12px 16px;
@@ -143,6 +144,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .custom-input:focus {
+  background: #ffffff;
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px var(--color-primary-glow);
 }
