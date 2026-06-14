@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, 
+  ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag, 
   MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw, Menu,
   Mail, Settings, ChevronDown
@@ -283,6 +283,9 @@ function App() {
   const [selectedPayment, setSelectedPayment] = useState('ONLINE');
   const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({});
+  const [reroutingOrderId, setReroutingOrderId] = useState(null);
+  const [rerouteSelectedShop, setRerouteSelectedShop] = useState('');
+  const [rerouteSelectedRider, setRerouteSelectedRider] = useState('');
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -338,6 +341,19 @@ function App() {
   const [dealZoomEdit, setDealZoomEdit] = useState('1');
   const [activeSettingsAccordion, setActiveSettingsAccordion] = useState('global'); // 'global' | 'deal' | 'preview' | 'guide'
   const [activePreviewTab, setActivePreviewTab] = useState('desktop'); // 'desktop' | 'mobile'
+  const [tempAuthPassword, setTempAuthPassword] = useState('');
+  const [tempAuthEmail, setTempAuthEmail] = useState('');
+
+  const [onboardShopName, setOnboardShopName] = useState('');
+  const [onboardShopCategory, setOnboardShopCategory] = useState('General Store');
+  const [onboardShopPhone, setOnboardShopPhone] = useState('');
+  const [onboardShopEmail, setOnboardShopEmail] = useState('');
+  const [onboardShopAddress, setOnboardShopAddress] = useState('');
+
+  const [onboardRiderName, setOnboardRiderName] = useState('');
+  const [onboardRiderEmail, setOnboardRiderEmail] = useState('');
+  const [onboardRiderPhone, setOnboardRiderPhone] = useState('');
+  const [onboardRiderVehicle, setOnboardRiderVehicle] = useState('');
 
   const [shopDocAadhaar, setShopDocAadhaar] = useState(false);
   const [shopDocPan, setShopDocPan] = useState(false);
@@ -542,7 +558,7 @@ function App() {
         // Retrieve local storage values first
         let localName = localStorage.getItem('pixigo_customerName') || nameVal;
         let localPhone = localStorage.getItem('pixigo_customerPhone') || '';
-        let localEmail = localStorage.getItem('pixigo_customerEmail') || currentUser.email;
+        let localEmail = currentUser.email; // ALWAYS use the authenticated email as primary source of truth
         let localAddress = localStorage.getItem('pixigo_customerAddress') || '';
 
         try {
@@ -572,6 +588,10 @@ function App() {
               address: localAddress,
               createdAt: timestamp
             });
+            localStorage.setItem('pixigo_customerName', localName);
+            localStorage.setItem('pixigo_customerPhone', localPhone);
+            localStorage.setItem('pixigo_customerEmail', localEmail);
+            localStorage.setItem('pixigo_customerAddress', localAddress);
           }
 
           // 2. Sync with Admin collection if on admin page
@@ -595,12 +615,44 @@ function App() {
           if (adminSnap.exists()) {
             setUserRole('admin');
           } else {
-            const riderDocRef = doc(db, "delivery_boys", currentUser.uid);
-            const riderSnap = await getDoc(riderDocRef);
-            if (riderSnap.exists()) {
+            const ridersRef = collection(db, "delivery_boys");
+            const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
+            const riderQuery2 = query(ridersRef, where("email", "==", currentUser.email));
+            const [riderSnap1, riderSnap2] = await Promise.all([getDocs(riderQuery1), getDocs(riderQuery2)]);
+            
+            let riderDoc = null;
+            if (!riderSnap1.empty) riderDoc = riderSnap1.docs[0];
+            else if (!riderSnap2.empty) riderDoc = riderSnap2.docs[0];
+
+            if (riderDoc) {
               setUserRole('rider');
+              const riderData = riderDoc.data();
+              setUser({
+                uid: riderData.id || riderDoc.id,
+                email: currentUser.email,
+                name: riderData.name || nameVal
+              });
             } else {
-              setUserRole('customer');
+              const merchantsRef = collection(db, "merchants");
+              const merchQuery1 = query(merchantsRef, where("authUid", "==", currentUser.uid));
+              const merchQuery2 = query(merchantsRef, where("email", "==", currentUser.email));
+              const [merchSnap1, merchSnap2] = await Promise.all([getDocs(merchQuery1), getDocs(merchQuery2)]);
+              
+              let merchDoc = null;
+              if (!merchSnap1.empty) merchDoc = merchSnap1.docs[0];
+              else if (!merchSnap2.empty) merchDoc = merchSnap2.docs[0];
+
+              if (merchDoc) {
+                setUserRole('merchant');
+                const merchData = merchDoc.data();
+                setUser({
+                  uid: merchData.id || merchDoc.id,
+                  email: currentUser.email,
+                  name: merchData.storeName || nameVal
+                });
+              } else {
+                setUserRole('customer');
+              }
             }
           }
         } catch (e) {
@@ -628,6 +680,16 @@ function App() {
           setUser(null);
           setUserRole(null);
         }
+        
+        // Reset customer states on logout
+        localStorage.removeItem('pixigo_customerName');
+        localStorage.removeItem('pixigo_customerPhone');
+        localStorage.removeItem('pixigo_customerEmail');
+        localStorage.removeItem('pixigo_customerAddress');
+        setCustomerName('Raj Malhotra');
+        setCustomerPhone('9251054064');
+        setCustomerEmail('pixigodelivery@gmail.com');
+        setCustomerAddress('Vaishali Nagar, Jaipur (RJ)');
       }
     });
     return () => unsubscribe();
@@ -784,6 +846,28 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Watch for tracked order cancellation and notify user / close panel
+  useEffect(() => {
+    if (isTrackingDrawerOpen && currentOrderTracking) {
+      const trackedOrder = orders.find(o => o.id === currentOrderTracking);
+      if (trackedOrder) {
+        if (trackedOrder.status === 'CANCELLED_BY_STORE') {
+          setIsTrackingDrawerOpen(false);
+          setCurrentOrderTracking(null);
+          alert(`Your order ${trackedOrder.id} has been Cancelled by the Store.`);
+        } else if (trackedOrder.status === 'CANCELLED_BY_RIDER') {
+          setIsTrackingDrawerOpen(false);
+          setCurrentOrderTracking(null);
+          alert(`Your order ${trackedOrder.id} has been Cancelled by the Rider.`);
+        } else if (trackedOrder.status === 'CANCELLED') {
+          setIsTrackingDrawerOpen(false);
+          setCurrentOrderTracking(null);
+          alert(`Your order ${trackedOrder.id} has been Cancelled.`);
+        }
+      }
+    }
+  }, [orders, currentOrderTracking, isTrackingDrawerOpen]);
 
   const playNotificationSound = () => {
     try {
@@ -1082,6 +1166,14 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('pixigo_rider_session');
+    localStorage.removeItem('pixigo_customerName');
+    localStorage.removeItem('pixigo_customerPhone');
+    localStorage.removeItem('pixigo_customerEmail');
+    localStorage.removeItem('pixigo_customerAddress');
+    setCustomerName('Raj Malhotra');
+    setCustomerPhone('9251054064');
+    setCustomerEmail('pixigodelivery@gmail.com');
+    setCustomerAddress('Vaishali Nagar, Jaipur (RJ)');
     setUser(null);
     setUserRole(null);
     signOut(auth)
@@ -1121,6 +1213,56 @@ function App() {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
   };
 
+  // Helper: Get final price of product
+  const getProductFinalPrice = (p) => {
+    return p.price;
+  };
+
+  // Admin: Update product catalog details
+  const handleAdminUpdateProductCatalog = async (productId, newPrice, newOriginalPrice, newOfferText, newImage) => {
+    const price = parseFloat(newPrice);
+    const originalPrice = parseFloat(newOriginalPrice) || 0;
+    
+    if (isNaN(price) || price < 0) {
+      alert("Please enter a valid price!");
+      return;
+    }
+
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return;
+
+    const updatedFields = {
+      price: price,
+      originalPrice: originalPrice,
+      offerText: newOfferText,
+      image: newImage || prod.image || ''
+    };
+
+    if (prod.firestoreId) {
+      try {
+        const prodRef = doc(db, "products", prod.firestoreId);
+        await updateDoc(prodRef, updatedFields);
+        showToast(`${prod.name} successfully updated!`);
+      } catch (err) {
+        console.error("Error updating catalog product in Firestore:", err);
+        alert("Failed to update product: " + err.message);
+      }
+    } else {
+      // It's a mock product not in Firestore. Create a new document in Firestore!
+      try {
+        const docRef = await addDoc(collection(db, "products"), {
+          ...prod,
+          ...updatedFields,
+          createdAt: new Date().toISOString()
+        });
+        showToast(`${prod.name} saved to database & updated!`);
+      } catch (err) {
+        console.error("Error creating product in Firestore:", err);
+        alert("Failed to save product in DB: " + err.message);
+      }
+    }
+  };
+
   // Add Item to Cart
   const handleAddToCart = (product) => {
     const hasDifferentStore = cart.some(item => item.store !== product.store);
@@ -1158,7 +1300,7 @@ function App() {
       setAppliedDiscount(100);
       alert('Coupon Applied Successfully: Flat ₹100 Off!');
     } else if (couponCode.toUpperCase() === 'PIXIGO10') {
-      const cartSubtotal = cart.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+      const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
       setAppliedDiscount(Math.round(cartSubtotal * 0.1));
       alert('Coupon Applied Successfully: 10% Off!');
     } else {
@@ -1171,13 +1313,29 @@ function App() {
     if (cart.length === 0) return alert('Your cart is empty!');
     if (!customerAddress) return alert('Please input your delivery coordinates / address!');
 
-    const cartSubtotal = cart.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    // Check if customer already has an active order in progress
+    const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
+    const hasActiveOrder = orders.some(o => 
+      (o.customerId === customerId || (o.customerPhone === customerPhone && customerPhone)) && 
+      !['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER'].includes(o.status?.toUpperCase())
+    );
+    if (hasActiveOrder) {
+      alert("You already have an active order in progress! Please wait for it to be completed or cancelled before placing a new one.");
+      return;
+    }
+
+    const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
     const delCharge = baseDeliveryCharge + perKmCharge * 3; // Mock 3km distance
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
 
     const storeName = cart[0]?.store || 'Store';
     const merchantId = 'merch_' + storeName.replace(/\s+/g, '_').toLowerCase();
+
+    // Determine dual order routing option based on store name and category
+    const isShopDirect = ['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe', 'Burger Club', 'Pizza Corner', 'Gelato Heaven'].includes(storeName) || 
+                         ['Bakery', 'Fast Food', 'Restaurant Cafe', 'Icecream and dessert'].includes(cart[0]?.category);
+    const routingOption = isShopDirect ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)';
 
     const newOrder = {
       id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -1201,6 +1359,7 @@ function App() {
       customerId: auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`, // Relational link
       merchantId: merchantId, // Relational link
       merchantName: storeName,
+      routingOption, // Set routing flow dynamically
       createdAt: new Date().toISOString()
     };
 
@@ -1256,6 +1415,56 @@ function App() {
     }
   };
 
+  // Admin: Initiate Re-route selection UI
+  const handleAdminRerouteOrder = (orderId) => {
+    setReroutingOrderId(orderId);
+    setRerouteSelectedShop('');
+    setRerouteSelectedRider('');
+  };
+
+  // Admin: Submit the Re-routing details to Firestore
+  const handleAdminSubmitReroute = async (orderId) => {
+    if (!rerouteSelectedShop) {
+      alert("Please select a store to re-route!");
+      return;
+    }
+    const shop = shops.find(s => s.id === rerouteSelectedShop);
+    if (!shop) return;
+    const rider = deliveryPartners.find(d => d.id === rerouteSelectedRider);
+
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const updatedFields = {
+      status: rider ? 'ASSIGNED' : 'ACCEPTED',
+      merchantId: shop.id,
+      merchantName: shop.storeName || shop.name,
+      routingOption: 'Option 2 (Managed)', // default to managed for manual re-routing
+      deliveryPartnerId: rider ? rider.id : null,
+      deliveryPartnerName: rider ? rider.name : '',
+      riderId: rider ? rider.id : null,
+      reroutedAt: new Date().toISOString()
+    };
+
+    // Update local state first
+    setOrders(orders.map(o => o.id === orderId ? { ...o, ...updatedFields } : o));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, updatedFields);
+        showToast(`Order ${orderId} successfully re-routed!`);
+        
+        // Reset states
+        setReroutingOrderId(null);
+        setRerouteSelectedShop('');
+        setRerouteSelectedRider('');
+      } catch (err) {
+        console.error("Error submitting re-routed order to Firestore:", err);
+      }
+    }
+  };
+
   // Merchant: Accept / Confirm Order
   const handleMerchantAcceptOrder = async (orderId) => {
     const order = orders.find(o => o.id === orderId);
@@ -1269,6 +1478,29 @@ function App() {
         const orderRef = doc(db, "orders", order.firestoreId);
         await updateDoc(orderRef, { status: 'ACCEPTED' });
         showToast(`Order ${orderId} Accepted!`);
+      } catch (err) {
+        console.error("Error updating order status in Firestore:", err);
+      }
+    }
+  };
+
+  // Merchant: Reject / Cancel Order
+  const handleMerchantRejectOrder = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Update local state first
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'CANCELLED_BY_STORE' } : o));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, { 
+          status: 'CANCELLED_BY_STORE',
+          cancelledBy: 'Merchant',
+          cancelledAt: new Date().toISOString()
+        });
+        showToast(`Order ${orderId} Rejected.`);
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
       }
@@ -1468,6 +1700,69 @@ function App() {
     }
   };
 
+  const handleMerchantOnboardSubmit = async (e) => {
+    e.preventDefault();
+    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress) {
+      alert("Please fill in all the details for the onboarding request.");
+      return;
+    }
+    const newShopId = `merch_${onboardShopName.trim().replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
+    try {
+      await setDoc(doc(db, "merchants", newShopId), {
+        id: newShopId,
+        storeName: onboardShopName.trim(),
+        category: onboardShopCategory,
+        phone: onboardShopPhone.trim(),
+        address: onboardShopAddress.trim(),
+        email: onboardShopEmail.trim().toLowerCase(),
+        verified: false,
+        docs: 'Pending',
+        createdAt: new Date().toISOString()
+      });
+      alert(`Onboarding request submitted successfully for "${onboardShopName.trim()}"!\nOur admin will review your request and create your account.`);
+      setOnboardShopName('');
+      setOnboardShopPhone('');
+      setOnboardShopEmail('');
+      setOnboardShopAddress('');
+      setIsSignUp(false); // Switch back to sign in
+    } catch (err) {
+      console.error("Error submitting shop onboarding request:", err);
+      alert(`Failed to submit request: ${err.message}`);
+    }
+  };
+
+  const handleRiderOnboardSubmit = async (e) => {
+    e.preventDefault();
+    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle) {
+      alert("Please fill in all the details for the rider onboarding request.");
+      return;
+    }
+    const newRiderId = `rider_${Date.now()}`;
+    try {
+      await setDoc(doc(db, "delivery_boys", newRiderId), {
+        id: newRiderId,
+        name: onboardRiderName.trim(),
+        email: onboardRiderEmail.trim().toLowerCase(),
+        phone: onboardRiderPhone.trim(),
+        vehicle: onboardRiderVehicle.trim(),
+        active: true,
+        verified: false, // Pending verification
+        totalDeliveries: 0,
+        pendingPayout: 0,
+        createdAt: new Date().toISOString()
+      });
+      alert(`Onboarding request submitted successfully for rider "${onboardRiderName.trim()}"!\nOur admin will review your request and create your account.`);
+      setOnboardRiderName('');
+      setOnboardRiderEmail('');
+      setOnboardRiderPhone('');
+      setOnboardRiderVehicle('');
+      setIsSignUp(false); // Switch back to sign in
+    } catch (err) {
+      console.error("Error submitting rider onboarding request:", err);
+      alert(`Failed to submit request: ${err.message}`);
+    }
+  };
+
   // Admin: Start Editing Rider
   const handleStartEditRider = (rider) => {
     setEditingRider(rider);
@@ -1542,6 +1837,8 @@ function App() {
     setShopDocAadhaar(shop.hasAadhaar || false);
     setShopDocPan(shop.hasPan || false);
     setShopDocFssai(shop.hasFssai || false);
+    setTempAuthEmail(shop.email || '');
+    setTempAuthPassword('');
     setIsShopModalOpen(true);
   };
 
@@ -1816,6 +2113,80 @@ function App() {
     }
   };
 
+  const handleCreateAuthAccount = async (type, email, password, id) => {
+    if (!email || !password) {
+      alert("Please provide both email/username and password.");
+      return;
+    }
+    if (password.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
+    
+    let targetEmail = email.trim();
+    if (!targetEmail.includes('@')) {
+      targetEmail = `${targetEmail.toLowerCase().replace(/\s+/g, '')}@pixigo.com`;
+    }
+
+    try {
+      showToast("Creating auth account... Please wait.");
+      
+      const tempAppName = `TempApp_${Date.now()}`;
+      const tempApp = initializeApp(firebaseConfig, tempAppName);
+      const tempAuth = getAuth(tempApp);
+      
+      const userCredential = await createUserWithEmailAndPassword(tempAuth, targetEmail, password);
+      const newUid = userCredential.user.uid;
+      
+      await deleteApp(tempApp);
+
+      if (type === 'merchant') {
+        const merchant = shops.find(s => s.id === id);
+        if (merchant) {
+          const docId = merchant.firestoreId || merchant.id;
+          const docRef = doc(db, "merchants", docId);
+          await setDoc(docRef, { 
+            id: merchant.id,
+            storeName: merchant.storeName || merchant.name,
+            category: merchant.category,
+            phone: merchant.phone || '9251054064',
+            address: merchant.address || 'Vaishali Market, Jaipur (RJ)',
+            verified: merchant.verified ?? true,
+            docs: merchant.docs || 'Approved',
+            hasAuthAccount: true,
+            authUid: newUid,
+            email: targetEmail
+          }, { merge: true });
+        }
+      } else if (type === 'rider') {
+        const rider = deliveryPartners.find(d => d.id === id);
+        if (rider) {
+          const docId = rider.firestoreId || rider.id;
+          const docRef = doc(db, "delivery_boys", docId);
+          await setDoc(docRef, { 
+            id: rider.id,
+            name: rider.name,
+            password: password,
+            email: targetEmail,
+            phone: rider.phone || '9251054064',
+            vehicle: rider.vehicle || 'RJ-14-AB-1234',
+            verified: rider.verified ?? true,
+            active: rider.active ?? true,
+            hasAuthAccount: true,
+            authUid: newUid
+          }, { merge: true });
+        }
+      }
+
+      setTempAuthPassword('');
+      alert(`Firebase Auth Account successfully created for ${targetEmail}!\nThey can now log into their console.`);
+      showToast("Auth account created successfully!");
+    } catch (error) {
+      console.error("Error creating auth account:", error);
+      alert(`Failed to create auth account: ${error.message}`);
+    }
+  };
+
   // Merchant add custom product
 
   const handleMerchantAddProduct = async () => {
@@ -1944,7 +2315,14 @@ function App() {
                 </div>
                 <div className="cart-item-detail">
                   <h4>{item.name}</h4>
-                  <span className="cart-item-sub">{formatINR(item.price)} each</span>
+                  <span className="cart-item-sub">
+                    {formatINR(item.price)} each 
+                    {item.originalPrice > item.price && (
+                      <span style={{ textDecoration: 'line-through', fontSize: '10px', marginLeft: '4px', color: 'var(--color-text-muted)' }}>
+                        {formatINR(item.originalPrice)}
+                      </span>
+                    )}
+                  </span>
                 </div>
                 <div className="cart-item-qty">
                   <button onClick={() => handleUpdateQty(item.id, -1)}>-</button>
@@ -1977,7 +2355,7 @@ function App() {
             <div className="price-summary">
               <div className="summary-row">
                 <span>Items Subtotal</span>
-                <span>{formatINR(cart.reduce((acc, i) => acc + (i.price * i.quantity), 0))}</span>
+                <span>{formatINR(cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0))}</span>
               </div>
               <div className="summary-row">
                 <span>Delivery Fee</span>
@@ -1994,7 +2372,7 @@ function App() {
                 <span>Grand Total</span>
                 <span>
                   {formatINR(
-                    cart.reduce((acc, i) => acc + (i.price * i.quantity), 0) + 
+                    cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0) + 
                     (baseDeliveryCharge + perKmCharge * 3) - 
                     appliedDiscount
                   )}
@@ -2081,93 +2459,181 @@ function App() {
   const renderPortalGuard = (portalName, children) => {
     if (!user) {
       const isRider = portalName === 'Delivery Rider';
-      const showSignUpForm = (portalName === 'Admin Console') ? false : isSignUp;
+      const showSignUpForm = (portalName === 'Merchant Dashboard' || portalName === 'Delivery Rider') ? isSignUp : false;
+      const portalThemeClass = portalName === 'Admin Console' ? 'portal-theme-admin' :
+                               portalName === 'Delivery Rider' ? 'portal-theme-delivery' :
+                               'portal-theme-merchant';
 
       return (
-        <div className="portal-auth-wrapper fade-in">
-          <div className="portal-auth-card glass-panel border-glow">
-            <div className="auth-icon-badge">
-              {portalName === 'Admin Console' ? <Shield size={36} className="text-neon" /> :
-               portalName === 'Delivery Rider' ? <Bike size={36} className="text-neon" /> :
-               <Store size={36} className="text-neon" />}
+        <div className={`portal-auth-scene ${portalThemeClass} fade-in`}>
+          <div className="portal-bg-orbs">
+            <div className="orb orb-1"></div>
+            <div className="orb orb-2"></div>
+            <div className="orb orb-3"></div>
+          </div>
+          <div className="portal-floating-particles">
+            {[...Array(8)].map((_, i) => <div key={i} className={`particle particle-${i+1}`}></div>)}
+          </div>
+          <div className="portal-auth-card-dark">
+            <div className="portal-card-glow-ring"></div>
+            <div className="auth-icon-badge-dark">
+              {portalName === 'Admin Console' ? <Shield size={36} className="auth-icon-svg" /> :
+               portalName === 'Delivery Rider' ? <Bike size={36} className="auth-icon-svg" /> :
+               <Store size={36} className="auth-icon-svg" />}
             </div>
-            <h2 className="auth-portal-title">{portalName}</h2>
-            <p className="auth-portal-subtitle">Authentication Required to Access Staff Panel</p>
+            <h2 className="auth-portal-title-dark">{portalName}</h2>
+            <p className="auth-portal-subtitle-dark">Authentication Required to Access Staff Panel</p>
 
             {authError && (
-              <div className={`auth-error-banner fade-in ${authError.toLowerCase().includes('sent') ? 'auth-info-banner' : ''}`}>
-                {authError.toLowerCase().includes('sent') ? <Check size={16} /> : <AlertCircle size={16} />}
+              <div className={`auth-error-banner fade-in ${authError.toLowerCase().includes('sent') || authError.toLowerCase().includes('submitted') ? 'auth-info-banner' : ''}`}>
+                {authError.toLowerCase().includes('sent') || authError.toLowerCase().includes('submitted') ? <Check size={16} /> : <AlertCircle size={16} />}
                 <span>{authError}</span>
               </div>
             )}
             
-            <form onSubmit={handleAuthAction} className="auth-form-premium">
-              <div className="form-group-premium">
-                <label className="form-label-premium">
-                  {isRider ? 'Rider Name / Username' : 'Email Address'}
-                </label>
-                <input 
-                  type={isRider ? 'text' : 'email'} 
-                  placeholder={isRider ? 'Enter Rider Name' : 'Enter email address'} 
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
+            {portalName === 'Merchant Dashboard' && showSignUpForm ? (
+              <form onSubmit={handleMerchantOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Shop Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Bake House" 
+                    value={onboardShopName}
+                    onChange={(e) => setOnboardShopName(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Category</label>
+                  <select 
+                    value={onboardShopCategory}
+                    onChange={(e) => setOnboardShopCategory(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                    style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                  >
+                    {categories.slice(1).map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Phone Number</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. 9251054064" 
+                    value={onboardShopPhone}
+                    onChange={(e) => setOnboardShopPhone(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Merchant Login Email</label>
+                  <input 
+                    type="email" 
+                    placeholder="e.g. owner@gmail.com" 
+                    value={onboardShopEmail}
+                    onChange={(e) => setOnboardShopEmail(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Shop Address</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. C-Scheme, Jaipur" 
+                    value={onboardShopAddress}
+                    onChange={(e) => setOnboardShopAddress(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <button type="submit" className="neon-btn auth-submit-btn-premium">
+                  Submit Onboarding Request
+                </button>
+              </form>
+            ) : portalName === 'Delivery Rider' && showSignUpForm ? (
+              <form onSubmit={handleRiderOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Rider Name</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. JohnDoe" 
+                    value={onboardRiderName}
+                    onChange={(e) => setOnboardRiderName(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Email ID</label>
+                  <input 
+                    type="email" 
+                    placeholder="e.g. john@example.com" 
+                    value={onboardRiderEmail}
+                    onChange={(e) => setOnboardRiderEmail(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Phone Number</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. 9251054064" 
+                    value={onboardRiderPhone}
+                    onChange={(e) => setOnboardRiderPhone(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Vehicle Details</label>
+                  <input 
+                    type="text" 
+                    placeholder="e.g. Splendor (RJ-14-SG-2024)" 
+                    value={onboardRiderVehicle}
+                    onChange={(e) => setOnboardRiderVehicle(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <button type="submit" className="neon-btn auth-submit-btn-premium">
+                  Submit Onboarding Request
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleAuthAction} className="auth-form-premium">
+                <div className="form-group-premium">
+                  <label className="form-label-premium">
+                    Email Address
+                  </label>
+                  <input 
+                    type="email" 
+                    placeholder="Enter email address" 
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
 
-              {isRider && showSignUpForm && (
-                <>
-                  <div className="form-group-premium">
-                    <label className="form-label-premium">Email ID</label>
-                    <input 
-                      type="email" 
-                      placeholder="Enter email address" 
-                      value={riderEmailInput}
-                      onChange={(e) => setRiderEmailInput(e.target.value)}
-                      className="custom-input-premium"
-                      required
-                    />
-                  </div>
-                  <div className="form-group-premium">
-                    <label className="form-label-premium">Phone Number</label>
-                    <input 
-                      type="text" 
-                      placeholder="Enter mobile number" 
-                      value={riderPhoneInput}
-                      onChange={(e) => setRiderPhoneInput(e.target.value)}
-                      className="custom-input-premium"
-                      required
-                    />
-                  </div>
-                  <div className="form-group-premium">
-                    <label className="form-label-premium">Vehicle Details</label>
-                    <input 
-                      type="text" 
-                      placeholder="e.g. Activa (RJ-14-AB-1234)" 
-                      value={riderVehicleInput}
-                      onChange={(e) => setRiderVehicleInput(e.target.value)}
-                      className="custom-input-premium"
-                      required
-                    />
-                  </div>
-                </>
-              )}
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Password</label>
+                  <input 
+                    type="password" 
+                    placeholder="••••••••" 
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
 
-              <div className="form-group-premium">
-                <label className="form-label-premium">Password</label>
-                <input 
-                  type="password" 
-                  placeholder="••••••••" 
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
-
-              {!showSignUpForm && !isRider && (
-                <div style={{ textAlign: 'right', marginTop: '-8px' }}>
+                <div style={{ textAlign: 'center', marginTop: '4px', marginBottom: '8px' }}>
                   <button 
                     type="button" 
                     className="toggle-btn-link-premium" 
@@ -2177,27 +2643,14 @@ function App() {
                     Forgot Password?
                   </button>
                 </div>
-              )}
+                
+                <button type="submit" className="neon-btn auth-submit-btn-premium">
+                  Sign In to Panel
+                </button>
+              </form>
+            )}
 
-              {!showSignUpForm && isRider && (
-                <div style={{ textAlign: 'center', marginTop: '4px', marginBottom: '8px' }}>
-                  <button 
-                    type="button" 
-                    className="toggle-btn-link-premium" 
-                    style={{ fontSize: '11px', opacity: 0.8 }} 
-                    onClick={handleRiderForgotPassword}
-                  >
-                    Forgot Password? (WhatsApp Admin)
-                  </button>
-                </div>
-              )}
-              
-              <button type="submit" className="neon-btn auth-submit-btn-premium">
-                {showSignUpForm ? (isRider ? 'Register Rider Account' : 'Register Staff Account') : 'Sign In to Panel'}
-              </button>
-            </form>
-
-            {!isRider && (
+            {portalName === 'Admin Console' && (
               <>
                 <div className="divider"></div>
                 <button 
@@ -2218,32 +2671,35 @@ function App() {
               </>
             )}
 
-            {isRider ? (
+            {portalName === 'Delivery Rider' ? (
               <p className="auth-toggle-text-premium">
-                {showSignUpForm ? 'Already registered?' : 'Need a new Rider Account?'} {' '}
+                {showSignUpForm ? 'Already registered?' : 'Need a new rider account?'} {' '}
                 <button type="button" className="toggle-btn-link-premium" onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }}>
                   {showSignUpForm ? 'Sign In Instead' : 'Register Now'}
                 </button>
               </p>
-            ) : (!isRider && (
+            ) : portalName === 'Merchant Dashboard' ? (
               <p className="auth-toggle-text-premium">
-                {portalName === 'Admin Console' ? (
-                  <>
-                    Need a new panel account? {' '}
-                    <button type="button" className="toggle-btn-link-premium" onClick={() => setAuthError('Request is sent to the administrator. Please contact your Administrator for the Admin Account.')}>
-                      Create New Admin Account
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {showSignUpForm ? 'Already registered?' : 'Need a new panel account?'} {' '}
-                    <button type="button" className="toggle-btn-link-premium" onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }}>
-                      {showSignUpForm ? 'Sign In Instead' : 'Create Account'}
-                    </button>
-                  </>
-                )}
+                {showSignUpForm ? 'Already registered?' : 'Need a new merchant account?'} {' '}
+                <button type="button" className="toggle-btn-link-premium" onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }}>
+                  {showSignUpForm ? 'Sign In Instead' : 'Create Account'}
+                </button>
               </p>
-            ))}
+            ) : (
+              <p className="auth-toggle-text-premium">
+                Need a new panel account? {' '}
+                <button type="button" className="toggle-btn-link-premium" onClick={() => setAuthError('Request is sent to the administrator. Please contact your Administrator for the Admin Account.')}>
+                  Create New Admin Account
+                </button>
+              </p>
+            )}
+
+            <div className="chittortech-branding-footer-dark">
+              <span className="branding-text-muted-dark">Powered and maintained by</span>
+              <div className="chittortech-logo-premium">
+                <img src="/chittortech_logo.png" alt="Chittortech Logo" className="chittortech-logo-img" />
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -2253,13 +2709,15 @@ function App() {
       
       if (!currentRider) {
         return (
-          <div className="portal-auth-wrapper fade-in">
-            <div className="portal-auth-card glass-panel border-glow" style={{ textAlign: 'center', padding: '30px' }}>
-              <div className="auth-icon-badge" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.1)' }}>
+          <div className="portal-auth-scene portal-theme-delivery fade-in">
+            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+              <div className="portal-card-glow-ring"></div>
+              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
                 <AlertCircle size={36} style={{ color: '#ef4444' }} />
               </div>
-              <h2 className="auth-portal-title">Access Denied</h2>
-              <p className="auth-portal-subtitle">
+              <h2 className="auth-portal-title-dark">Access Denied</h2>
+              <p className="auth-portal-subtitle-dark">
                 You are not registered as an authorized Delivery Rider. Please contact the Admin.
               </p>
               <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
@@ -2272,13 +2730,15 @@ function App() {
 
       if (!currentRider.verified) {
         return (
-          <div className="portal-auth-wrapper fade-in">
-            <div className="portal-auth-card glass-panel border-glow" style={{ textAlign: 'center', padding: '30px' }}>
-              <div className="auth-icon-badge" style={{ margin: '0 auto 16px', background: 'rgba(245, 158, 11, 0.1)' }}>
+          <div className="portal-auth-scene portal-theme-delivery fade-in">
+            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+              <div className="portal-card-glow-ring"></div>
+              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245,158,11,0.4)' }}>
                 <Activity size={36} style={{ color: '#f59e0b' }} />
               </div>
-              <h2 className="auth-portal-title">Approval Pending</h2>
-              <p className="auth-portal-subtitle">
+              <h2 className="auth-portal-title-dark">Approval Pending</h2>
+              <p className="auth-portal-subtitle-dark">
                 Your Rider account (<strong>{currentRider.name}</strong>) is currently pending admin verification. Your account verification is in process, please wait some time.
               </p>
               <div className="divider" style={{ margin: '20px 0' }}></div>
@@ -2312,140 +2772,145 @@ function App() {
   return (
     <div className="app-container">
       {/* Header Banner */}
-      <header className="app-header glass-panel">
-        {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
-        {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
-          <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
-            <Menu size={20} />
-          </button>
-        )}
+      {!(activeTab !== 'customer' && !user) && (
+        <header className="app-header glass-panel">
+          {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
+          {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
+            <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
+              <Menu size={20} />
+            </button>
+          )}
 
-        <div className="header-logo">
-          <div className="logo-text">
-            <div className="logo-brand-name">
-              <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
-              {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
-              {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Admin Console</span>}
-              {activeTab === 'merchant' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Merchant Shop Console</span>}
+          <div className="header-logo">
+            <div className="logo-text">
+              <div className="logo-brand-name">
+                <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
+                {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
+                {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Admin Console</span>}
+                {activeTab === 'merchant' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Merchant Shop Console</span>}
+              </div>
+              <p className="tagline">Quick Home Delivery Service</p>
             </div>
-            <p className="tagline">Quick Home Delivery Service</p>
           </div>
-        </div>
 
-        {/* Admin Console Navigation in Header */}
-        {activeTab === 'admin' && (
-          <nav className="header-nav">
-            <button 
-              className={`nav-link ${adminSubView === 'orders' ? 'active' : ''}`}
-              onClick={() => setAdminSubView('orders')}
-            >
-              <ShoppingCart size={16} style={{ marginRight: '6px' }} />
-              Total Orders ({stats.totalOrders})
-            </button>
-            <button 
-              className={`nav-link ${adminSubView === 'shops' ? 'active' : ''}`}
-              onClick={() => setAdminSubView('shops')}
-            >
-              <Store size={16} style={{ marginRight: '6px' }} />
-              Active Shops ({stats.activeMerchants})
-            </button>
-            <button 
-              className={`nav-link ${adminSubView === 'riders' ? 'active' : ''}`}
-              onClick={() => setAdminSubView('riders')}
-            >
-              <Bike size={16} style={{ marginRight: '6px' }} />
-              Active Riders ({stats.activeRiders})
-            </button>
-            <button 
-              className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
-              onClick={() => setAdminSubView('settings')}
-            >
-              <Settings size={16} style={{ marginRight: '6px' }} />
-              Settings
-            </button>
-            <div className="admin-header-profit-badge">
-              <DollarSign size={14} />
-              Profit: {formatINR(stats.netProfit)}
-            </div>
-          </nav>
-        )}
+          {/* Admin Console Navigation in Header */}
+          {activeTab === 'admin' && (
+            <nav className="header-nav">
+              <button 
+                className={`nav-link ${adminSubView === 'orders' ? 'active' : ''}`}
+                onClick={() => setAdminSubView('orders')}
+              >
+                <ShoppingCart size={16} style={{ marginRight: '6px' }} />
+                Total Orders ({stats.totalOrders})
+              </button>
+              <button 
+                className={`nav-link ${adminSubView === 'shops' ? 'active' : ''}`}
+                onClick={() => setAdminSubView('shops')}
+              >
+                <Store size={16} style={{ marginRight: '6px' }} />
+                Active Shops ({stats.activeMerchants})
+              </button>
+              <button 
+                className={`nav-link ${adminSubView === 'riders' ? 'active' : ''}`}
+                onClick={() => setAdminSubView('riders')}
+              >
+                <Bike size={16} style={{ marginRight: '6px' }} />
+                Active Riders ({stats.activeRiders})
+              </button>
+              <button 
+                className={`nav-link ${adminSubView === 'items' ? 'active' : ''}`}
+                onClick={() => setAdminSubView('items')}
+              >
+                <Package size={16} style={{ marginRight: '6px' }} />
+                All Items ({products.length})
+              </button>
+              <button 
+                className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
+                onClick={() => setAdminSubView('settings')}
+              >
+                <Settings size={16} style={{ marginRight: '6px' }} />
+                Settings
+              </button>
+            </nav>
+          )}
 
-        {/* Tab Controls (Desktop only) */}
-        {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
-          <nav className="header-nav desktop-only-nav">
-            <button 
-              className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
-              onClick={() => handleTabChange('customer')}
-            >
-              <ShoppingCart size={18} />
-              Customer View
-            </button>
-            {activeTab !== 'customer' && (
-              <>
-                <button 
-                  className={`nav-link ${activeTab === 'admin' ? 'active font-neon' : ''}`}
-                  onClick={() => handleTabChange('admin')}
-                >
-                  <Shield size={18} />
-                  Admin Console
-                </button>
-                <button 
-                  className={`nav-link ${activeTab === 'delivery' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('delivery')}
-                >
-                  <Bike size={18} />
-                  Delivery Rider
-                </button>
-                <button 
-                  className={`nav-link ${activeTab === 'merchant' ? 'active' : ''}`}
-                  onClick={() => handleTabChange('merchant')}
-                >
-                  <Store size={18} />
-                  Merchant Shop
-                </button>
-              </>
-            )}
-          </nav>
-        )}
-
-        {/* Header Actions (Auth, Cart & Mobile Menu) */}
-        <div className="header-actions">
-          {activeTab === 'customer' && (
-            <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)} title="View Cart">
-              <ShoppingCart size={20} />
-              {cart.length > 0 && (
-                <span className="cart-badge-count-header">
-                  {cart.reduce((sum, item) => sum + item.quantity, 0)}
-                </span>
+          {/* Tab Controls (Desktop only) */}
+          {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
+            <nav className="header-nav desktop-only-nav">
+              <button 
+                className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
+                onClick={() => handleTabChange('customer')}
+              >
+                <ShoppingCart size={18} />
+                Customer View
+              </button>
+              {activeTab !== 'customer' && (
+                <>
+                  <button 
+                    className={`nav-link ${activeTab === 'admin' ? 'active font-neon' : ''}`}
+                    onClick={() => handleTabChange('admin')}
+                  >
+                    <Shield size={18} />
+                    Admin Console
+                  </button>
+                  <button 
+                    className={`nav-link ${activeTab === 'delivery' ? 'active' : ''}`}
+                    onClick={() => handleTabChange('delivery')}
+                  >
+                    <Bike size={18} />
+                    Delivery Rider
+                  </button>
+                  <button 
+                    className={`nav-link ${activeTab === 'merchant' ? 'active' : ''}`}
+                    onClick={() => handleTabChange('merchant')}
+                  >
+                    <Store size={18} />
+                    Merchant Shop
+                  </button>
+                </>
               )}
-            </button>
+            </nav>
           )}
 
-          {activeTab === 'customer' && (
-            <button className="cart-header-icon-btn" onClick={() => setIsProfileOpen(true)} title="My Profile & Orders">
-              <User size={20} />
-            </button>
-          )}
+          {/* Header Actions (Auth, Cart & Mobile Menu) */}
+          <div className="header-actions">
+            {activeTab === 'customer' && (
+              <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)} title="View Cart">
+                <ShoppingCart size={20} />
+                {cart.length > 0 && (
+                  <span className="cart-badge-count-header">
+                    {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            )}
 
-          {activeTab === 'customer' && (
-            <button className="cart-header-icon-btn" onClick={() => setIsContactOpen(true)} title="Contact Us">
-              <Phone size={20} />
-            </button>
-          )}
+            {activeTab === 'customer' && (
+              <button className="cart-header-icon-btn" onClick={() => setIsProfileOpen(true)} title="My Profile & Orders">
+                <User size={20} />
+              </button>
+            )}
 
-          {user ? (
-            <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
-              <span className="user-welcome">Hi, {user.name.split('@')[0]}</span>
-              <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
-            </div>
-          ) : (
-            <button className={`neon-btn login-trigger-btn ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`} onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
-              Sign In
-            </button>
-          )}
+            {activeTab === 'customer' && (
+              <button className="cart-header-icon-btn" onClick={() => setIsContactOpen(true)} title="Contact Us">
+                <Phone size={20} />
+              </button>
+            )}
 
-        </div>
-      </header>
+            {user ? (
+              <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
+                <span className="user-welcome">Hi, {user.name.split('@')[0]}</span>
+                <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
+              </div>
+            ) : (
+              <button className={`neon-btn login-trigger-btn ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`} onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); }}>
+                Sign In
+              </button>
+            )}
+
+          </div>
+        </header>
+      )}
 
       {/* Main Portals Container */}
       <main className="portal-content">
@@ -2478,9 +2943,10 @@ function App() {
                   margin: '20px 0',
                   padding: '20px',
                   borderRadius: '16px',
-                  background: 'linear-gradient(135deg, rgba(0, 255, 242, 0.08) 0%, rgba(255, 0, 127, 0.08) 100%)',
-                  backdropFilter: 'blur(10px)',
-                  boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+                  background: 'linear-gradient(135deg, #090d16 0%, #151b2d 100%)',
+                  border: '1px solid rgba(0, 255, 242, 0.25)',
+                  backdropFilter: 'blur(12px)',
+                  boxShadow: '0 8px 32px 0 rgba(0, 255, 242, 0.15)'
                 }}>
                   {dealOfTheDay.image && (
                     <div className="deal-banner-image-wrap" style={{ flexShrink: 0, width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
@@ -2582,8 +3048,26 @@ function App() {
                       <h3 className="prod-title">{p.name}</h3>
                       <span className="prod-store">{p.store}</span>
                       <p className="prod-category">{p.category}</p>
+                      
+                      {(p.originalPrice > p.price || p.offerText) && (
+                        <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
+                            {p.offerText || `SAVE ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%`}
+                          </span>
+                        </div>
+                      )}
+
                       <div className="prod-buy">
-                        <span className="prod-price">{formatINR(p.price)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                          <span className="prod-price" style={{ color: p.originalPrice > p.price ? 'var(--color-success)' : 'inherit' }}>
+                            {formatINR(p.price)}
+                          </span>
+                          {p.originalPrice > p.price && (
+                            <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
+                              {formatINR(p.originalPrice)}
+                            </span>
+                          )}
+                        </div>
                         <button 
                           className="add-to-cart-btn" 
                           onClick={() => handleAddToCart(p)}
@@ -2616,8 +3100,8 @@ function App() {
                         <div className="eta-banner-sidebar">
                           <span className="eta-countdown-sidebar">
                             {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
-                             trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~14 mins' :
-                             trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~22 mins' :
+                             trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
+                             trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
                              'Awaiting Confirmation'}
                           </span>
                         </div>
@@ -2717,76 +3201,165 @@ function App() {
                           </td>
                         </tr>
                       ) : (
-                        orders.filter(o => o.status !== 'COMPLETED').map(o => (
-                          <tr key={o.id}>
-                            <td><strong>{o.id}</strong></td>
-                            <td>
-                              <div>{o.customerName}</div>
-                              <div className="sub-text">{o.customerPhone}</div>
-                            </td>
-                            <td>
-                              <div>{o.items[0]?.store}</div>
-                              <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
-                            </td>
-                            <td>{formatINR(o.totalAmount)}</td>
-                            <td>
-                              <span className={`badge ${o.paymentStatus === 'PAID' ? 'badge-success' : 'badge-warning'}`}>
-                                {o.paymentMethod} ({o.paymentStatus})
-                              </span>
-                            </td>
-                            <td>
-                              {o.deliveryPartnerName ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <div className="badge badge-primary">{o.deliveryPartnerName}</div>
-                                  {(() => {
-                                    const assignedRider = deliveryPartners.find(d => d.id === o.deliveryPartnerId);
-                                    const rPhone = assignedRider?.phone || '919251054064';
-                                    return (
-                                      <a 
-                                        href={`https://wa.me/${rPhone}?text=${encodeURIComponent(`Hi ${o.deliveryPartnerName}, you have been assigned Order ${o.id} from ${o.items[0]?.store || 'Store'} on PixiGo. Please open your Rider Console to start delivery: http://localhost:5173/delivery`)}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="whatsapp-link-btn"
-                                        title="Notify Rider on WhatsApp"
-                                        style={{ background: 'rgba(37, 211, 102, 0.15)', color: '#25D366', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                                      >
-                                        <MessageCircle size={14} />
-                                      </a>
-                                    );
-                                  })()}
+                        orders.filter(o => o.status !== 'COMPLETED').map(o => {
+                          const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
+                          return (
+                            <tr key={o.id}>
+                              <td>
+                                <strong>{o.id}</strong>
+                                <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <span className={`badge ${routing === 'Option 1 (Shop-Direct)' ? 'badge-primary' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
+                                    {routing}
+                                  </span>
+                                  <span className={`badge ${
+                                    o.status === 'ACCEPTED' ? 'badge-success' :
+                                    o.status === 'ASSIGNED' ? 'badge-primary' :
+                                    o.status === 'CANCELLED_BY_STORE' ? 'badge-danger' :
+                                    'badge-warning'
+                                  }`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
+                                    {o.status || 'PLACED'}
+                                  </span>
                                 </div>
-                              ) : (
-                                <select 
-                                  className="rider-select"
-                                  onChange={(e) => handleAdminAssignRider(o.id, e.target.value)}
-                                  defaultValue=""
+                              </td>
+                              <td>
+                                <div>{o.customerName}</div>
+                                <div className="sub-text">{o.customerPhone}</div>
+                              </td>
+                              <td>
+                                <div>{o.items[0]?.store}</div>
+                                <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
+                              </td>
+                              <td>{formatINR(o.totalAmount)}</td>
+                              <td>
+                                <span className={`badge ${o.paymentStatus === 'PAID' ? 'badge-success' : 'badge-warning'}`}>
+                                  {o.paymentMethod} ({o.paymentStatus})
+                                </span>
+                              </td>
+                              <td>
+                                {o.status === 'CANCELLED_BY_STORE' ? (
+                                  <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                    Rejected by Store
+                                  </span>
+                                ) : o.deliveryPartnerName ? (
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <div className="badge badge-primary">{o.deliveryPartnerName}</div>
+                                    {(() => {
+                                      const assignedRider = deliveryPartners.find(d => d.id === o.deliveryPartnerId);
+                                      const rPhone = assignedRider?.phone || '919251054064';
+                                      return (
+                                        <a 
+                                          href={`https://wa.me/${rPhone}?text=${encodeURIComponent(`Hi ${o.deliveryPartnerName}, you have been assigned Order ${o.id} from ${o.items[0]?.store || 'Store'} on PixiGo. Please open your Rider Console to start delivery: http://localhost:5173/delivery`)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="whatsapp-link-btn"
+                                          title="Notify Rider on WhatsApp"
+                                          style={{ background: 'rgba(37, 211, 102, 0.15)', color: '#25D366', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                                        >
+                                          <MessageCircle size={14} />
+                                        </a>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : o.status === 'PLACED' ? (
+                                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontStyle: 'italic' }}>
+                                    Awaiting Confirmation
+                                  </span>
+                                ) : (
+                                  <select 
+                                    className="rider-select"
+                                    onChange={(e) => handleAdminAssignRider(o.id, e.target.value)}
+                                    defaultValue=""
+                                  >
+                                    <option value="" disabled>Assign Rider...</option>
+                                    {deliveryPartners.filter(d => d.verified && d.active).map(d => (
+                                      <option key={d.id} value={d.id}>{d.name}</option>
+                                    ))}
+                                  </select>
+                                )}
+                              </td>
+                              <td><strong>{o.otp}</strong></td>
+                              <td className="action-td">
+                                {o.status === 'CANCELLED_BY_STORE' && (
+                                  reroutingOrderId === o.id ? (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px', border: '1px solid var(--color-border)', borderRadius: '6px', background: 'rgba(255,255,255,0.02)', minWidth: '150px' }}>
+                                      <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-text-main)', textAlign: 'left' }}>Re-route Settings:</div>
+                                      
+                                      {/* Store Dropdown */}
+                                      <select
+                                        value={rerouteSelectedShop}
+                                        onChange={(e) => setRerouteSelectedShop(e.target.value)}
+                                        className="rider-select"
+                                        style={{ width: '100%', padding: '4px', fontSize: '12px' }}
+                                      >
+                                        <option value="">Select Shop...</option>
+                                        {shops.filter(s => s.verified).map(s => (
+                                          <option key={s.id} value={s.id}>{s.storeName || s.name}</option>
+                                        ))}
+                                      </select>
+
+                                      {/* Rider Dropdown */}
+                                      <select
+                                        value={rerouteSelectedRider}
+                                        onChange={(e) => setRerouteSelectedRider(e.target.value)}
+                                        className="rider-select"
+                                        style={{ width: '100%', padding: '4px', fontSize: '12px' }}
+                                      >
+                                        <option value="">Select Rider (Optional)...</option>
+                                        {deliveryPartners.filter(d => d.verified && d.active).map(d => (
+                                          <option key={d.id} value={d.id}>{d.name}</option>
+                                        ))}
+                                      </select>
+
+                                      <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                                        <button 
+                                          className="neon-btn small-btn" 
+                                          onClick={() => handleAdminSubmitReroute(o.id)}
+                                          style={{ flex: 1, padding: '4px 8px', fontSize: '11px', background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                                        >
+                                          Confirm
+                                        </button>
+                                        <button 
+                                          className="neon-btn small-btn" 
+                                          onClick={() => setReroutingOrderId(null)}
+                                          style={{ flex: 1, padding: '4px 8px', fontSize: '11px', background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button 
+                                      className="neon-btn small-btn" 
+                                      onClick={() => handleAdminRerouteOrder(o.id)}
+                                      style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
+                                    >
+                                      Re-route Order
+                                    </button>
+                                  )
+                                )}
+                                {o.status === 'PLACED' && routing === 'Option 2 (Managed)' && (
+                                  <button className="neon-btn small-btn" onClick={() => handleAdminAcceptOrder(o.id)}>
+                                    Confirm Order
+                                  </button>
+                                )}
+                                {o.status === 'PLACED' && routing === 'Option 1 (Shop-Direct)' && (
+                                  <span style={{ fontSize: '11px', color: 'var(--color-warning)', fontWeight: '600' }}>
+                                    Awaiting Merchant...
+                                  </span>
+                                )}
+                                <a 
+                                  href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="whatsapp-link-btn"
+                                  title="WhatsApp Customer"
                                 >
-                                  <option value="" disabled>Assign Rider...</option>
-                                  {deliveryPartners.filter(d => d.verified && d.active).map(d => (
-                                    <option key={d.id} value={d.id}>{d.name}</option>
-                                  ))}
-                                </select>
-                              )}
-                            </td>
-                            <td><strong>{o.otp}</strong></td>
-                            <td className="action-td">
-                              {o.status === 'PLACED' && (
-                                <button className="neon-btn small-btn" onClick={() => handleAdminAcceptOrder(o.id)}>
-                                  Confirm Order
-                                </button>
-                              )}
-                              <a 
-                                href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="whatsapp-link-btn"
-                                title="WhatsApp Customer"
-                              >
-                                <MessageCircle size={18} />
-                              </a>
-                            </td>
-                          </tr>
-                        ))
+                                  <MessageCircle size={18} />
+                                </a>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -2831,29 +3404,39 @@ function App() {
                             </td>
                           </tr>
                         ) : (
-                          orders.filter(o => o.status === 'COMPLETED').map(o => (
-                            <tr key={o.id}>
-                              <td><strong>{o.id}</strong></td>
-                              <td>
-                                <div>{o.customerName}</div>
-                                <div className="sub-text">{o.customerPhone}</div>
-                              </td>
-                              <td>
-                                <div>{o.items[0]?.store}</div>
-                                <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
-                              </td>
-                              <td>{formatINR(o.totalAmount)}</td>
-                              <td>
-                                <span className="badge badge-success">
-                                  {o.paymentMethod} ({o.paymentStatus})
-                                </span>
-                              </td>
-                              <td>
-                                <span className="badge badge-primary">{o.deliveryPartnerName || 'N/A'}</span>
-                              </td>
-                              <td><strong>{o.otp}</strong></td>
-                            </tr>
-                          ))
+                          orders.filter(o => o.status === 'COMPLETED').map(o => {
+                            const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
+                            return (
+                              <tr key={o.id}>
+                                <td>
+                                  <strong>{o.id}</strong>
+                                  <div style={{ marginTop: '4px' }}>
+                                    <span className={`badge ${routing === 'Option 1 (Shop-Direct)' ? 'badge-primary' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                                      {routing}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <div>{o.customerName}</div>
+                                  <div className="sub-text">{o.customerPhone}</div>
+                                </td>
+                                <td>
+                                  <div>{o.items[0]?.store}</div>
+                                  <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
+                                </td>
+                                <td>{formatINR(o.totalAmount)}</td>
+                                <td>
+                                  <span className="badge badge-success">
+                                    {o.paymentMethod} ({o.paymentStatus})
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className="badge badge-primary">{o.deliveryPartnerName || 'N/A'}</span>
+                                </td>
+                                <td><strong>{o.otp}</strong></td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
@@ -2861,6 +3444,129 @@ function App() {
                 </div>
               )}
             </>)}
+
+            {adminSubView === 'items' && (
+              <div className="admin-orders-table glass-panel fade-in">
+                <div className="panel-header">
+                  <h2>Product Catalog Manager ({products.length})</h2>
+                  <button className="neon-btn csv-btn" onClick={() => setAdminSubView('orders')}>
+                    ← Back to Orders
+                  </button>
+                </div>
+                
+                <div className="table-responsive">
+                  <table className="order-log-table">
+                    <thead>
+                      <tr>
+                        <th>Item Info</th>
+                        <th>Store</th>
+                        <th>Category</th>
+                        <th>Image URL</th>
+                        <th>Selling Price (₹)</th>
+                        <th>Original Price (₹)</th>
+                        <th>Offer Title</th>
+                        <th>Final Price</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.length === 0 ? (
+                        <tr>
+                          <td colSpan="8" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                            No products found in the catalog.
+                          </td>
+                        </tr>
+                      ) : (
+                        products.map(p => {
+                          return (
+                            <tr key={p.id}>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <div style={{ fontSize: '20px' }}>{p.emoji || '📦'}</div>
+                                  <div style={{ textAlign: 'left' }}>
+                                    <strong>{p.name}</strong>
+                                    <div className="sub-text">ID: {p.id}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>{p.store}</td>
+                              <td>
+                                <span className="badge badge-info">{p.category}</span>
+                              </td>
+                              <td>
+                                <input 
+                                  type="text"
+                                  id={`image-${p.id}`}
+                                  defaultValue={p.image || ''}
+                                  placeholder="Image URL"
+                                  className="rider-select"
+                                  style={{ width: '150px', padding: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '11px' }}
+                                />
+                              </td>
+                              <td>
+                                <input 
+                                  type="number"
+                                  id={`price-${p.id}`}
+                                  defaultValue={p.price}
+                                  className="rider-select"
+                                  style={{ width: '80px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                />
+                              </td>
+                              <td>
+                                <input 
+                                  type="number"
+                                  id={`orig-price-${p.id}`}
+                                  defaultValue={p.originalPrice || 0}
+                                  placeholder="0"
+                                  className="rider-select"
+                                  style={{ width: '80px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                />
+                              </td>
+                              <td>
+                                <input 
+                                  type="text"
+                                  id={`offer-${p.id}`}
+                                  defaultValue={p.offerText || ''}
+                                  placeholder="e.g. 20% Off"
+                                  className="rider-select"
+                                  style={{ width: '150px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                />
+                              </td>
+                              <td>
+                                <span style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>
+                                  {formatINR(p.price)}
+                                </span>
+                              </td>
+                              <td>
+                                <button 
+                                  className="neon-btn small-btn"
+                                  onClick={() => {
+                                    const priceInput = document.getElementById(`price-${p.id}`);
+                                    const origPriceInput = document.getElementById(`orig-price-${p.id}`);
+                                    const offerInput = document.getElementById(`offer-${p.id}`);
+                                    const imageInput = document.getElementById(`image-${p.id}`);
+                                    handleAdminUpdateProductCatalog(
+                                      p.id, 
+                                      priceInput.value, 
+                                      origPriceInput.value, 
+                                      offerInput.value,
+                                      imageInput.value
+                                    );
+                                  }}
+                                  style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                                >
+                                  Save
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {adminSubView === 'shops' && (
               <>
@@ -2893,7 +3599,10 @@ function App() {
                               style={{ cursor: 'pointer' }}
                             >
                               <td><strong>{s.id}</strong></td>
-                              <td>{s.name}</td>
+                              <td>
+                                {s.name}
+                                {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                              </td>
                               <td><span className="badge badge-info">{s.category}</span></td>
                               <td>{s.phone || 'N/A'}</td>
                               <td>
@@ -3122,7 +3831,10 @@ function App() {
                           {deliveryPartners.map(d => (
                             <tr key={d.id}>
                               <td><strong>{d.id}</strong></td>
-                              <td>{d.name}</td>
+                              <td>
+                                {d.name}
+                                {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                              </td>
                               <td>{d.vehicle || 'N/A'}</td>
                               <td>{d.phone || 'N/A'}</td>
                               <td>{d.totalDeliveries || 0}</td>
@@ -3500,8 +4212,8 @@ function App() {
                             gap: '20px',
                             padding: '16px',
                             borderRadius: '12px',
-                            background: 'linear-gradient(135deg, rgba(0, 255, 242, 0.08) 0%, rgba(255, 0, 127, 0.08) 100%)',
-                            border: '1px solid rgba(255,255,255,0.05)',
+                            background: 'linear-gradient(135deg, #090d16 0%, #151b2d 100%)',
+                            border: '1px solid rgba(0, 255, 242, 0.25)',
                             margin: 0
                           }}>
                             {dealImageEdit ? (
@@ -3521,7 +4233,7 @@ function App() {
                             )}
                             <div style={{ flex: 1, textAlign: 'left' }}>
                               <span className="deal-banner-tag" style={{ background: 'linear-gradient(90deg, #ff007f, #00fff2)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '11px', fontWeight: '800', display: 'block', marginBottom: '4px' }}>🔥 Deal of the Day</span>
-                              <h3 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--color-text-main)', margin: '0 0 6px 0', lineHeight: '1.4' }}>{dealTextEdit || 'Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!'}</h3>
+                              <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#ffffff', margin: '0 0 6px 0', lineHeight: '1.4' }}>{dealTextEdit || 'Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!'}</h3>
                               <button className="neon-btn small-btn" style={{ fontSize: '10px', padding: '4px 12px' }} disabled>Claim Deal Now</button>
                             </div>
                           </div>
@@ -3537,8 +4249,8 @@ function App() {
                               gap: '12px',
                               padding: '12px',
                               borderRadius: '10px',
-                              background: 'linear-gradient(135deg, rgba(0, 255, 242, 0.08) 0%, rgba(255, 0, 127, 0.08) 100%)',
-                              border: '1px solid rgba(255,255,255,0.05)',
+                              background: 'linear-gradient(135deg, #090d16 0%, #151b2d 100%)',
+                              border: '1px solid rgba(0, 255, 242, 0.25)',
                               margin: 0
                             }}>
                               {dealImageEdit ? (
@@ -3558,7 +4270,7 @@ function App() {
                               )}
                               <div style={{ textAlign: 'left' }}>
                                 <span className="deal-banner-tag" style={{ background: 'linear-gradient(90deg, #ff007f, #00fff2)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontSize: '10px', fontWeight: '800', display: 'block', marginBottom: '4px' }}>🔥 Deal of the Day</span>
-                                <h3 style={{ fontSize: '13px', fontWeight: '700', color: 'var(--color-text-main)', margin: '0 0 6px 0', lineHeight: '1.4' }}>{dealTextEdit || 'Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!'}</h3>
+                                <h3 style={{ fontSize: '13px', fontWeight: '700', color: '#ffffff', margin: '0 0 6px 0', lineHeight: '1.4' }}>{dealTextEdit || 'Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!'}</h3>
                                 <button className="neon-btn small-btn" style={{ fontSize: '9px', padding: '4px 10px', width: '100%' }} disabled>Claim Deal Now</button>
                               </div>
                             </div>
@@ -3789,6 +4501,55 @@ function App() {
                   </div>
                 )}
 
+                {/* Contact Support Section */}
+                <div className="support-section glass-panel border-glow" style={{
+                  marginTop: '40px',
+                  padding: '24px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, rgba(0, 255, 242, 0.05) 0%, rgba(255, 0, 127, 0.05) 100%)',
+                  textAlign: 'left'
+                }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-main)', marginBottom: '8px' }}>
+                    <MessageCircle size={20} style={{ color: 'var(--color-primary)' }} /> Contact Support Desk
+                  </h3>
+                  <p style={{ fontSize: '14px', color: 'var(--color-text-main)', margin: '0 0 16px 0', lineHeight: '1.6' }}>
+                    You can call us on this number for 24/7 help: <strong><a href="tel:+919251054064" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>+91 9251054064</a></strong>
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', width: '100%' }}>
+                    <a 
+                      href="https://wa.me/919251054064" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="contact-method-card border-glow"
+                      style={{ margin: 0 }}
+                    >
+                      <div className="contact-method-icon whatsapp-color">
+                        <MessageCircle size={20} />
+                      </div>
+                      <div className="contact-method-details">
+                        <h4>WhatsApp Chat</h4>
+                        <p>+91 9251054064</p>
+                      </div>
+                      <ArrowRight size={16} className="contact-arrow" />
+                    </a>
+
+                    <a 
+                      href="mailto:pixigodelivery@gmail.com" 
+                      className="contact-method-card border-glow"
+                      style={{ margin: 0 }}
+                    >
+                      <div className="contact-method-icon email-color">
+                        <Mail size={20} />
+                      </div>
+                      <div className="contact-method-details">
+                        <h4>Email Support</h4>
+                        <p>pixigodelivery@gmail.com</p>
+                      </div>
+                      <ArrowRight size={16} className="contact-arrow" />
+                    </a>
+                  </div>
+                </div>
+
               </div>
             </div>
           );
@@ -3796,10 +4557,12 @@ function App() {
 
         {/* ==================== MERCHANT DASHBOARD ==================== */}
         {activeTab === 'merchant' && renderPortalGuard('Merchant Dashboard', (() => {
-          const merchantOrders = orders.filter(o => 
-            o.merchantName === currentMerchantShopName || 
-            (o.items && o.items.some(i => i.store === currentMerchantShopName))
-          );
+          const merchantOrders = orders.filter(o => {
+            const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
+            return (o.merchantName === currentMerchantShopName || 
+                    (o.items && o.items.some(i => i.store === currentMerchantShopName))) &&
+                   routing === 'Option 1 (Shop-Direct)';
+          });
 
           const todaysMerchantOrders = merchantOrders.filter(o => {
             const dateVal = o.completedAt || o.createdAt;
@@ -3888,9 +4651,22 @@ function App() {
                           </div>
                           <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                             <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{formatINR(o.totalAmount)}</div>
-                            <button className="neon-btn small-btn" onClick={() => handleMerchantAcceptOrder(o.id)}>
-                              Accept Order
-                            </button>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button 
+                                className="neon-btn small-btn" 
+                                onClick={() => handleMerchantAcceptOrder(o.id)}
+                                style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
+                              >
+                                Approve
+                              </button>
+                              <button 
+                                className="neon-btn small-btn" 
+                                onClick={() => handleMerchantRejectOrder(o.id)}
+                                style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -4048,6 +4824,56 @@ function App() {
                     </div>
                   </div>
                 </div>
+
+                {/* Contact Support Section */}
+                <div className="support-section glass-panel border-glow" style={{
+                  marginTop: '40px',
+                  padding: '24px',
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, rgba(0, 255, 242, 0.05) 0%, rgba(255, 0, 127, 0.05) 100%)',
+                  textAlign: 'left'
+                }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-text-main)', marginBottom: '8px' }}>
+                    <MessageCircle size={20} style={{ color: 'var(--color-primary)' }} /> Contact Support Desk
+                  </h3>
+                  <p style={{ fontSize: '14px', color: 'var(--color-text-main)', margin: '0 0 16px 0', lineHeight: '1.6' }}>
+                    You can call us on this number for 24/7 help: <strong><a href="tel:+919251054064" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>+91 9251054064</a></strong>
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', width: '100%' }}>
+                    <a 
+                      href="https://wa.me/919251054064" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="contact-method-card border-glow"
+                      style={{ margin: 0 }}
+                    >
+                      <div className="contact-method-icon whatsapp-color">
+                        <MessageCircle size={20} />
+                      </div>
+                      <div className="contact-method-details">
+                        <h4>WhatsApp Chat</h4>
+                        <p>+91 9251054064</p>
+                      </div>
+                      <ArrowRight size={16} className="contact-arrow" />
+                    </a>
+
+                    <a 
+                      href="mailto:pixigodelivery@gmail.com" 
+                      className="contact-method-card border-glow"
+                      style={{ margin: 0 }}
+                    >
+                      <div className="contact-method-icon email-color">
+                        <Mail size={20} />
+                      </div>
+                      <div className="contact-method-details">
+                        <h4>Email Support</h4>
+                        <p>pixigodelivery@gmail.com</p>
+                      </div>
+                      <ArrowRight size={16} className="contact-arrow" />
+                    </a>
+                  </div>
+                </div>
+
               </div>
             </div>
           );
@@ -4074,19 +4900,25 @@ function App() {
       {/* Firebase Authentication Modal */}
       {isAuthModalOpen && (
         <div className="modal-backdrop fade-in" onClick={() => { setIsAuthModalOpen(false); setAuthError(''); }}>
-          <div className="auth-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => { setIsAuthModalOpen(false); setAuthError(''); }}>
-              <X size={20} />
-            </button>
-            
-            <div className="auth-icon-badge">
-              <User size={36} className="text-neon" />
+          <div className="customer-auth-modal-scene" onClick={(e) => e.stopPropagation()}>
+            <div className="portal-bg-orbs">
+              <div className="orb orb-1"></div>
+              <div className="orb orb-2"></div>
             </div>
+            <div className="portal-auth-card-dark customer-auth-modal-card">
+              <div className="portal-card-glow-ring"></div>
+              <button className="modal-close-btn-dark" onClick={() => { setIsAuthModalOpen(false); setAuthError(''); }}>
+                <X size={20} />
+              </button>
             
-            <div className="auth-modal-header" style={{ textAlign: 'center', marginBottom: '8px' }}>
-              <h2 className="auth-portal-title">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
-              <p className="auth-portal-subtitle">Access your PixiGo Delivery dashboard</p>
-            </div>
+              <div className="auth-icon-badge-dark">
+                <User size={36} className="auth-icon-svg" />
+              </div>
+            
+              <div className="auth-modal-header" style={{ textAlign: 'center', marginBottom: '8px' }}>
+                <h2 className="auth-portal-title-dark">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
+                <p className="auth-portal-subtitle-dark">Access your PixiGo Delivery dashboard</p>
+              </div>
 
             {authError && (
               <div className={`auth-error-banner fade-in ${authError.toLowerCase().includes('sent') ? 'auth-info-banner' : ''}`}>
@@ -4162,6 +4994,14 @@ function App() {
                 {isSignUp ? 'Sign In Instead' : 'Sign Up Now'}
               </button>
             </p>
+
+            <div className="chittortech-branding-footer-dark">
+              <span className="branding-text-muted-dark">Powered and maintained by</span>
+              <div className="chittortech-logo-premium">
+                <img src="/chittortech_logo.png" alt="Chittortech Logo" className="chittortech-logo-img" />
+              </div>
+            </div>
+            </div>
           </div>
         </div>
       )}
@@ -4441,10 +5281,11 @@ function App() {
                 <div className="tracked-order-detail-sidebar fade-in" style={{ gap: '16px', display: 'flex', flexDirection: 'column' }}>
                   {/* ETA banner */}
                   <div className="eta-banner-sidebar">
-                    <span className="eta-countdown-sidebar">
+                    <span className="eta-countdown-sidebar" style={{ color: trackedOrder.status === 'CANCELLED_BY_STORE' ? 'var(--color-danger)' : 'inherit' }}>
                       {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
-                       trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~14 mins' :
-                       trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~22 mins' :
+                       trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
+                       trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
+                       trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
                        'Awaiting Confirmation'}
                     </span>
                   </div>
@@ -4468,7 +5309,11 @@ function App() {
                     </div>
                     <div className="sidebar-detail-row">
                       <span>Status:</span>
-                      <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                      <span className={`badge ${
+                        trackedOrder.status === 'COMPLETED' ? 'badge-success' : 
+                        trackedOrder.status === 'CANCELLED_BY_STORE' ? 'badge-danger' : 
+                        'badge-warning'
+                      }`}>
                         {trackedOrder.status}
                       </span>
                     </div>
@@ -4673,6 +5518,24 @@ function App() {
                   required
                 />
               </div>
+
+              <div className="divider" style={{ margin: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                <span style={{ color: 'var(--color-primary)', fontSize: '13px', fontWeight: 'bold' }}>🔐 Firebase Auth Credentials</span>
+                <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Register this rider's login account in Firebase Auth.</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                  <button 
+                    type="button" 
+                    className="neon-btn small-btn" 
+                    onClick={() => handleCreateAuthAccount('rider', editRiderEmail || editingRider.name, editRiderPassword || editingRider.password, editingRider.id)}
+                    style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', alignSelf: 'flex-start' }}
+                  >
+                    Register Rider Login in Firebase
+                  </button>
+                </div>
+              </div>
+
               <button type="submit" className="neon-btn save-profile-btn-premium" style={{ marginTop: '10px' }}>
                 Save Rider Settings
               </button>
@@ -4781,6 +5644,13 @@ function App() {
                 </span>
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Auth Login Account:</span>
+                <span className={`badge ${selectedShopDetails.hasAuthAccount ? 'badge-success' : 'badge-warning'}`}>
+                  {selectedShopDetails.hasAuthAccount ? 'Created' : 'Not Created'}
+                </span>
+              </div>
+
               <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px' }}>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px', display: 'block', marginBottom: '8px' }}>Onboarding Documents Provided:</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
@@ -4819,6 +5689,41 @@ function App() {
                 <span className={`badge ${selectedShopDetails.verified ? 'badge-success' : 'badge-danger'}`}>
                   {selectedShopDetails.verified ? 'Verified & Active' : 'Unverified / Blocked'}
                 </span>
+              </div>
+            </div>
+
+            <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+              <span style={{ color: 'var(--color-primary)', fontSize: '14px', fontWeight: 'bold', display: 'block' }}>🔐 Create Merchant Login Account</span>
+              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Create a Firebase Auth login account for this shop.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Email:</span>
+                <input 
+                  type="email" 
+                  placeholder="e.g. owner@gmail.com" 
+                  value={tempAuthEmail}
+                  onChange={(e) => setTempAuthEmail(e.target.value)}
+                  className="custom-input-premium"
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', fontSize: '13px' }}
+                />
+                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Password:</span>
+                <input 
+                  type="password" 
+                  placeholder="Enter login password" 
+                  value={tempAuthPassword}
+                  onChange={(e) => setTempAuthPassword(e.target.value)}
+                  className="custom-input-premium"
+                  style={{ width: '100%', padding: '8px', borderRadius: '6px', fontSize: '13px' }}
+                />
+                <button 
+                  type="button" 
+                  className="neon-btn small-btn" 
+                  onClick={() => handleCreateAuthAccount('merchant', tempAuthEmail, tempAuthPassword, selectedShopDetails.id)}
+                  style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', display: 'inline-flex', alignSelf: 'flex-start', marginTop: '4px' }}
+                >
+                  Create Account
+                </button>
               </div>
             </div>
 
