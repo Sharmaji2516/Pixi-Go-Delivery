@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
@@ -12,11 +12,12 @@ export const firebaseConfig = {
   storageBucket: "pixi-go-delivery.firebasestorage.app",
   messagingSenderId: "985286465902",
   appId: "1:985286465902:web:9235c2ab2572493e8d897f",
-  measurementId: "G-FYL3PLNCK6"
+  measurementId: "G-FYL3PLNCK6",
+  databaseURL: "https://pixi-go-delivery-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // Export instances to use in App.jsx
 export const auth = getAuth(app);

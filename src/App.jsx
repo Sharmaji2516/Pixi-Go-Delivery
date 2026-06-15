@@ -3,7 +3,7 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag, 
   MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown
+  Mail, Settings, ChevronDown, Users
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
@@ -303,6 +303,11 @@ function App() {
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [adminSubView, setAdminSubView] = useState('orders'); // orders | shops | riders
+  const [allAdmins, setAllAdmins] = useState([]);
+  const [allCustomers, setAllCustomers] = useState([]);
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [showPastOrders, setShowPastOrders] = useState(false);
   const [newShopName, setNewShopName] = useState('');
   const [newShopCategory, setNewShopCategory] = useState('General Store');
@@ -847,27 +852,75 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // Fetch real-time admins from Firestore
+  useEffect(() => {
+    const adminsRef = collection(db, "admins");
+    const unsubscribe = onSnapshot(adminsRef, (snapshot) => {
+      const fetchedAdmins = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedAdmins.push({
+          firestoreId: doc.id,
+          id: data.id || doc.id,
+          name: data.name || 'Admin',
+          email: data.email || '',
+          role: 'admin',
+          ...data
+        });
+      });
+      setAllAdmins(fetchedAdmins);
+    }, (error) => {
+      console.warn("Firestore admins subscription error (rules might restrict):", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time customers from Firestore
+  useEffect(() => {
+    const customersRef = collection(db, "customers");
+    const unsubscribe = onSnapshot(customersRef, (snapshot) => {
+      const fetchedCustomers = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        fetchedCustomers.push({
+          firestoreId: doc.id,
+          id: data.id || doc.id,
+          name: data.name || 'Customer',
+          email: data.email || '',
+          role: 'customer',
+          ...data
+        });
+      });
+      setAllCustomers(fetchedCustomers);
+    }, (error) => {
+      console.warn("Firestore customers subscription error (rules might restrict):", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Watch for tracked order cancellation and notify user / close panel
   useEffect(() => {
-    if (isTrackingDrawerOpen && currentOrderTracking) {
+    if (currentOrderTracking) {
       const trackedOrder = orders.find(o => o.id === currentOrderTracking);
       if (trackedOrder) {
-        if (trackedOrder.status === 'CANCELLED_BY_STORE') {
-          setIsTrackingDrawerOpen(false);
+        const statusUpper = trackedOrder.status?.toUpperCase() || '';
+        if (statusUpper.startsWith('CANCELLED')) {
+          let msg = `Your order ${trackedOrder.id} has been cancelled.`;
+          if (statusUpper === 'CANCELLED_BY_STORE') {
+            msg = `Your order ${trackedOrder.id} has been Cancelled by the Store.`;
+          } else if (statusUpper === 'CANCELLED_BY_RIDER') {
+            msg = `Your order ${trackedOrder.id} has been Cancelled by the Rider.`;
+          } else if (statusUpper === 'CANCELLED_BY_ADMIN') {
+            msg = `Your order ${trackedOrder.id} has been Cancelled by Admin.`;
+          }
+          
           setCurrentOrderTracking(null);
-          alert(`Your order ${trackedOrder.id} has been Cancelled by the Store.`);
-        } else if (trackedOrder.status === 'CANCELLED_BY_RIDER') {
           setIsTrackingDrawerOpen(false);
-          setCurrentOrderTracking(null);
-          alert(`Your order ${trackedOrder.id} has been Cancelled by the Rider.`);
-        } else if (trackedOrder.status === 'CANCELLED') {
-          setIsTrackingDrawerOpen(false);
-          setCurrentOrderTracking(null);
-          alert(`Your order ${trackedOrder.id} has been Cancelled.`);
+          alert(msg);
         }
       }
     }
-  }, [orders, currentOrderTracking, isTrackingDrawerOpen]);
+  }, [orders, currentOrderTracking]);
 
   const playNotificationSound = () => {
     try {
@@ -1208,6 +1261,120 @@ function App() {
     }, 0)
   };
 
+  // Compile all users list
+  const compiledAllUsers = [];
+  const userIdsSeen = new Set();
+
+  // 1. Add Admins
+  allAdmins.forEach(u => {
+    if (u.id && !userIdsSeen.has(u.id)) {
+      userIdsSeen.add(u.id);
+      compiledAllUsers.push({
+        id: u.id,
+        name: u.name,
+        email: u.email || 'N/A',
+        role: 'admin'
+      });
+    }
+  });
+
+  // 2. Add Merchants
+  shops.forEach(u => {
+    if (u.id && !userIdsSeen.has(u.id)) {
+      userIdsSeen.add(u.id);
+      compiledAllUsers.push({
+        id: u.id,
+        name: u.name || u.storeName,
+        email: u.email || 'N/A',
+        role: 'merchant'
+      });
+    }
+  });
+
+  // 3. Add Riders
+  deliveryPartners.forEach(u => {
+    if (u.id && !userIdsSeen.has(u.id)) {
+      userIdsSeen.add(u.id);
+      compiledAllUsers.push({
+        id: u.id,
+        name: u.name,
+        email: u.email || 'N/A',
+        role: 'rider'
+      });
+    }
+  });
+
+  // 4. Add Customers
+  allCustomers.forEach(u => {
+    if (u.id && !userIdsSeen.has(u.id)) {
+      userIdsSeen.add(u.id);
+      compiledAllUsers.push({
+        id: u.id,
+        name: u.name,
+        email: u.email || 'N/A',
+        role: 'customer'
+      });
+    }
+  });
+
+  // Admin search filtering logic
+  const filteredOrders = orders.filter(o => o.status !== 'COMPLETED').filter(o => {
+    if (!adminSearchQuery) return true;
+    const queryLower = adminSearchQuery.toLowerCase();
+    return (
+      (o.id && o.id.toLowerCase().includes(queryLower)) ||
+      (o.customerName && o.customerName.toLowerCase().includes(queryLower)) ||
+      (o.customerPhone && o.customerPhone.toLowerCase().includes(queryLower)) ||
+      (o.items && o.items[0]?.store && o.items[0].store.toLowerCase().includes(queryLower)) ||
+      (o.merchantName && o.merchantName.toLowerCase().includes(queryLower)) ||
+      (o.deliveryPartnerName && o.deliveryPartnerName.toLowerCase().includes(queryLower))
+    );
+  });
+
+  const filteredShops = shops.filter(s => {
+    if (!adminSearchQuery) return true;
+    const queryLower = adminSearchQuery.toLowerCase();
+    return (
+      (s.id && s.id.toLowerCase().includes(queryLower)) ||
+      (s.name && s.name.toLowerCase().includes(queryLower)) ||
+      (s.category && s.category.toLowerCase().includes(queryLower)) ||
+      (s.phone && s.phone.toLowerCase().includes(queryLower))
+    );
+  });
+
+  const filteredRiders = deliveryPartners.filter(d => {
+    if (!adminSearchQuery) return true;
+    const queryLower = adminSearchQuery.toLowerCase();
+    return (
+      (d.id && d.id.toLowerCase().includes(queryLower)) ||
+      (d.name && d.name.toLowerCase().includes(queryLower)) ||
+      (d.phone && d.phone.toLowerCase().includes(queryLower)) ||
+      (d.vehicle && d.vehicle.toLowerCase().includes(queryLower))
+    );
+  });
+
+  const filteredAdminProducts = products.filter(p => {
+    if (!adminSearchQuery) return true;
+    const queryLower = adminSearchQuery.toLowerCase();
+    return (
+      (p.id && p.id.toLowerCase().includes(queryLower)) ||
+      (p.name && p.name.toLowerCase().includes(queryLower)) ||
+      (p.store && p.store.toLowerCase().includes(queryLower)) ||
+      (p.category && p.category.toLowerCase().includes(queryLower))
+    );
+  });
+
+  const filteredUsers = compiledAllUsers.filter(u => {
+    if (!adminSearchQuery) return true;
+    const queryLower = adminSearchQuery.toLowerCase();
+    return (
+      (u.id && u.id.toLowerCase().includes(queryLower)) ||
+      (u.name && u.name.toLowerCase().includes(queryLower)) ||
+      (u.email && u.email.toLowerCase().includes(queryLower)) ||
+      (u.role && u.role.toLowerCase().includes(queryLower))
+    );
+  });
+
   // Helper: Format price in INR
   const formatINR = (amount) => {
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
@@ -1317,7 +1484,8 @@ function App() {
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
     const hasActiveOrder = orders.some(o => 
       (o.customerId === customerId || (o.customerPhone === customerPhone && customerPhone)) && 
-      !['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER'].includes(o.status?.toUpperCase())
+      !['COMPLETED', 'DELIVERED'].includes(o.status?.toUpperCase()) &&
+      !o.status?.toUpperCase().startsWith('CANCEL')
     );
     if (hasActiveOrder) {
       alert("You already have an active order in progress! Please wait for it to be completed or cancelled before placing a new one.");
@@ -1412,6 +1580,39 @@ function App() {
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
       }
+    }
+  };
+
+  // Admin: Cancel Order
+  const handleAdminCancelOrder = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    if (!window.confirm(`Are you sure you want to cancel Order ${orderId}?`)) {
+      return;
+    }
+
+    // Update local state first
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'CANCELLED_BY_ADMIN' } : o));
+    if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
+      setSelectedOrderDetails(prev => prev ? { ...prev, status: 'CANCELLED_BY_ADMIN' } : null);
+    }
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, { 
+          status: 'CANCELLED_BY_ADMIN',
+          cancelledBy: 'Admin',
+          cancelledAt: new Date().toISOString()
+        });
+        showToast(`Order ${orderId} Cancelled by Admin.`);
+      } catch (err) {
+        console.error("Error updating order status in Firestore:", err);
+        alert(`Failed to cancel order in database: ${err.message}`);
+      }
+    } else {
+      showToast(`Order ${orderId} Cancelled.`);
     }
   };
 
@@ -2258,7 +2459,7 @@ function App() {
     return matchQuery && matchCat;
   });
 
-  // Compute active orders for the current customer (excluding completed and delivered ones)
+  // Compute active orders for the current customer (excluding completed, delivered, and cancelled ones)
   const activeCustomerOrders = orders.filter(o => {
     const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
     const targetEmail = customerEmail.trim().toLowerCase();
@@ -2266,7 +2467,10 @@ function App() {
     const isUidMatch = user && o.userId && o.userId === user.uid;
     const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
     const isUserOrder = isEmailMatch || isUidMatch || isPhoneMatch;
-    const isActive = o.status && o.status.toUpperCase() !== 'COMPLETED' && o.status.toUpperCase() !== 'DELIVERED';
+    const isActive = o.status && 
+      o.status.toUpperCase() !== 'COMPLETED' && 
+      o.status.toUpperCase() !== 'DELIVERED' && 
+      !o.status.toUpperCase().startsWith('CANCEL');
     return isUserOrder && isActive;
   });
 
@@ -2798,35 +3002,42 @@ function App() {
             <nav className="header-nav">
               <button 
                 className={`nav-link ${adminSubView === 'orders' ? 'active' : ''}`}
-                onClick={() => setAdminSubView('orders')}
+                onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}
               >
                 <ShoppingCart size={16} style={{ marginRight: '6px' }} />
                 Total Orders ({stats.totalOrders})
               </button>
               <button 
                 className={`nav-link ${adminSubView === 'shops' ? 'active' : ''}`}
-                onClick={() => setAdminSubView('shops')}
+                onClick={() => { setAdminSubView('shops'); setAdminSearchQuery(''); }}
               >
                 <Store size={16} style={{ marginRight: '6px' }} />
                 Active Shops ({stats.activeMerchants})
               </button>
               <button 
                 className={`nav-link ${adminSubView === 'riders' ? 'active' : ''}`}
-                onClick={() => setAdminSubView('riders')}
+                onClick={() => { setAdminSubView('riders'); setAdminSearchQuery(''); }}
               >
                 <Bike size={16} style={{ marginRight: '6px' }} />
                 Active Riders ({stats.activeRiders})
               </button>
               <button 
                 className={`nav-link ${adminSubView === 'items' ? 'active' : ''}`}
-                onClick={() => setAdminSubView('items')}
+                onClick={() => { setAdminSubView('items'); setAdminSearchQuery(''); }}
               >
                 <Package size={16} style={{ marginRight: '6px' }} />
                 All Items ({products.length})
               </button>
               <button 
+                className={`nav-link ${adminSubView === 'users' ? 'active' : ''}`}
+                onClick={() => { setAdminSubView('users'); setAdminSearchQuery(''); }}
+              >
+                <Users size={16} style={{ marginRight: '6px' }} />
+                All Users ({compiledAllUsers.length})
+              </button>
+              <button 
                 className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
-                onClick={() => setAdminSubView('settings')}
+                onClick={() => { setAdminSubView('settings'); setAdminSearchQuery(''); }}
               >
                 <Settings size={16} style={{ marginRight: '6px' }} />
                 Settings
@@ -3100,6 +3311,7 @@ function App() {
                         <div className="eta-banner-sidebar">
                           <span className="eta-countdown-sidebar">
                             {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
+                             trackedOrder.status?.startsWith('CANCELLED') ? 'Order Cancelled' :
                              trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
                              trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
                              'Awaiting Confirmation'}
@@ -3125,7 +3337,11 @@ function App() {
                           </div>
                           <div className="sidebar-detail-row">
                             <span>Status:</span>
-                            <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' : 'badge-warning'}`}>
+                            <span className={`badge ${
+                              trackedOrder.status === 'COMPLETED' ? 'badge-success' : 
+                              trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' : 
+                              'badge-warning'
+                            }`}>
                               {trackedOrder.status}
                             </span>
                           </div>
@@ -3173,10 +3389,27 @@ function App() {
             {adminSubView === 'orders' && (<>
               <div className="admin-orders-table glass-panel fade-in">
                 <div className="panel-header">
-                  <h2>Active Order Operations</h2>
-                  <button className="neon-btn csv-btn" onClick={handleExportCSV}>
-                    <Download size={16} /> Export to Excel
-                  </button>
+                  <h2>Active Order Operations ({filteredOrders.length})</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
+                      <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                      <input 
+                        type="text" 
+                        placeholder="Search orders..." 
+                        value={adminSearchQuery}
+                        onChange={(e) => setAdminSearchQuery(e.target.value)}
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                      />
+                      {adminSearchQuery && (
+                        <button onClick={() => setAdminSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <button className="neon-btn csv-btn" onClick={handleExportCSV}>
+                      <Download size={16} /> Export to Excel
+                    </button>
+                  </div>
                 </div>
 
                 <div className="table-responsive">
@@ -3194,17 +3427,21 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.filter(o => o.status !== 'COMPLETED').length === 0 ? (
+                      {filteredOrders.length === 0 ? (
                         <tr>
                           <td colSpan="8" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
-                            No active orders currently running.
+                            No active orders match search query.
                           </td>
                         </tr>
                       ) : (
-                        orders.filter(o => o.status !== 'COMPLETED').map(o => {
+                        filteredOrders.map(o => {
                           const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
                           return (
-                            <tr key={o.id}>
+                            <tr 
+                              key={o.id}
+                              onClick={() => { setSelectedOrderDetails(o); setIsOrderModalOpen(true); }}
+                              className="clickable-row"
+                            >
                               <td>
                                 <strong>{o.id}</strong>
                                 <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
@@ -3214,7 +3451,7 @@ function App() {
                                   <span className={`badge ${
                                     o.status === 'ACCEPTED' ? 'badge-success' :
                                     o.status === 'ASSIGNED' ? 'badge-primary' :
-                                    o.status === 'CANCELLED_BY_STORE' ? 'badge-danger' :
+                                    o.status?.startsWith('CANCELLED') ? 'badge-danger' :
                                     'badge-warning'
                                   }`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
                                     {o.status || 'PLACED'}
@@ -3236,11 +3473,19 @@ function App() {
                                 </span>
                               </td>
                               <td>
-                                {o.status === 'CANCELLED_BY_STORE' ? (
-                                  <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
-                                    Rejected by Store
-                                  </span>
-                                ) : o.deliveryPartnerName ? (
+                                 {o.status === 'CANCELLED_BY_STORE' ? (
+                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                     Rejected by Store
+                                   </span>
+                                 ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' ? (
+                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                     Cancelled by Admin
+                                   </span>
+                                 ) : o.status === 'CANCELLED_BY_RIDER' ? (
+                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                     Rejected by Rider
+                                   </span>
+                                 ) : o.deliveryPartnerName ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div className="badge badge-primary">{o.deliveryPartnerName}</div>
                                     {(() => {
@@ -3253,6 +3498,7 @@ function App() {
                                           rel="noopener noreferrer"
                                           className="whatsapp-link-btn"
                                           title="Notify Rider on WhatsApp"
+                                          onClick={(e) => e.stopPropagation()}
                                           style={{ background: 'rgba(37, 211, 102, 0.15)', color: '#25D366', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                                         >
                                           <MessageCircle size={14} />
@@ -3268,6 +3514,7 @@ function App() {
                                   <select 
                                     className="rider-select"
                                     onChange={(e) => handleAdminAssignRider(o.id, e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
                                     defaultValue=""
                                   >
                                     <option value="" disabled>Assign Rider...</option>
@@ -3281,13 +3528,14 @@ function App() {
                               <td className="action-td">
                                 {o.status === 'CANCELLED_BY_STORE' && (
                                   reroutingOrderId === o.id ? (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px', border: '1px solid var(--color-border)', borderRadius: '6px', background: 'rgba(255,255,255,0.02)', minWidth: '150px' }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px', border: '1px solid var(--color-border)', borderRadius: '6px', background: 'rgba(255,255,255,0.02)', minWidth: '150px' }} onClick={(e) => e.stopPropagation()}>
                                       <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-text-main)', textAlign: 'left' }}>Re-route Settings:</div>
                                       
                                       {/* Store Dropdown */}
                                       <select
                                         value={rerouteSelectedShop}
                                         onChange={(e) => setRerouteSelectedShop(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
                                         className="rider-select"
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
@@ -3301,6 +3549,7 @@ function App() {
                                       <select
                                         value={rerouteSelectedRider}
                                         onChange={(e) => setRerouteSelectedRider(e.target.value)}
+                                        onClick={(e) => e.stopPropagation()}
                                         className="rider-select"
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
@@ -3313,14 +3562,14 @@ function App() {
                                       <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
                                         <button 
                                           className="neon-btn small-btn" 
-                                          onClick={() => handleAdminSubmitReroute(o.id)}
+                                          onClick={(e) => { e.stopPropagation(); handleAdminSubmitReroute(o.id); }}
                                           style={{ flex: 1, padding: '4px 8px', fontSize: '11px', background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                                         >
                                           Confirm
                                         </button>
                                         <button 
                                           className="neon-btn small-btn" 
-                                          onClick={() => setReroutingOrderId(null)}
+                                          onClick={(e) => { e.stopPropagation(); setReroutingOrderId(null); }}
                                           style={{ flex: 1, padding: '4px 8px', fontSize: '11px', background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
                                         >
                                           Cancel
@@ -3330,7 +3579,7 @@ function App() {
                                   ) : (
                                     <button 
                                       className="neon-btn small-btn" 
-                                      onClick={() => handleAdminRerouteOrder(o.id)}
+                                      onClick={(e) => { e.stopPropagation(); handleAdminRerouteOrder(o.id); }}
                                       style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
                                     >
                                       Re-route Order
@@ -3338,7 +3587,7 @@ function App() {
                                   )
                                 )}
                                 {o.status === 'PLACED' && routing === 'Option 2 (Managed)' && (
-                                  <button className="neon-btn small-btn" onClick={() => handleAdminAcceptOrder(o.id)}>
+                                  <button className="neon-btn small-btn" onClick={(e) => { e.stopPropagation(); handleAdminAcceptOrder(o.id); }}>
                                     Confirm Order
                                   </button>
                                 )}
@@ -3353,6 +3602,7 @@ function App() {
                                   rel="noopener noreferrer"
                                   className="whatsapp-link-btn"
                                   title="WhatsApp Customer"
+                                  onClick={(e) => e.stopPropagation()}
                                 >
                                   <MessageCircle size={18} />
                                 </a>
@@ -3448,10 +3698,27 @@ function App() {
             {adminSubView === 'items' && (
               <div className="admin-orders-table glass-panel fade-in">
                 <div className="panel-header">
-                  <h2>Product Catalog Manager ({products.length})</h2>
-                  <button className="neon-btn csv-btn" onClick={() => setAdminSubView('orders')}>
-                    ← Back to Orders
-                  </button>
+                  <h2>Product Catalog Manager ({filteredAdminProducts.length})</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
+                      <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                      <input 
+                        type="text" 
+                        placeholder="Search items..." 
+                        value={adminSearchQuery}
+                        onChange={(e) => setAdminSearchQuery(e.target.value)}
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                      />
+                      {adminSearchQuery && (
+                        <button onClick={() => setAdminSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <button className="neon-btn csv-btn" onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}>
+                      ← Back to Orders
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="table-responsive">
@@ -3470,14 +3737,14 @@ function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {products.length === 0 ? (
+                      {filteredAdminProducts.length === 0 ? (
                         <tr>
-                          <td colSpan="8" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
-                            No products found in the catalog.
+                          <td colSpan="9" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                            No products match search query.
                           </td>
                         </tr>
                       ) : (
-                        products.map(p => {
+                        filteredAdminProducts.map(p => {
                           return (
                             <tr key={p.id}>
                               <td>
@@ -3573,10 +3840,27 @@ function App() {
                 <div className="admin-riders-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
                   <div className="admin-orders-table glass-panel fade-in" style={{ margin: 0 }}>
                     <div className="panel-header">
-                      <h2>Registered Shops Directory ({shops.length})</h2>
-                      <button className="neon-btn csv-btn" onClick={() => setAdminSubView('orders')}>
-                        ← Back to Orders
-                      </button>
+                      <h2>Registered Shops Directory ({filteredShops.length})</h2>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
+                          <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                          <input 
+                            type="text" 
+                            placeholder="Search shops..." 
+                            value={adminSearchQuery}
+                            onChange={(e) => setAdminSearchQuery(e.target.value)}
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                          />
+                          {adminSearchQuery && (
+                            <button onClick={() => setAdminSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                        <button className="neon-btn csv-btn" onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}>
+                          ← Back to Orders
+                        </button>
+                      </div>
                     </div>
 
                     <div className="table-responsive">
@@ -3584,43 +3868,37 @@ function App() {
                         <thead>
                           <tr>
                             <th>Shop ID</th>
-                            <th>Shop Name / Owner</th>
-                            <th>Category</th>
-                            <th>Phone Number</th>
-                            <th>Status</th>
-                            <th>Actions</th>
+                            <th>Shop Name</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {shops.map(s => (
+                          {filteredShops.length === 0 ? (
+                            <tr>
+                              <td colSpan="2" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                                No shops match search query.
+                              </td>
+                            </tr>
+                          ) : (
+                            filteredShops.map(s => (
                             <tr 
                               key={s.id} 
                               onClick={() => handleOpenShopDetails(s)}
-                              style={{ cursor: 'pointer' }}
+                              className="clickable-row"
                             >
                               <td><strong>{s.id}</strong></td>
                               <td>
-                                {s.name}
-                                {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                              </td>
-                              <td><span className="badge badge-info">{s.category}</span></td>
-                              <td>{s.phone || 'N/A'}</td>
-                              <td>
-                                <span className={`badge ${s.verified ? 'badge-success' : 'badge-warning'}`}>
-                                  {s.verified ? 'Verified & Active' : 'Pending Verification'}
-                                </span>
-                              </td>
-                              <td>
-                                <button 
-                                  className="neon-btn small-btn" 
-                                  onClick={(e) => { e.stopPropagation(); handleOpenShopDetails(s); }}
-                                  style={{ fontSize: '11px', padding: '4px 8px' }}
-                                >
-                                  View Details
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <span>
+                                    {s.name}
+                                    {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                  </span>
+                                  <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                    View Details →
+                                  </span>
+                                </div>
                               </td>
                             </tr>
-                          ))}
+                          )))}
                         </tbody>
                       </table>
                     </div>
@@ -3807,10 +4085,27 @@ function App() {
                 <div className="admin-riders-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '20px', alignItems: 'start' }}>
                   <div className="admin-orders-table glass-panel fade-in" style={{ margin: 0 }}>
                     <div className="panel-header">
-                      <h2>Registered Riders Directory ({deliveryPartners.length})</h2>
-                      <button className="neon-btn csv-btn" onClick={() => setAdminSubView('orders')}>
-                        ← Back to Orders
-                      </button>
+                      <h2>Registered Riders Directory ({filteredRiders.length})</h2>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                        <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
+                          <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                          <input 
+                            type="text" 
+                            placeholder="Search riders..." 
+                            value={adminSearchQuery}
+                            onChange={(e) => setAdminSearchQuery(e.target.value)}
+                            style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                          />
+                          {adminSearchQuery && (
+                            <button onClick={() => setAdminSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                        <button className="neon-btn csv-btn" onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}>
+                          ← Back to Orders
+                        </button>
+                      </div>
                     </div>
 
                     <div className="table-responsive">
@@ -3819,42 +4114,36 @@ function App() {
                           <tr>
                             <th>Rider ID</th>
                             <th>Rider Name</th>
-                            <th>Vehicle</th>
-                            <th>Phone Number</th>
-                            <th>Total Deliveries</th>
-                            <th>Pending Payout</th>
-                            <th>Status</th>
-                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {deliveryPartners.map(d => (
-                            <tr key={d.id}>
-                              <td><strong>{d.id}</strong></td>
-                              <td>
-                                {d.name}
-                                {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                              </td>
-                              <td>{d.vehicle || 'N/A'}</td>
-                              <td>{d.phone || 'N/A'}</td>
-                              <td>{d.totalDeliveries || 0}</td>
-                              <td><strong>{formatINR(d.pendingPayout || 0)}</strong></td>
-                              <td>
-                                <span className={`badge ${d.verified ? 'badge-success' : 'badge-warning'}`}>
-                                  {d.verified ? 'Verified & Active' : 'Pending Verification'}
-                                </span>
-                              </td>
-                              <td>
-                                <button 
-                                  className="neon-btn small-btn" 
-                                  onClick={(e) => { e.stopPropagation(); handleStartEditRider(d); }}
-                                  style={{ fontSize: '11px', padding: '4px 8px' }}
-                                >
-                                  Edit
-                                </button>
+                          {filteredRiders.length === 0 ? (
+                            <tr>
+                              <td colSpan="2" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                                No riders match search query.
                               </td>
                             </tr>
-                          ))}
+                          ) : (
+                            filteredRiders.map(d => (
+                            <tr 
+                              key={d.id}
+                              onClick={() => handleStartEditRider(d)}
+                              className="clickable-row"
+                            >
+                              <td><strong>{d.id}</strong></td>
+                              <td>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <span>
+                                    {d.name}
+                                    {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                  </span>
+                                  <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                    View Details →
+                                  </span>
+                                </div>
+                              </td>
+                            </tr>
+                          )))}
                         </tbody>
                       </table>
                     </div>
@@ -4326,6 +4615,83 @@ function App() {
                 </div>
               </div>
             )}
+
+            {adminSubView === 'users' && (
+              <div className="admin-orders-table glass-panel fade-in">
+                <div className="panel-header">
+                  <h2>Platform Users Directory ({filteredUsers.length})</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
+                      <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                      <input 
+                        type="text" 
+                        placeholder="Search users..." 
+                        value={adminSearchQuery}
+                        onChange={(e) => setAdminSearchQuery(e.target.value)}
+                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                      />
+                      {adminSearchQuery && (
+                        <button onClick={() => setAdminSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                    <button className="neon-btn csv-btn" onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}>
+                      ← Back to Orders
+                    </button>
+                  </div>
+                </div>
+
+                <div className="table-responsive">
+                  <table className="order-log-table">
+                    <thead>
+                      <tr>
+                        <th>User ID</th>
+                        <th>Name / Username</th>
+                        <th>Email Address</th>
+                        <th>Role / Account Type</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                            No users match search query.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredUsers.map(u => {
+                          const roleBadgeClass = 
+                            u.role === 'admin' ? 'badge-danger' : 
+                            u.role === 'merchant' ? 'badge-warning' : 
+                            u.role === 'rider' ? 'badge-primary' : 
+                            'badge-success';
+                          
+                          const roleLabel = 
+                            u.role === 'admin' ? 'Admin' : 
+                            u.role === 'merchant' ? 'Merchant' : 
+                            u.role === 'rider' ? 'Delivery Partner' : 
+                            'Customer';
+
+                          return (
+                            <tr key={u.id}>
+                              <td><strong style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{u.id}</strong></td>
+                              <td><strong>{u.name}</strong></td>
+                              <td>{u.email}</td>
+                              <td>
+                                <span className={`badge ${roleBadgeClass}`}>
+                                  {roleLabel}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         ))
       }
@@ -4362,7 +4728,7 @@ function App() {
                     Welcome, {user?.name || user?.email}
                   </h2>
                   <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                    Logged in as: <strong>{user?.email}</strong>
+                    Logged in as: <strong>{user?.email}</strong> | UID: <strong>{user?.uid}</strong>
                   </p>
                 </div>
 
@@ -5281,9 +5647,11 @@ function App() {
                 <div className="tracked-order-detail-sidebar fade-in" style={{ gap: '16px', display: 'flex', flexDirection: 'column' }}>
                   {/* ETA banner */}
                   <div className="eta-banner-sidebar">
-                    <span className="eta-countdown-sidebar" style={{ color: trackedOrder.status === 'CANCELLED_BY_STORE' ? 'var(--color-danger)' : 'inherit' }}>
+                    <span className="eta-countdown-sidebar" style={{ color: trackedOrder.status?.startsWith('CANCELLED') ? 'var(--color-danger)' : 'inherit' }}>
                       {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
                        trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
+                       trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
+                       trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
                        trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
                        trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
                        'Awaiting Confirmation'}
@@ -5311,7 +5679,7 @@ function App() {
                       <span>Status:</span>
                       <span className={`badge ${
                         trackedOrder.status === 'COMPLETED' ? 'badge-success' : 
-                        trackedOrder.status === 'CANCELLED_BY_STORE' ? 'badge-danger' : 
+                        trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' : 
                         'badge-warning'
                       }`}>
                         {trackedOrder.status}
@@ -5754,6 +6122,218 @@ function App() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Order Details Modal (Admin) */}
+      {isOrderModalOpen && selectedOrderDetails && (
+        <div className="modal-backdrop fade-in" onClick={() => { setIsOrderModalOpen(false); setSelectedOrderDetails(null); }}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '600px' }}>
+            <button className="modal-close-btn" onClick={() => { setIsOrderModalOpen(false); setSelectedOrderDetails(null); }}>
+              <X size={20} />
+            </button>
+            
+            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
+                <ShoppingCart size={40} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium">Order Details</h3>
+              <p className="profile-sub" style={{ marginTop: '4px' }}>Order ID: <strong>{selectedOrderDetails.id}</strong></p>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '60vh', overflowY: 'auto', paddingRight: '6px' }}>
+              
+              {/* Order Status & Progress */}
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Current Status:</span>
+                  <span className={`badge ${
+                    selectedOrderDetails.status === 'COMPLETED' ? 'badge-success' :
+                    selectedOrderDetails.status === 'ACCEPTED' ? 'badge-success' :
+                    selectedOrderDetails.status === 'ASSIGNED' ? 'badge-primary' :
+                    selectedOrderDetails.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                    'badge-warning'
+                  }`}>
+                    {selectedOrderDetails.status || 'PLACED'}
+                  </span>
+                </div>
+
+                {/* Progress bar simulation */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '15px 0 5px 0', padding: '0 5px' }}>
+                  {['PLACED', 'ACCEPTED', 'ASSIGNED', 'COMPLETED'].map((step, idx, arr) => {
+                    const statusIdx = arr.indexOf(selectedOrderDetails.status || 'PLACED');
+                    const isActive = statusIdx >= idx && !selectedOrderDetails.status?.startsWith('CANCELLED');
+                    return (
+                      <React.Fragment key={step}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1 }}>
+                          <div style={{ 
+                            width: '12px', 
+                            height: '12px', 
+                            borderRadius: '50%', 
+                            background: isActive ? 'var(--color-primary)' : 'var(--color-border)',
+                            boxShadow: isActive ? '0 0 6px var(--color-primary)' : 'none',
+                            zIndex: 2
+                          }}></div>
+                          <span style={{ fontSize: '9px', color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)', marginTop: '4px', fontWeight: '500' }}>
+                            {step}
+                          </span>
+                        </div>
+                        {idx < arr.length - 1 && (
+                          <div style={{ 
+                            flexGrow: 1, 
+                            height: '2px', 
+                            background: (statusIdx > idx && !selectedOrderDetails.status?.startsWith('CANCELLED')) ? 'var(--color-primary)' : 'var(--color-border)', 
+                            marginTop: '-14px',
+                            zIndex: 1
+                          }}></div>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Customer Information */}
+              <div>
+                <h4 style={{ fontSize: '13px', color: 'var(--color-primary)', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>👨‍💼 Customer Information</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Name:</span>
+                  <strong>{selectedOrderDetails.customerName}</strong>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Phone:</span>
+                  <strong>{selectedOrderDetails.customerPhone}</strong>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Delivery Address:</span>
+                  <span>{selectedOrderDetails.customerAddress || 'N/A'}</span>
+                </div>
+              </div>
+
+              {/* Shop Information */}
+              <div>
+                <h4 style={{ fontSize: '13px', color: 'var(--color-warning)', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>🏪 Merchant Shop Information</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Shop Name:</span>
+                  <strong>{selectedOrderDetails.items[0]?.store || selectedOrderDetails.merchantName}</strong>
+                </div>
+                {(() => {
+                  const mShop = shops.find(s => s.name === selectedOrderDetails.merchantName || s.storeName === selectedOrderDetails.merchantName);
+                  return (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Category:</span>
+                        <span>{mShop?.category || 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Phone:</span>
+                        <span>{mShop?.phone || 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Shop Address:</span>
+                        <span>{mShop?.address || 'N/A'}</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
+              {/* Items Ordered */}
+              <div>
+                <h4 style={{ fontSize: '13px', color: 'var(--color-neon-cyan)', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>📦 Items Ordered</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {selectedOrderDetails.items.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)', padding: '6px 10px', borderRadius: '6px', fontSize: '13px' }}>
+                      <div>
+                        <span>{item.emoji || '📦'} </span>
+                        <strong>{item.name}</strong>
+                        <span style={{ color: 'var(--color-text-muted)', marginLeft: '8px' }}>x{item.quantity}</span>
+                      </div>
+                      <strong style={{ color: 'var(--color-success)' }}>{formatINR(item.price * item.quantity)}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Breakdown */}
+              <div style={{ background: 'rgba(255,255,255,0.01)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Items Subtotal:</span>
+                  <span>{formatINR(selectedOrderDetails.totalAmount - selectedOrderDetails.deliveryCharge + (selectedOrderDetails.discountAmount || 0))}</span>
+                </div>
+                {selectedOrderDetails.discountAmount > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px', color: 'var(--color-primary)' }}>
+                    <span>Discount Applied:</span>
+                    <span>-{formatINR(selectedOrderDetails.discountAmount)}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                  <span style={{ color: 'var(--color-text-muted)' }}>Delivery Charge:</span>
+                  <span>{formatINR(selectedOrderDetails.deliveryCharge)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '8px', fontWeight: 'bold' }}>
+                  <span>Total Amount Paid:</span>
+                  <span style={{ color: 'var(--color-success)' }}>{formatINR(selectedOrderDetails.totalAmount)}</span>
+                </div>
+              </div>
+
+              {/* Rider & OTP */}
+              <div>
+                <h4 style={{ fontSize: '13px', color: 'var(--color-primary)', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>🏍️ Delivery & Security Info</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Assigned Rider:</span>
+                  <strong>{selectedOrderDetails.deliveryPartnerName || 'Not Assigned'}</strong>
+                </div>
+                {selectedOrderDetails.deliveryPartnerId && (() => {
+                  const rider = deliveryPartners.find(d => d.id === selectedOrderDetails.deliveryPartnerId);
+                  return (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Rider Phone:</span>
+                        <span>{rider?.phone || 'N/A'}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Vehicle:</span>
+                        <span>{rider?.vehicle || 'N/A'}</span>
+                      </div>
+                    </>
+                  );
+                })()}
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginTop: '6px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Delivery OTP:</span>
+                  <span style={{ background: 'var(--color-primary-glow)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', width: 'fit-content' }}>
+                    {selectedOrderDetails.otp || 'N/A'}
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', marginTop: '6px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Payment Details:</span>
+                  <span>{selectedOrderDetails.paymentMethod} ({selectedOrderDetails.paymentStatus})</span>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+            
+            <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN'].includes(selectedOrderDetails.status?.toUpperCase()) && (
+                <button 
+                  className="neon-btn" 
+                  onClick={() => handleAdminCancelOrder(selectedOrderDetails.id)}
+                  style={{ flex: 1, padding: '12px', fontWeight: 'bold', background: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: '#fff' }}
+                >
+                  Cancel Order
+                </button>
+              )}
+              <button 
+                className="neon-btn" 
+                onClick={() => { setIsOrderModalOpen(false); setSelectedOrderDetails(null); }}
+                style={{ flex: 1, padding: '12px', fontWeight: 'bold' }}
+              >
+                Close Details
+              </button>
             </div>
           </div>
         </div>
