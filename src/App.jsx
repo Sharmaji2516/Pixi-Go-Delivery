@@ -1677,6 +1677,13 @@ function App() {
 
   // Checkout and Order Placement
   const handlePlaceOrder = async () => {
+    // Check operational hours: 10:00 AM to 8:00 PM (10:00 to 20:00)
+    const currentHour = new Date().getHours();
+    if (currentHour < 10 || currentHour >= 20) {
+      alert("We don't provide service for this time. Operational hours are from 10:00 AM to 8:00 PM.");
+      return;
+    }
+
     if (cart.length === 0) return alert('Your cart is empty!');
     if (!customerAddress) return alert('Please input your delivery coordinates / address!');
 
@@ -3529,33 +3536,34 @@ function App() {
             {/* Customer Promotional Marquee (Black & Gold Theme) */}
             {customerAnnouncement && (
               <div className="customer-announcement-banner" style={{
-                margin: '12px auto 20px auto',
-                padding: '10px 20px',
-                background: 'linear-gradient(90deg, #0f0c05 0%, #1f190a 50%, #0f0c05 100%)',
-                border: '1px solid rgba(218, 165, 32, 0.25)',
-                borderRadius: '30px',
+                margin: '10px auto 16px auto',
+                padding: '6px 12px',
+                background: 'linear-gradient(90deg, #090703 0%, #151006 50%, #090703 100%)',
+                border: '1px solid rgba(255, 215, 0, 0.2)',
+                borderRadius: '20px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
+                gap: '8px',
                 overflow: 'hidden',
-                boxShadow: '0 0 15px rgba(218, 165, 32, 0.08)',
+                boxShadow: '0 0 10px rgba(255, 215, 0, 0.05)',
                 width: '100%',
                 maxWidth: '1200px'
               }}>
                 <span style={{ 
-                  fontSize: '11px', 
-                  fontWeight: '800', 
+                  fontSize: '9px', 
+                  fontWeight: '900', 
                   color: '#000000', 
                   background: 'linear-gradient(90deg, #ffd700, #daa520)', 
-                  padding: '4px 12px', 
-                  borderRadius: '15px',
+                  padding: '2px 8px', 
+                  borderRadius: '10px',
                   textTransform: 'uppercase',
-                  letterSpacing: '1px',
+                  letterSpacing: '0.5px',
                   whiteSpace: 'nowrap',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                  gap: '4px'
+                  gap: '3px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+                  flexShrink: 0
                 }}>
                   ⭐ OFFERS
                 </span>
@@ -3564,18 +3572,51 @@ function App() {
                   direction="left" 
                   scrollamount="4" 
                   style={{ 
-                    fontSize: '13px', 
+                    fontSize: '12px', 
                     color: '#ffd700', 
                     textShadow: '0 0 4px rgba(255, 215, 0, 0.2)',
-                    fontWeight: '700', 
+                    fontWeight: '600', 
                     margin: 0,
-                    padding: 0
+                    padding: 0,
+                    flexGrow: 1,
+                    minWidth: 0
                   }}
                 >
                   {customerAnnouncement}
                 </marquee>
               </div>
             )}
+
+            {/* Store Closed Warning Banner */}
+            {(() => {
+              const currentHour = new Date().getHours();
+              if (currentHour < 10 || currentHour >= 20) {
+                return (
+                  <div className="store-closed-banner fade-in" style={{
+                    margin: '0 auto 16px auto',
+                    padding: '10px 16px',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '24px',
+                    color: '#f87171',
+                    fontSize: '13px',
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    width: '100%',
+                    maxWidth: '1200px',
+                    boxShadow: '0 0 10px rgba(239, 68, 68, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px'
+                  }}>
+                    <span>🌙</span>
+                    <span>We don't provide service for this time. Operational hours are 10:00 AM to 8:00 PM.</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             <div className="customer-grid">
             {/* Storefront Layout */}
