@@ -570,47 +570,57 @@ function App() {
           const timestamp = new Date().toISOString();
           const currentTab = window.location.pathname.replace('/', '').toLowerCase();
 
-          // 1. Sync with Customer collection
-          const customerDocRef = doc(db, "customers", currentUser.uid);
-          const custSnap = await getDoc(customerDocRef);
-          if (custSnap.exists()) {
-            const data = custSnap.data();
-            localName = data.name || localName;
-            localPhone = data.phone || localPhone;
-            localEmail = data.email || localEmail;
-            localAddress = data.address || localAddress;
+          const emailClean = localEmail.trim().toLowerCase();
+          const existingRole = getRoleForEmail(emailClean);
 
-            localStorage.setItem('pixigo_customerName', localName);
-            localStorage.setItem('pixigo_customerPhone', localPhone);
-            localStorage.setItem('pixigo_customerEmail', localEmail);
-            localStorage.setItem('pixigo_customerAddress', localAddress);
-          } else {
-            // Document doesn't exist yet, auto-create
-            await setDoc(customerDocRef, {
-              name: localName,
-              email: localEmail,
-              phone: localPhone,
-              address: localAddress,
-              createdAt: timestamp
-            });
-            localStorage.setItem('pixigo_customerName', localName);
-            localStorage.setItem('pixigo_customerPhone', localPhone);
-            localStorage.setItem('pixigo_customerEmail', localEmail);
-            localStorage.setItem('pixigo_customerAddress', localAddress);
-          }
+          // 1. Sync with Customer collection only if they are not signing up/logging in as admin
+          // and they are not already an admin, rider, or merchant
+          if (currentTab !== 'admin' && (existingRole === 'customer' || !existingRole)) {
+            const customerDocRef = doc(db, "customers", currentUser.uid);
+            const custSnap = await getDoc(customerDocRef);
+            if (custSnap.exists()) {
+              const data = custSnap.data();
+              localName = data.name || localName;
+              localPhone = data.phone || localPhone;
+              localEmail = data.email || localEmail;
+              localAddress = data.address || localAddress;
 
-          // 2. Sync with Admin collection if on admin page
-          if (currentTab === 'admin') {
-            const adminDocRef = doc(db, "admins", currentUser.uid);
-            const adminSnap = await getDoc(adminDocRef);
-            if (!adminSnap.exists()) {
-              await setDoc(adminDocRef, {
-                id: currentUser.uid,
+              localStorage.setItem('pixigo_customerName', localName);
+              localStorage.setItem('pixigo_customerPhone', localPhone);
+              localStorage.setItem('pixigo_customerEmail', localEmail);
+              localStorage.setItem('pixigo_customerAddress', localAddress);
+            } else {
+              // Document doesn't exist yet, auto-create
+              await setDoc(customerDocRef, {
                 name: localName,
                 email: localEmail,
-                role: 'admin',
+                phone: localPhone,
+                address: localAddress,
                 createdAt: timestamp
               });
+              localStorage.setItem('pixigo_customerName', localName);
+              localStorage.setItem('pixigo_customerPhone', localPhone);
+              localStorage.setItem('pixigo_customerEmail', localEmail);
+              localStorage.setItem('pixigo_customerAddress', localAddress);
+            }
+          }
+
+          // 2. Sync with Admin collection if on admin page AND not already another role
+          if (currentTab === 'admin') {
+            if (existingRole === 'admin' || !existingRole) {
+              const adminDocRef = doc(db, "admins", currentUser.uid);
+              const adminSnap = await getDoc(adminDocRef);
+              if (!adminSnap.exists()) {
+                await setDoc(adminDocRef, {
+                  id: currentUser.uid,
+                  name: localName,
+                  email: localEmail,
+                  role: 'admin',
+                  createdAt: timestamp
+                });
+              }
+            } else {
+              console.warn("User already has another role: cannot sync as Admin", existingRole);
             }
           }
 
@@ -956,6 +966,45 @@ function App() {
     }
   };
 
+  const play30SecondBeepAlert = () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const audioCtx = audioContextRef.current;
+      
+      const playBeep = (freq, duration, delay) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime + delay);
+        gain.gain.setValueAtTime(0, audioCtx.currentTime + delay);
+        gain.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + delay + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + delay + duration);
+        osc.start(audioCtx.currentTime + delay);
+        osc.stop(audioCtx.currentTime + delay + duration);
+      };
+
+      const startBeeps = () => {
+        for (let i = 0; i < 30; i++) {
+          playBeep(987.77, 0.25, i * 1.0);
+        }
+      };
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          startBeeps();
+        });
+      } else {
+        startBeeps();
+      }
+    } catch (e) {
+      console.warn("30-second beep alert failed:", e);
+    }
+  };
+
   // Pre-enable audio context on user gesture
   useEffect(() => {
     const handleGesture = () => {
@@ -994,6 +1043,19 @@ function App() {
     prevActiveJobsCount.current = riderActiveJobs.length;
   }, [riderActiveJobs.length, activeTab]);
 
+  const prevPoolJobsCount = useRef(0);
+  const availablePoolJobs = orders.filter(o => o.status === 'ACCEPTED' && !o.deliveryPartnerId);
+
+  useEffect(() => {
+    if (activeTab === 'delivery') {
+      if (availablePoolJobs.length > prevPoolJobsCount.current) {
+        play30SecondBeepAlert();
+        showToast("🔔 New delivery run available in the pool! Check details below.");
+      }
+    }
+    prevPoolJobsCount.current = availablePoolJobs.length;
+  }, [availablePoolJobs.length, activeTab]);
+
   // Get active merchant shop based on email or phone
   const loggedInMerchantShop = user ? shops.find(s => 
     (s.email && s.email.toLowerCase() === user.email.toLowerCase()) ||
@@ -1025,7 +1087,7 @@ function App() {
 
       if (merchantPendingOrders.length > prevMerchantOrdersCount.current) {
         if (prevMerchantOrdersCount.current > 0 || merchantPendingOrders.length > 0) {
-          playNotificationSound();
+          play30SecondBeepAlert();
           const latestOrder = merchantPendingOrders[0];
           showToast(`🔔 New order received for your shop! Order ID: ${latestOrder.id}`);
           
@@ -1037,6 +1099,24 @@ function App() {
       prevMerchantOrdersCount.current = merchantPendingOrders.length;
     }
   }, [orders, currentMerchantShopName, activeTab, user]);
+
+  const getRoleForEmail = (email) => {
+    if (!email) return null;
+    const cleanEmail = email.trim().toLowerCase();
+    if (allAdmins.some(a => (a.email || '').trim().toLowerCase() === cleanEmail)) {
+      return 'admin';
+    }
+    if (shops.some(s => (s.email || '').trim().toLowerCase() === cleanEmail)) {
+      return 'merchant';
+    }
+    if (deliveryPartners.some(d => (d.email || '').trim().toLowerCase() === cleanEmail)) {
+      return 'rider';
+    }
+    if (allCustomers.some(c => (c.email || '').trim().toLowerCase() === cleanEmail)) {
+      return 'customer';
+    }
+    return null;
+  };
 
   const handleAuthAction = async (e) => {
     e.preventDefault();
@@ -1060,8 +1140,10 @@ function App() {
           setAuthError('This Phone Number is already registered to a Rider.');
           return;
         }
-        if (deliveryPartners.some(d => (d.email || '').trim().toLowerCase() === riderEmailInput.trim().toLowerCase())) {
-          setAuthError('This Email Address is already registered to a Rider.');
+        const cleanRiderEmail = riderEmailInput.trim().toLowerCase();
+        const existingRole = getRoleForEmail(cleanRiderEmail);
+        if (existingRole) {
+          setAuthError(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
           return;
         }
         
@@ -1139,6 +1221,12 @@ function App() {
     let targetEmail = authEmail;
     
     if (isSignUp) {
+      const emailClean = targetEmail.trim().toLowerCase();
+      const existingRole = getRoleForEmail(emailClean);
+      if (existingRole) {
+        setAuthError(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
+        return;
+      }
       createUserWithEmailAndPassword(auth, targetEmail, authPassword)
         .then(async (userCredential) => {
           const uid = userCredential.user.uid;
@@ -1149,14 +1237,16 @@ function App() {
 
           try {
             // 1. Initialize customer document in Firestore
-            const customerDocRef = doc(db, "customers", uid);
-            await setDoc(customerDocRef, {
-              name: name,
-              email: email,
-              phone: '',
-              address: '',
-              createdAt: timestamp
-            });
+            if (currentTab !== 'admin') {
+              const customerDocRef = doc(db, "customers", uid);
+              await setDoc(customerDocRef, {
+                name: name,
+                email: email,
+                phone: '',
+                address: '',
+                createdAt: timestamp
+              });
+            }
 
             // 2. Sync with Admin collection if on admin page
             if (currentTab === 'admin') {
@@ -1761,6 +1851,68 @@ function App() {
     alert(`Delivery rider ${rider.name} assigned to Order ${orderId}. OTP ${order.otp} generated.`);
   };
 
+  const handleRiderAcceptJob = async (orderId) => {
+    let rider = deliveryPartners.find(d => d.id === user?.uid);
+    if (!rider && user) {
+      // Fallback rider object for Admin/Tester accounts
+      rider = {
+        id: user.uid,
+        name: user.name || 'Admin Tester',
+        phone: '9251054064',
+        vehicle: 'TEST-BIKE-1'
+      };
+    }
+    if (!rider) {
+      showToast("Error: Rider profile not found.");
+      return;
+    }
+
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    if (order.deliveryPartnerId) {
+      alert("This delivery job has already been claimed by another rider.");
+      return;
+    }
+
+    // Update local state first
+    setOrders(orders.map(o => {
+      if (o.id === orderId) {
+        return {
+          ...o,
+          status: 'ASSIGNED',
+          deliveryPartnerId: user.uid,
+          deliveryPartnerName: rider.name
+        };
+      }
+      return o;
+    }));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, {
+          status: 'ASSIGNED',
+          deliveryPartnerId: user.uid,
+          deliveryPartnerName: rider.name,
+          riderId: user.uid
+        });
+
+        // Set rider status to busy in delivery_boys collection
+        const riderDocRef = doc(db, "delivery_boys", user.uid);
+        await setDoc(riderDocRef, {
+          status: 'busy',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        showToast(`Successfully claimed delivery job for Order ${orderId}!`);
+      } catch (err) {
+        console.error("Error accepting job in Firestore:", err);
+        showToast("Failed to claim job. Please try again.");
+      }
+    }
+  };
+
   // Admin: Wipe database collections to start fresh
   const handleResetDatabase = async () => {
     if (!window.confirm("Are you sure you want to delete all registered shops, registered riders, and total orders? This action is permanent and cannot be undone.")) {
@@ -1872,6 +2024,13 @@ function App() {
       return;
     }
 
+    const cleanEmail = newShopEmail.trim().toLowerCase();
+    const existingRole = getRoleForEmail(cleanEmail);
+    if (existingRole) {
+      alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
+      return;
+    }
+
     const newShopId = `merch_${newShopName.trim().replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
     const tempShopName = newShopName.trim();
     try {
@@ -1907,6 +2066,12 @@ function App() {
       alert("Please fill in all the details for the onboarding request.");
       return;
     }
+    const cleanEmail = onboardShopEmail.trim().toLowerCase();
+    const existingRole = getRoleForEmail(cleanEmail);
+    if (existingRole) {
+      alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
+      return;
+    }
     const newShopId = `merch_${onboardShopName.trim().replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
     try {
       await setDoc(doc(db, "merchants", newShopId), {
@@ -1936,6 +2101,12 @@ function App() {
     e.preventDefault();
     if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle) {
       alert("Please fill in all the details for the rider onboarding request.");
+      return;
+    }
+    const cleanEmail = onboardRiderEmail.trim().toLowerCase();
+    const existingRole = getRoleForEmail(cleanEmail);
+    if (existingRole) {
+      alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
     }
     const newRiderId = `rider_${Date.now()}`;
@@ -2122,15 +2293,32 @@ function App() {
       setShops(shops.map(s => s.id === id ? { ...s, verified: status, docs: status ? 'Approved' : 'Rejected' } : s));
     } else {
       const rider = deliveryPartners.find(d => d.id === id);
-      if (rider && rider.firestoreId) {
-        try {
-          const docRef = doc(db, "delivery_boys", rider.firestoreId);
-          await updateDoc(docRef, { verified: status });
-        } catch (err) {
-          console.error("Error updating rider verification in Firestore:", err);
+      if (rider) {
+        if (status) {
+          // Approve
+          if (rider.firestoreId) {
+            try {
+              const docRef = doc(db, "delivery_boys", rider.firestoreId);
+              await updateDoc(docRef, { verified: true });
+            } catch (err) {
+              console.error("Error updating rider verification in Firestore:", err);
+            }
+          }
+          setDeliveryPartners(deliveryPartners.map(d => d.id === id ? { ...d, verified: true } : d));
+        } else {
+          // Reject -> Delete application
+          if (rider.firestoreId) {
+            try {
+              const docRef = doc(db, "delivery_boys", rider.firestoreId);
+              await deleteDoc(docRef);
+            } catch (err) {
+              console.error("Error deleting rider application in Firestore:", err);
+            }
+          }
+          setDeliveryPartners(deliveryPartners.filter(d => d.id !== id));
+          showToast("Rider onboarding request rejected.");
         }
       }
-      setDeliveryPartners(deliveryPartners.map(d => d.id === id ? { ...d, verified: status } : d));
     }
   };
 
@@ -2977,7 +3165,7 @@ function App() {
     <div className="app-container">
       {/* Header Banner */}
       {!(activeTab !== 'customer' && !user) && (
-        <header className="app-header glass-panel">
+        <header className={`app-header glass-panel ${activeTab === 'admin' ? 'admin-header-black' : ''}`}>
           {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
           {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
             <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
@@ -2990,7 +3178,7 @@ function App() {
               <div className="logo-brand-name">
                 <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
                 {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
-                {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Admin Console</span>}
+                {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Manager Console</span>}
                 {activeTab === 'merchant' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Merchant Shop Console</span>}
               </div>
               <p className="tagline">Quick Home Delivery Service</p>
@@ -4753,6 +4941,67 @@ function App() {
                   </div>
                 </div>
 
+                {/* Available Delivery Jobs Pool */}
+                <div className="rider-orders-section" style={{ marginBottom: '32px' }}>
+                  <h2>Available Delivery Jobs Pool ({availablePoolJobs.length})</h2>
+                  {availablePoolJobs.length === 0 ? (
+                    <div className="no-jobs-card">
+                      <Package size={32} className="text-muted" />
+                      <p>No available delivery runs in the pool at the moment.</p>
+                    </div>
+                  ) : (
+                    availablePoolJobs.map(o => (
+                      <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px', border: '1px solid var(--color-primary-glow-strong)' }}>
+                        <div className="job-header">
+                          <div style={{ textAlign: 'left' }}>
+                            <h3 style={{ margin: 0 }}>Order {o.id}</h3>
+                            <span className="badge badge-success" style={{ marginTop: '4px', display: 'inline-block' }}>READY FOR PICKUP</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
+                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                              {formatINR(o.deliveryCharge || 0)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="job-info-grid">
+                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
+                            <h4>🏪 Merchant Pickup</h4>
+                            <p><strong>Shop:</strong> {o.merchantName || o.items[0]?.store}</p>
+                            <p><strong>Location:</strong> Vaishali Market Area, Jaipur</p>
+                          </div>
+
+                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
+                            <h4>🏠 Customer Delivery</h4>
+                            <p><strong>Address:</strong> {o.customerLocation}</p>
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="maps-link-btn"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
+                            >
+                              📍 View on Google Maps
+                            </a>
+                            <p><strong>Payment Method:</strong> {o.paymentMethod} {o.paymentMethod === 'COD' ? `(${formatINR(o.totalAmount)} to collect)` : '(Paid Online)'}</p>
+                          </div>
+                        </div>
+
+                        <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
+                          <button 
+                            className="neon-btn" 
+                            style={{ width: '100%', background: 'var(--color-primary)', color: '#000000', fontWeight: 'bold' }}
+                            onClick={() => handleRiderAcceptJob(o.id)}
+                          >
+                            🤝 Claim & Accept Delivery Run
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
                 {/* Rider Active Orders */}
                 <div className="rider-orders-section">
                   <h2>Assigned Delivery Jobs ({activeJobs.length})</h2>
@@ -4791,6 +5040,15 @@ function App() {
                             <h4>🏠 Customer Delivery</h4>
                             <p><strong>Name:</strong> {o.customerName}</p>
                             <p><strong>Address:</strong> {o.customerLocation}</p>
+                            <a 
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="maps-link-btn"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
+                            >
+                              📍 View on Google Maps
+                            </a>
                             <p><strong>Phone:</strong> {o.customerPhone || '9251054064'}</p>
                             <p><strong>Collect Payment:</strong> <span style={{ color: 'var(--color-success)', fontWeight: 'bold' }}>{formatINR(o.totalAmount)}</span> ({o.paymentMethod})</p>
                             <a href={`tel:${o.customerPhone || '9251054064'}`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
@@ -5056,6 +5314,9 @@ function App() {
                             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
                               Customer: {o.customerName} | Rider: <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{o.deliveryPartnerName || 'Assigning Rider...'}</span>
                             </span>
+                            <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--color-text-main)' }}>
+                              <strong>Items:</strong> {o.items.map(i => `${i.name} (${i.quantity})`).join(', ')}
+                            </div>
                             <div style={{ marginTop: '4px' }}>
                               <span className="badge badge-warning">{o.status}</span>
                             </div>

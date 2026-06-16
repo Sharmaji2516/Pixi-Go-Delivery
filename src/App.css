@@ -2781,8 +2781,19 @@
 }
 
 /* Prevent horizontal scroll of main drawer modal & content overlay on mobile */
-.cart-drawer, .mobile-menu-drawer {
+.cart-drawer {
   overflow-x: hidden !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
+  display: block !important;
+}
+
+.mobile-menu-drawer {
+  overflow-x: hidden !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow-y: auto !important;
 }
 
 .cart-card, .price-summary, .delivery-info-form, .payment-select-grid {
@@ -3956,6 +3967,57 @@
 .chittortech-logo-img:hover {
   transform: scale(1.06);
   filter: drop-shadow(0 0 4px var(--color-primary-glow));
+}
+
+/* ==================== ADMIN PORTAL HEADER TWEAKS ==================== */
+.app-header.admin-header-black {
+  background: #0a0e1a !important; /* Elegant dark slate background */
+  border-bottom: 2px solid var(--color-primary) !important;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+.app-header.admin-header-black .brand-light {
+  color: #ffffff !important;
+}
+
+.app-header.admin-header-black .tagline {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.app-header.admin-header-black .header-nav {
+  margin-right: auto !important;
+  margin-left: 32px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.app-header.admin-header-black .nav-link {
+  color: rgba(255, 255, 255, 0.6) !important;
+}
+
+.app-header.admin-header-black .nav-link:hover {
+  color: #ffffff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.app-header.admin-header-black .nav-link.active {
+  background: var(--color-primary) !important;
+  color: #000000 !important;
+}
+
+.app-header.admin-header-black .user-welcome {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.app-header.admin-header-black .logout-btn {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.app-header.admin-header-black .logout-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
 }
 
 
