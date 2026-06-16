@@ -4128,5 +4128,92 @@
   color: #ffffff !important;
 }
 
+/* ==================== VEG/NON-VEG FILTER CHIPS & DOTS ==================== */
+.filter-chips-row {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 24px 0;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--color-text-main);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+.filter-chip.active {
+  background: rgba(0, 255, 242, 0.08);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(0, 255, 242, 0.15);
+}
+
+.filter-chip.veg-chip.active {
+  background: rgba(34, 197, 94, 0.08);
+  border-color: #22c55e;
+  color: #22c55e;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
+}
+
+.filter-chip.nonveg-chip.active {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: #ef4444;
+  color: #ef4444;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
+.veg-dot-box {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  padding: 1.5px;
+  background: transparent;
+  flex-shrink: 0;
+}
+.veg-dot-box.green {
+  color: #22c55e;
+}
+.veg-dot-box.red {
+  color: #ef4444;
+}
+
+.veg-dot-circle {
+  width: 6px;
+  height: 6px;
+  background-color: currentColor;
+  border-radius: 50%;
+}
+
+.veg-dot-triangle {
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-bottom: 7px solid currentColor;
+}
+
+
 
 

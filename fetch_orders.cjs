@@ -20,7 +20,7 @@ async function checkOrders() {
     console.log(`Total orders found in Firestore: ${querySnapshot.size}`);
     querySnapshot.forEach((doc) => {
       const data = doc.data();
-      console.log(`- ID: ${doc.id}, Customer: ${data.customerName}, Email: ${data.customerEmail}, Status: ${data.status}`);
+      console.log(`- DocID: ${doc.id}, ID: ${data.id}, Customer: ${data.customerName}, Status: ${data.status}, OTP: ${data.otp}, Payment: ${data.paymentMethod}`);
     });
   } catch (error) {
     console.error("Error fetching orders:", error);

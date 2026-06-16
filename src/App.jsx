@@ -14,22 +14,22 @@ import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbR
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
-  { id: 'p1', name: 'Fresh Kirana Atta (5kg)', price: 280, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=300&auto=format&fit=crop&q=60', emoji: '🌾' },
-  { id: 'p2', name: 'Organic Mustard Oil (1L)', price: 175, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=300&auto=format&fit=crop&q=60', emoji: '🛢️' },
-  { id: 'p3', name: 'Fresh Farm Tomatoes (1kg)', price: 40, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=300&auto=format&fit=crop&q=60', emoji: '🍅' },
-  { id: 'p4', name: 'Alphonso Mangoes (1kg)', price: 250, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&auto=format&fit=crop&q=60', emoji: '🥭' },
-  { id: 'p5', name: 'Creamy Paneer (200g)', price: 90, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=300&auto=format&fit=crop&q=60', emoji: '🥛' },
-  { id: 'p6', name: 'Amul Salted Butter (100g)', price: 56, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=300&auto=format&fit=crop&q=60', emoji: '🧈' },
-  { id: 'p7', name: 'Chocolate Fudge Cake', price: 650, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&auto=format&fit=crop&q=60', emoji: '🎂' },
-  { id: 'p8', name: 'Garlic Bread Sticks', price: 120, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1544982503-9f984c14501a?w=300&auto=format&fit=crop&q=60', emoji: '🥖' },
-  { id: 'p9', name: 'Crispy Veg Burger', price: 140, category: 'Fast Food', store: 'Burger Club', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&auto=format&fit=crop&q=60', emoji: '🍔' },
-  { id: 'p10', name: 'Cheese Pizza (Medium)', price: 320, category: 'Fast Food', store: 'Pizza Corner', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&auto=format&fit=crop&q=60', emoji: '🍕' },
-  { id: 'p11', name: 'Butter Chicken with Butter Naan', price: 380, category: 'Restaurant Cafe', store: 'Grand Plaza Restaurant', image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=300&auto=format&fit=crop&q=60', emoji: '🍛' },
-  { id: 'p12', name: 'Belgian Chocolate Waffle', price: 190, category: 'Restaurant Cafe', store: 'Sweet Treat Cafe', image: 'https://images.unsplash.com/photo-1562376502-6f769499887d?w=300&auto=format&fit=crop&q=60', emoji: '🧇' },
-  { id: 'p13', name: 'Double Chocolate Ice Cream', price: 150, category: 'Icecream and dessert', store: 'Gelato Heaven', image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&auto=format&fit=crop&q=60', emoji: '🍨' },
-  { id: 'p14', name: 'Premium Multi-vitamins (60 Caps)', price: 890, category: 'Medical and fitness', store: 'Apollo Wellness', image: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=300&auto=format&fit=crop&q=60', emoji: '💊' },
-  { id: 'p15', name: 'Fresh Orange Juice (500ml)', price: 110, category: 'Juice and drink', store: 'Juice Junction', image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=300&auto=format&fit=crop&q=60', emoji: '🍹' },
-  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&auto=format&fit=crop&q=60', emoji: '☕' }
+  { id: 'p1', name: 'Fresh Kirana Atta (5kg)', price: 280, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=300&auto=format&fit=crop&q=60', emoji: '🌾', isVeg: true },
+  { id: 'p2', name: 'Organic Mustard Oil (1L)', price: 175, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=300&auto=format&fit=crop&q=60', emoji: '🛢️', isVeg: true },
+  { id: 'p3', name: 'Fresh Farm Tomatoes (1kg)', price: 40, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=300&auto=format&fit=crop&q=60', emoji: '🍅', isVeg: true },
+  { id: 'p4', name: 'Alphonso Mangoes (1kg)', price: 250, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&auto=format&fit=crop&q=60', emoji: '🥭', isVeg: true },
+  { id: 'p5', name: 'Creamy Paneer (200g)', price: 90, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=300&auto=format&fit=crop&q=60', emoji: '🥛', isVeg: true },
+  { id: 'p6', name: 'Amul Salted Butter (100g)', price: 56, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=300&auto=format&fit=crop&q=60', emoji: '🧈', isVeg: true },
+  { id: 'p7', name: 'Chocolate Fudge Cake', price: 650, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&auto=format&fit=crop&q=60', emoji: '🎂', isVeg: true },
+  { id: 'p8', name: 'Garlic Bread Sticks', price: 120, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1544982503-9f984c14501a?w=300&auto=format&fit=crop&q=60', emoji: '🥖', isVeg: true },
+  { id: 'p9', name: 'Crispy Veg Burger', price: 140, category: 'Fast Food', store: 'Burger Club', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&auto=format&fit=crop&q=60', emoji: '🍔', isVeg: true },
+  { id: 'p10', name: 'Cheese Pizza (Medium)', price: 320, category: 'Fast Food', store: 'Pizza Corner', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&auto=format&fit=crop&q=60', emoji: '🍕', isVeg: true },
+  { id: 'p11', name: 'Butter Chicken with Butter Naan', price: 380, category: 'Restaurant Cafe', store: 'Grand Plaza Restaurant', image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=300&auto=format&fit=crop&q=60', emoji: '🍛', isVeg: false },
+  { id: 'p12', name: 'Belgian Chocolate Waffle', price: 190, category: 'Restaurant Cafe', store: 'Sweet Treat Cafe', image: 'https://images.unsplash.com/photo-1562376502-6f769499887d?w=300&auto=format&fit=crop&q=60', emoji: '🧇', isVeg: true },
+  { id: 'p13', name: 'Double Chocolate Ice Cream', price: 150, category: 'Icecream and dessert', store: 'Gelato Heaven', image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&auto=format&fit=crop&q=60', emoji: '🍨', isVeg: true },
+  { id: 'p14', name: 'Premium Multi-vitamins (60 Caps)', price: 890, category: 'Medical and fitness', store: 'Apollo Wellness', image: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=300&auto=format&fit=crop&q=60', emoji: '💊', isVeg: true },
+  { id: 'p15', name: 'Fresh Orange Juice (500ml)', price: 110, category: 'Juice and drink', store: 'Juice Junction', image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=300&auto=format&fit=crop&q=60', emoji: '🍹', isVeg: true },
+  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&auto=format&fit=crop&q=60', emoji: '☕', isVeg: true }
 ];
 
 const INITIAL_SHOPS = [
@@ -299,6 +299,7 @@ function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(false);
+  const [activeQrModalOrder, setActiveQrModalOrder] = useState(null);
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
@@ -320,6 +321,22 @@ function App() {
   const [newProductPrice, setNewProductPrice] = useState('');
   const [newProductCategory, setNewProductCategory] = useState('Bakery');
   const [merchantShopSelect, setMerchantShopSelect] = useState('Bake House');
+  const [vegFilter, setVegFilter] = useState('All'); // 'All' | 'Veg' | 'NonVeg'
+  const [newProductIsVeg, setNewProductIsVeg] = useState(true);
+
+  // Admin catalog additions state variables
+  const [adminNewProductName, setAdminNewProductName] = useState('');
+  const [adminNewProductPrice, setAdminNewProductPrice] = useState('');
+  const [adminNewProductOrigPrice, setAdminNewProductOrigPrice] = useState('');
+  const [adminNewProductOffer, setAdminNewProductOffer] = useState('');
+  const [adminNewProductImage, setAdminNewProductImage] = useState('');
+  const [adminNewProductCategory, setAdminNewProductCategory] = useState('Bakery');
+  const [adminNewProductStore, setAdminNewProductStore] = useState('');
+  const [adminNewProductIsVeg, setAdminNewProductIsVeg] = useState(true);
+  const [adminCustomCategory, setAdminCustomCategory] = useState('');
+  const [adminCustomStore, setAdminCustomStore] = useState('');
+  const [isAdminAddFormOpen, setIsAdminAddFormOpen] = useState(false);
+
   const audioContextRef = useRef(null);
 
   const [editingProduct, setEditingProduct] = useState(null);
@@ -346,6 +363,10 @@ function App() {
   const [dealZoomEdit, setDealZoomEdit] = useState('1');
   const [activeSettingsAccordion, setActiveSettingsAccordion] = useState('global'); // 'global' | 'deal' | 'preview' | 'guide'
   const [activePreviewTab, setActivePreviewTab] = useState('desktop'); // 'desktop' | 'mobile'
+  const [riderAnnouncement, setRiderAnnouncement] = useState('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+  const [riderAnnouncementEdit, setRiderAnnouncementEdit] = useState('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+  const [customerAnnouncement, setCustomerAnnouncement] = useState('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+  const [customerAnnouncementEdit, setCustomerAnnouncementEdit] = useState('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
   const [tempAuthPassword, setTempAuthPassword] = useState('');
   const [tempAuthEmail, setTempAuthEmail] = useState('');
 
@@ -857,6 +878,42 @@ function App() {
     return () => unsubscribe();
   }, []);
 
+  // Fetch real-time Rider Announcement from Firestore
+  useEffect(() => {
+    const announceDocRef = doc(db, "configs", "rider_announcement");
+    const unsubscribe = onSnapshot(announceDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setRiderAnnouncement(data.text || 'Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+        setRiderAnnouncementEdit(data.text || 'Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+      } else {
+        setRiderAnnouncement('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+        setRiderAnnouncementEdit('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+      }
+    }, (error) => {
+      console.error("Firestore rider announcement subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time Customer Announcement from Firestore
+  useEffect(() => {
+    const announceDocRef = doc(db, "configs", "customer_announcement");
+    const unsubscribe = onSnapshot(announceDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setCustomerAnnouncement(data.text || '🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+        setCustomerAnnouncementEdit(data.text || '🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+      } else {
+        setCustomerAnnouncement('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+        setCustomerAnnouncementEdit('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+      }
+    }, (error) => {
+      console.error("Firestore customer announcement subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Fetch real-time admins from Firestore
   useEffect(() => {
     const adminsRef = collection(db, "admins");
@@ -1323,12 +1380,17 @@ function App() {
       });
   };
 
-  // Active Category list
-  const categories = [
+  // Active Category list derived from standard categories + custom product categories
+  const standardCategories = [
     'All', 'General Store', 'Vegetable', 'Dairy', 'Bakery', 'Fast Food', 
     'Restaurant Cafe', 'Icecream and dessert', 'Medical and fitness', 
     'Juice and drink', 'Snacks and breakfast'
   ];
+  const dynamicCategories = [...new Set(products.filter(p => p.approved !== false).map(p => p.category))].filter(Boolean);
+  const categories = ['All', ...new Set([
+    ...standardCategories.slice(1),
+    ...dynamicCategories
+  ])];
 
   // System Stats for Admin View
   const stats = {
@@ -1507,13 +1569,66 @@ function App() {
           ...updatedFields,
           createdAt: new Date().toISOString()
         });
-        showToast(`${prod.name} saved to database & updated!`);
       } catch (err) {
         console.error("Error creating product in Firestore:", err);
         alert("Failed to save product in DB: " + err.message);
       }
     }
   };
+
+  const handleAdminAddProduct = async () => {
+    if (!adminNewProductName || !adminNewProductPrice) {
+      alert("Please enter product name and price!");
+      return;
+    }
+    const price = parseFloat(adminNewProductPrice);
+    const originalPrice = parseFloat(adminNewProductOrigPrice) || 0;
+    if (isNaN(price)) {
+      return alert("Please enter a valid price!");
+    }
+
+    const finalCategory = adminNewProductCategory === 'custom' ? adminCustomCategory.trim() : adminNewProductCategory;
+    const finalStore = adminNewProductStore === 'custom' ? adminCustomStore.trim() : adminNewProductStore || (shops[0]?.storeName || shops[0]?.name || 'PixoGo Store');
+
+    if (!finalCategory) return alert("Please specify a category!");
+    if (!finalStore) return alert("Please specify a shop!");
+
+    const newProd = {
+      id: `p_${Date.now()}`,
+      name: adminNewProductName,
+      price: price,
+      originalPrice: originalPrice,
+      offerText: adminNewProductOffer,
+      category: finalCategory,
+      store: finalStore,
+      image: adminNewProductImage || '🍔',
+      isVeg: adminNewProductIsVeg,
+      approved: true, // Admin catalog additions are pre-approved!
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      await addDoc(collection(db, "products"), newProd);
+      showToast(`${adminNewProductName} successfully added to global catalog!`);
+      // Reset fields
+      setAdminNewProductName('');
+      setAdminNewProductPrice('');
+      setAdminNewProductOrigPrice('');
+      setAdminNewProductOffer('');
+      setAdminNewProductImage('');
+      setAdminNewProductCategory('Bakery');
+      setAdminNewProductStore('');
+      setAdminCustomCategory('');
+      setAdminCustomStore('');
+      setAdminNewProductIsVeg(true);
+      setIsAdminAddFormOpen(false);
+    } catch (err) {
+      console.error("Error adding product to Firestore:", err);
+      alert(`Failed to add product: ${err.message}`);
+    }
+  };
+
+  // Add Item to Cart
 
   // Add Item to Cart
   const handleAddToCart = (product) => {
@@ -2323,7 +2438,7 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    if (order.paymentMethod === 'ONLINE' && riderInputOTP !== order.otp) {
+    if (riderInputOTP.trim().toString() !== (order.otp || '').toString().trim()) {
       return alert('Invalid OTP Code! Please confirm with the customer.');
     }
 
@@ -2497,6 +2612,36 @@ function App() {
     }
   };
 
+  const handleSaveRiderAnnouncement = async () => {
+    try {
+      const announceDocRef = doc(db, "configs", "rider_announcement");
+      await setDoc(announceDocRef, {
+        text: riderAnnouncementEdit,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      showToast("Rider announcement updated successfully!");
+      alert("Rider announcement saved to Firebase Firestore.");
+    } catch (err) {
+      console.error("Error saving rider announcement:", err);
+      alert(`Failed to save announcement: ${err.message}`);
+    }
+  };
+
+  const handleSaveCustomerAnnouncement = async () => {
+    try {
+      const announceDocRef = doc(db, "configs", "customer_announcement");
+      await setDoc(announceDocRef, {
+        text: customerAnnouncementEdit,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      showToast("Customer announcement updated successfully!");
+      alert("Customer announcement saved to Firebase Firestore.");
+    } catch (err) {
+      console.error("Error saving customer announcement:", err);
+      alert(`Failed to save announcement: ${err.message}`);
+    }
+  };
+
   const handleCreateAuthAccount = async (type, email, password, id) => {
     if (!email || !password) {
       alert("Please provide both email/username and password.");
@@ -2583,12 +2728,14 @@ function App() {
       store: merchantShopSelect,
       image: '🍔',
       approved: false,
+      isVeg: newProductIsVeg,
       createdAt: new Date().toISOString()
     };
     try {
       await addDoc(collection(db, "products"), newProd);
       setNewProductName('');
       setNewProductPrice('');
+      setNewProductIsVeg(true);
       alert('Product added to listing catalog!');
     } catch (e) {
       console.error("Error adding product to Firestore:", e);
@@ -2623,7 +2770,7 @@ function App() {
     return [...new Set(approved.map(p => p.store))].sort();
   };
 
-  // Filter products by search, mode, and category
+  // Filter products by search, mode, category, and veg/non-veg type
   const filteredProducts = products.filter(p => {
     if (p.approved === false) return false;
     let matchQuery = true;
@@ -2639,7 +2786,10 @@ function App() {
       }
     }
     const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
-    return matchQuery && matchCat;
+    const matchVeg = vegFilter === 'All' || 
+                     (vegFilter === 'Veg' && p.isVeg !== false) || 
+                     (vegFilter === 'NonVeg' && p.isVeg === false);
+    return matchQuery && matchCat && matchVeg;
   });
 
   // Compute active orders for the current customer (excluding completed, delivered, and cancelled ones)
@@ -2852,7 +3002,56 @@ function App() {
                                'portal-theme-merchant';
 
       return (
-        <div className={`portal-auth-scene ${portalThemeClass} fade-in`}>
+        <div className={`portal-auth-scene ${portalThemeClass} fade-in`} style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
+          
+          {isRider && riderAnnouncement && (
+            <div className="rider-announcement-banner" style={{
+              width: '100%',
+              maxWidth: '450px',
+              padding: '8px 16px',
+              background: 'rgba(0, 255, 242, 0.05)',
+              border: '1px solid rgba(0, 255, 242, 0.15)',
+              borderRadius: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              overflow: 'hidden',
+              boxShadow: '0 0 10px rgba(0, 255, 242, 0.05)',
+              marginBottom: '10px'
+            }}>
+              <span style={{ 
+                fontSize: '11px', 
+                fontWeight: '800', 
+                color: 'var(--color-primary)', 
+                background: 'rgba(0, 255, 242, 0.15)', 
+                padding: '3px 8px', 
+                borderRadius: '10px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}>
+                📢 Notice
+              </span>
+              <marquee 
+                behavior="scroll" 
+                direction="left" 
+                scrollamount="4" 
+                style={{ 
+                  fontSize: '12px', 
+                  color: '#00fff2', 
+                  textShadow: '0 0 4px rgba(0, 255, 242, 0.3)',
+                  fontWeight: '600', 
+                  margin: 0,
+                  padding: 0
+                }}
+              >
+                {riderAnnouncement}
+              </marquee>
+            </div>
+          )}
+
           <div className="portal-bg-orbs">
             <div className="orb orb-1"></div>
             <div className="orb orb-2"></div>
@@ -3326,6 +3525,58 @@ function App() {
         {/* ==================== CUSTOMER VIEW ==================== */}
         {activeTab === 'customer' && (
           <div className="customer-portal-layout fade-in">
+            
+            {/* Customer Promotional Marquee (Black & Gold Theme) */}
+            {customerAnnouncement && (
+              <div className="customer-announcement-banner" style={{
+                margin: '12px auto 20px auto',
+                padding: '10px 20px',
+                background: 'linear-gradient(90deg, #0f0c05 0%, #1f190a 50%, #0f0c05 100%)',
+                border: '1px solid rgba(218, 165, 32, 0.25)',
+                borderRadius: '30px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                overflow: 'hidden',
+                boxShadow: '0 0 15px rgba(218, 165, 32, 0.08)',
+                width: '100%',
+                maxWidth: '1200px'
+              }}>
+                <span style={{ 
+                  fontSize: '11px', 
+                  fontWeight: '800', 
+                  color: '#000000', 
+                  background: 'linear-gradient(90deg, #ffd700, #daa520)', 
+                  padding: '4px 12px', 
+                  borderRadius: '15px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                  gap: '4px'
+                }}>
+                  ⭐ OFFERS
+                </span>
+                <marquee 
+                  behavior="scroll" 
+                  direction="left" 
+                  scrollamount="4" 
+                  style={{ 
+                    fontSize: '13px', 
+                    color: '#ffd700', 
+                    textShadow: '0 0 4px rgba(255, 215, 0, 0.2)',
+                    fontWeight: '700', 
+                    margin: 0,
+                    padding: 0
+                  }}
+                >
+                  {customerAnnouncement}
+                </marquee>
+              </div>
+            )}
+
             <div className="customer-grid">
             {/* Storefront Layout */}
             <div className="catalog-section">
@@ -3439,6 +3690,28 @@ function App() {
                 </div>
               </div>
 
+              {/* Veg/Non-Veg Filter Chips Row */}
+              <div className="filter-chips-row">
+                <button 
+                  className={`filter-chip ${vegFilter === 'All' ? 'active' : ''}`}
+                  onClick={() => setVegFilter('All')}
+                >
+                  All Items
+                </button>
+                <button 
+                  className={`filter-chip veg-chip ${vegFilter === 'Veg' ? 'active' : ''}`}
+                  onClick={() => setVegFilter('Veg')}
+                >
+                  <span className="veg-dot-box green"><span className="veg-dot-circle"></span></span> Veg Only
+                </button>
+                <button 
+                  className={`filter-chip nonveg-chip ${vegFilter === 'NonVeg' ? 'active' : ''}`}
+                  onClick={() => setVegFilter('NonVeg')}
+                >
+                  <span className="veg-dot-box red"><span className="veg-dot-triangle"></span></span> Non-Veg Only
+                </button>
+              </div>
+
               {/* Product Grid */}
               <div className="products-grid">
                 {filteredProducts.map(p => (
@@ -3453,7 +3726,12 @@ function App() {
                       )}
                     </div>
                     <div className="prod-meta">
-                      <h3 className="prod-title">{p.name}</h3>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
+                        <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
+                          <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
+                        </span>
+                      </div>
                       <span className="prod-store">{p.store}</span>
                       <p className="prod-category">{p.category}</p>
                       
@@ -3912,11 +4190,150 @@ function App() {
                         </button>
                       )}
                     </div>
+                    <button 
+                      className="neon-btn" 
+                      onClick={() => setIsAdminAddFormOpen(!isAdminAddFormOpen)} 
+                      style={{ background: 'rgba(0, 255, 242, 0.1)', borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
+                    >
+                      {isAdminAddFormOpen ? '✖ Close Form' : '➕ Add Product'}
+                    </button>
                     <button className="neon-btn csv-btn" onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}>
                       ← Back to Orders
                     </button>
                   </div>
                 </div>
+
+                {/* Togglable Admin Add Product Form */}
+                {isAdminAddFormOpen && (
+                  <div className="glass-panel fade-in border-glow" style={{ padding: '24px', marginBottom: '24px', borderRadius: '12px', background: 'rgba(30, 41, 59, 0.4)' }}>
+                    <h3 style={{ marginTop: 0, marginBottom: '20px', color: 'var(--color-primary)', textAlign: 'left' }}>➕ Add New Product to Catalog</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Product Name</label>
+                        <input 
+                          type="text" 
+                          value={adminNewProductName} 
+                          onChange={(e) => setAdminNewProductName(e.target.value)} 
+                          className="custom-input" 
+                          placeholder="e.g. Chocolate Truffle Cake"
+                        />
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Price (₹)</label>
+                        <input 
+                          type="number" 
+                          value={adminNewProductPrice} 
+                          onChange={(e) => setAdminNewProductPrice(e.target.value)} 
+                          className="custom-input" 
+                          placeholder="e.g. 350"
+                        />
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Original Price (₹)</label>
+                        <input 
+                          type="number" 
+                          value={adminNewProductOrigPrice} 
+                          onChange={(e) => setAdminNewProductOrigPrice(e.target.value)} 
+                          className="custom-input" 
+                          placeholder="e.g. 400"
+                        />
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Offer Title</label>
+                        <input 
+                          type="text" 
+                          value={adminNewProductOffer} 
+                          onChange={(e) => setAdminNewProductOffer(e.target.value)} 
+                          className="custom-input" 
+                          placeholder="e.g. 15% OFF"
+                        />
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Image URL / Emoji</label>
+                        <input 
+                          type="text" 
+                          value={adminNewProductImage} 
+                          onChange={(e) => setAdminNewProductImage(e.target.value)} 
+                          className="custom-input" 
+                          placeholder="https://... or 🍰"
+                        />
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Dietary Type</label>
+                        <select 
+                          value={adminNewProductIsVeg ? 'veg' : 'nonveg'} 
+                          onChange={(e) => setAdminNewProductIsVeg(e.target.value === 'veg')}
+                          className="rider-select"
+                          style={{ height: '38px' }}
+                        >
+                          <option value="veg">🟢 Vegetarian</option>
+                          <option value="nonveg">🔴 Non-Vegetarian</option>
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Product Category</label>
+                        <select 
+                          value={adminNewProductCategory} 
+                          onChange={(e) => setAdminNewProductCategory(e.target.value)}
+                          className="rider-select"
+                          style={{ height: '38px' }}
+                        >
+                          {categories.slice(1).map(c => (
+                            <option key={c} value={c}>{c}</option>
+                          ))}
+                          <option value="custom">[+ Custom Category]</option>
+                        </select>
+                        {adminNewProductCategory === 'custom' && (
+                          <input 
+                            type="text"
+                            value={adminCustomCategory}
+                            onChange={(e) => setAdminCustomCategory(e.target.value)}
+                            className="custom-input"
+                            style={{ marginTop: '8px' }}
+                            placeholder="Enter Custom Category"
+                          />
+                        )}
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Representing Shop</label>
+                        <select 
+                          value={adminNewProductStore} 
+                          onChange={(e) => setAdminNewProductStore(e.target.value)}
+                          className="rider-select"
+                          style={{ height: '38px' }}
+                        >
+                          <option value="">-- Select Shop --</option>
+                          {shops.map(s => (
+                            <option key={s.id} value={s.storeName || s.name}>{s.storeName || s.name}</option>
+                          ))}
+                          <option value="custom">[+ Custom Shop]</option>
+                        </select>
+                        {adminNewProductStore === 'custom' && (
+                          <input 
+                            type="text"
+                            value={adminCustomStore}
+                            onChange={(e) => setAdminCustomStore(e.target.value)}
+                            className="custom-input"
+                            style={{ marginTop: '8px' }}
+                            placeholder="Enter Custom Shop Name"
+                          />
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                      <button 
+                        className="neon-btn" 
+                        style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid var(--color-border)' }} 
+                        onClick={() => setIsAdminAddFormOpen(false)}
+                      >
+                        Cancel
+                      </button>
+                      <button className="neon-btn" onClick={handleAdminAddProduct}>
+                        Create & Publish Item
+                      </button>
+                    </div>
+                  </div>
+                )}
                 
                 <div className="table-responsive">
                   <table className="order-log-table">
@@ -4002,25 +4419,38 @@ function App() {
                                 </span>
                               </td>
                               <td>
-                                <button 
-                                  className="neon-btn small-btn"
-                                  onClick={() => {
-                                    const priceInput = document.getElementById(`price-${p.id}`);
-                                    const origPriceInput = document.getElementById(`orig-price-${p.id}`);
-                                    const offerInput = document.getElementById(`offer-${p.id}`);
-                                    const imageInput = document.getElementById(`image-${p.id}`);
-                                    handleAdminUpdateProductCatalog(
-                                      p.id, 
-                                      priceInput.value, 
-                                      origPriceInput.value, 
-                                      offerInput.value,
-                                      imageInput.value
-                                    );
-                                  }}
-                                  style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
-                                >
-                                  Save
-                                </button>
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <button 
+                                    className="neon-btn small-btn"
+                                    onClick={() => {
+                                      const priceInput = document.getElementById(`price-${p.id}`);
+                                      const origPriceInput = document.getElementById(`orig-price-${p.id}`);
+                                      const offerInput = document.getElementById(`offer-${p.id}`);
+                                      const imageInput = document.getElementById(`image-${p.id}`);
+                                      handleAdminUpdateProductCatalog(
+                                        p.id, 
+                                        priceInput.value, 
+                                        origPriceInput.value, 
+                                        offerInput.value,
+                                        imageInput.value
+                                      );
+                                    }}
+                                    style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)', padding: '4px 10px' }}
+                                  >
+                                    Save
+                                  </button>
+                                  <button 
+                                    className="neon-btn small-btn"
+                                    onClick={() => {
+                                      if (confirm(`Are you sure you want to delete ${p.name}?`)) {
+                                        handleMerchantDeleteProduct(p.id);
+                                      }
+                                    }}
+                                    style={{ background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239, 68, 68, 0.3)', color: '#ef4444', padding: '4px 10px' }}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -4646,6 +5076,67 @@ function App() {
                     </div>
                   </div>
 
+                  {/* Panel 2b: System Announcements Configuration */}
+                  <div className={`settings-accordion-section ${activeSettingsAccordion === 'announcement' ? 'active' : ''}`} style={{ marginTop: '20px' }}>
+                    <button 
+                      type="button" 
+                      className="settings-accordion-header"
+                      onClick={() => {
+                        setActiveSettingsAccordion(activeSettingsAccordion === 'announcement' ? '' : 'announcement');
+                      }}
+                    >
+                      <h2>
+                        <FileText size={20} style={{ color: 'var(--color-primary)' }} />
+                        <span>System Announcement Banners</span>
+                      </h2>
+                      <ChevronDown size={20} className="accordion-chevron" />
+                    </button>
+                    
+                    <div className="settings-accordion-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                      {/* Customer Banner Settings */}
+                      <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '20px' }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#ffd700', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          ⭐ Customer Storefront Announcement (Black & Gold Theme)
+                        </h3>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
+                          <textarea 
+                            value={customerAnnouncementEdit} 
+                            onChange={(e) => setCustomerAnnouncementEdit(e.target.value)} 
+                            className="custom-input"
+                            placeholder="e.g. 🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500!"
+                            rows={2}
+                            style={{ width: '100%', height: '60px', padding: '8px', resize: 'vertical' }}
+                          />
+                        </div>
+                        <button className="neon-btn" onClick={handleSaveCustomerAnnouncement} style={{ alignSelf: 'flex-start', padding: '8px 20px', width: '100%' }}>
+                          Save Customer Announcement Settings
+                        </button>
+                      </div>
+
+                      {/* Rider Banner Settings */}
+                      <div>
+                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#00fff2', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          📢 Rider Portal Announcement (Neon Cyan Theme)
+                        </h3>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
+                          <textarea 
+                            value={riderAnnouncementEdit} 
+                            onChange={(e) => setRiderAnnouncementEdit(e.target.value)} 
+                            className="custom-input"
+                            placeholder="e.g. 📢 Welcome to PIXIgo Rider Console! Please keep your GPS enabled and update delivery status with OTP on successful delivery."
+                            rows={2}
+                            style={{ width: '100%', height: '60px', padding: '8px', resize: 'vertical' }}
+                          />
+                        </div>
+                        <button className="neon-btn" onClick={handleSaveRiderAnnouncement} style={{ alignSelf: 'flex-start', padding: '8px 20px', width: '100%' }}>
+                          Save Rider Announcement Settings
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
 
                 {/* Right Column (Previews & Guides) */}
@@ -4919,6 +5410,53 @@ function App() {
             <div className="delivery-portal-wrap fade-in">
               <div className="delivery-layout glass-panel">
                 
+                {/* Rider Portal Announcement Marquee Banner */}
+                {riderAnnouncement && (
+                  <div className="rider-announcement-banner" style={{
+                    marginBottom: '24px',
+                    padding: '8px 16px',
+                    background: 'rgba(0, 255, 242, 0.05)',
+                    border: '1px solid rgba(0, 255, 242, 0.15)',
+                    borderRadius: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 0 10px rgba(0, 255, 242, 0.05)'
+                  }}>
+                    <span style={{ 
+                      fontSize: '12px', 
+                      fontWeight: '800', 
+                      color: 'var(--color-primary)', 
+                      background: 'rgba(0, 255, 242, 0.15)', 
+                      padding: '4px 10px', 
+                      borderRadius: '12px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center'
+                    }}>
+                      📢 Notice
+                    </span>
+                    <marquee 
+                      behavior="scroll" 
+                      direction="left" 
+                      scrollamount="4" 
+                      style={{ 
+                        fontSize: '13px', 
+                        color: '#00fff2', 
+                        textShadow: '0 0 4px rgba(0, 255, 242, 0.3)',
+                        fontWeight: '600', 
+                        margin: 0,
+                        padding: 0
+                      }}
+                    >
+                      {riderAnnouncement}
+                    </marquee>
+                  </div>
+                )}
+
                 {/* Rider Welcome Info */}
                 <div style={{ textAlign: 'left', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
                   <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
@@ -5094,9 +5632,23 @@ function App() {
                             onChange={(e) => setRiderInputOTP(e.target.value)}
                             className="custom-input"
                           />
-                          <button className="neon-btn" onClick={() => handleRiderCompleteDelivery(o.id)}>
-                            Complete Delivery & Collect Cash
-                          </button>
+                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                            <button 
+                              className="neon-btn" 
+                              onClick={() => handleRiderCompleteDelivery(o.id)}
+                              style={{ flexGrow: 2 }}
+                            >
+                              Complete Delivery & Collect Cash
+                            </button>
+                            <button 
+                              className="neon-btn" 
+                              onClick={() => setActiveQrModalOrder(o)}
+                              style={{ flexGrow: 1, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                              title="Show QR Code"
+                            >
+                              📱 Show QR
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))
@@ -5409,6 +5961,17 @@ function App() {
                         {categories.slice(1).map(c => (
                           <option key={c} value={c}>{c}</option>
                         ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Dietary Type</label>
+                      <select 
+                        value={newProductIsVeg ? 'veg' : 'nonveg'} 
+                        onChange={(e) => setNewProductIsVeg(e.target.value === 'veg')}
+                        className="rider-select"
+                      >
+                        <option value="veg">🟢 Vegetarian</option>
+                        <option value="nonveg">🔴 Non-Vegetarian</option>
                       </select>
                     </div>
                     <div className="form-group">
@@ -6695,6 +7258,46 @@ function App() {
                 style={{ flex: 1, padding: '12px', fontWeight: 'bold' }}
               >
                 Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Code Modal for Rider */}
+      {activeQrModalOrder && (
+        <div className="modal-backdrop fade-in" onClick={() => setActiveQrModalOrder(null)}>
+          <div className="customer-auth-modal-scene" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="portal-auth-card-dark" style={{ padding: '24px', textAlign: 'center', position: 'relative' }}>
+              <button className="modal-close-btn-dark" onClick={() => setActiveQrModalOrder(null)}>
+                <X size={20} />
+              </button>
+              <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)', marginBottom: '8px' }}>
+                Order {activeQrModalOrder.id} - Payment / Scan QR
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
+                Please show this QR code to the customer for payment scan or confirmation.
+              </p>
+              
+              <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', display: 'inline-block', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', marginBottom: '16px' }}>
+                <img 
+                  src="/pixigo_payment_qr.png" 
+                  alt="Payment QR Code" 
+                  style={{ width: '240px', height: '240px', display: 'block', margin: '0 auto', borderRadius: '8px' }} 
+                />
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '13px' }}>
+                <div>Total to Collect: <strong style={{ color: 'var(--color-success)', fontSize: '16px' }}>{formatINR(activeQrModalOrder.totalAmount)}</strong></div>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Method: {activeQrModalOrder.paymentMethod}</div>
+              </div>
+              
+              <button 
+                className="neon-btn" 
+                onClick={() => setActiveQrModalOrder(null)} 
+                style={{ width: '100%', marginTop: '16px', fontWeight: 'bold' }}
+              >
+                Close QR Code
               </button>
             </div>
           </div>
