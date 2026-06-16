@@ -712,11 +712,6 @@ function App() {
 
   // Fetch real-time orders from Firestore
   useEffect(() => {
-    if (!user) {
-      setOrders(INITIAL_ORDERS);
-      return;
-    }
-
     const ordersRef = collection(db, "orders");
     const q = query(ordersRef, orderBy("createdAt", "desc"));
     
@@ -1031,7 +1026,7 @@ function App() {
   }, []);
 
   const prevActiveJobsCount = useRef(0);
-  const riderActiveJobs = user ? orders.filter(o => o.deliveryPartnerId === user.uid && o.status !== 'COMPLETED') : [];
+  const riderActiveJobs = user ? orders.filter(o => o.deliveryPartnerId === user.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')) : [];
 
   useEffect(() => {
     if (riderActiveJobs.length > prevActiveJobsCount.current) {
@@ -3273,6 +3268,20 @@ function App() {
 
           {/* Header Actions (Auth, Cart & Mobile Menu) */}
           <div className="header-actions">
+            {activeTab === 'customer' && activeCustomerOrders.length > 0 && (
+              <button 
+                className="cart-header-icon-btn active-tracking-btn pulse-glow" 
+                onClick={() => {
+                  setCurrentOrderTracking(activeCustomerOrders[0].id);
+                  setIsTrackingDrawerOpen(true);
+                }} 
+                title="Track Active Order"
+                style={{ border: '1px solid var(--color-primary-glow-strong)', color: 'var(--color-primary)' }}
+              >
+                <Compass size={20} className="spin-slow" />
+              </button>
+            )}
+
             {activeTab === 'customer' && (
               <button className="cart-header-icon-btn" onClick={() => setIsCartDrawerOpen(true)} title="View Cart">
                 <ShoppingCart size={20} />
@@ -4894,7 +4903,7 @@ function App() {
           const isPanUploaded = currentRider?.panUploaded || false;
           const isAllUploaded = isAadhaarUploaded && isDlUploaded && isRcUploaded && isPanUploaded;
           
-          const activeJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status !== 'COMPLETED');
+          const activeJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED'));
           const completedJobs = orders.filter(o => {
             if (o.deliveryPartnerId !== user?.uid || o.status !== 'COMPLETED') return false;
             const dateVal = o.completedAt || o.createdAt;
@@ -5904,6 +5913,14 @@ function App() {
               const trackedOrder = orders.find(o => o.id === currentOrderTracking);
               if (!trackedOrder) return <p className="text-muted">Order not found.</p>;
 
+              const getStatusStepIndex = (status) => {
+                const s = status?.toUpperCase() || '';
+                if (s === 'COMPLETED' || s === 'DELIVERED') return 4;
+                if (['ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY'].includes(s)) return 3;
+                if (s === 'ACCEPTED') return 2;
+                return 1;
+              };
+
               return (
                 <div className="tracked-order-detail-sidebar fade-in" style={{ gap: '16px', display: 'flex', flexDirection: 'column' }}>
                   {/* ETA banner */}
@@ -5918,6 +5935,71 @@ function App() {
                        'Awaiting Confirmation'}
                     </span>
                   </div>
+
+                  {/* Vertical Timeline Status Progress */}
+                  {!trackedOrder.status?.startsWith('CANCELLED') && (
+                    <div className="order-progress-timeline">
+                      {/* Step 1: Placed */}
+                      <div className={`timeline-step ${getStatusStepIndex(trackedOrder.status) >= 1 ? 'completed' : ''} ${getStatusStepIndex(trackedOrder.status) === 1 ? 'active' : ''}`}>
+                        <div className="timeline-node">
+                          <span className="node-icon">🛒</span>
+                        </div>
+                        <div className="timeline-content">
+                          <h4>Order Placed</h4>
+                          <p>We've received your order.</p>
+                        </div>
+                      </div>
+                      
+                      <div className="timeline-line-connector">
+                        <div className={`timeline-line-progress ${getStatusStepIndex(trackedOrder.status) >= 2 ? 'full' : ''}`}></div>
+                      </div>
+
+                      {/* Step 2: Accepted */}
+                      <div className={`timeline-step ${getStatusStepIndex(trackedOrder.status) >= 2 ? 'completed' : ''} ${getStatusStepIndex(trackedOrder.status) === 2 ? 'active' : ''}`}>
+                        <div className="timeline-node">
+                          <span className="node-icon">🍳</span>
+                        </div>
+                        <div className="timeline-content">
+                          <h4>Accepted & Preparing</h4>
+                          <p>{getStatusStepIndex(trackedOrder.status) >= 2 ? "Kitchen is preparing your order!" : "Awaiting shop confirmation."}</p>
+                        </div>
+                      </div>
+
+                      <div className="timeline-line-connector">
+                        <div className={`timeline-line-progress ${getStatusStepIndex(trackedOrder.status) >= 3 ? 'full' : ''}`}></div>
+                      </div>
+
+                      {/* Step 3: Assigned */}
+                      <div className={`timeline-step ${getStatusStepIndex(trackedOrder.status) >= 3 ? 'completed' : ''} ${getStatusStepIndex(trackedOrder.status) === 3 ? 'active' : ''}`}>
+                        <div className="timeline-node">
+                          <span className="node-icon">🛵</span>
+                        </div>
+                        <div className="timeline-content">
+                          <h4>Courier Dispatched</h4>
+                          <p>
+                            {getStatusStepIndex(trackedOrder.status) >= 3 
+                              ? `Rider ${trackedOrder.deliveryPartnerName || 'Partner'} claimed your run!` 
+                              : "Waiting to assign courier..."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="timeline-line-connector">
+                        <div className={`timeline-line-progress ${getStatusStepIndex(trackedOrder.status) >= 4 ? 'full' : ''}`}></div>
+                      </div>
+
+                      {/* Step 4: Completed */}
+                      <div className={`timeline-step ${getStatusStepIndex(trackedOrder.status) >= 4 ? 'completed' : ''} ${getStatusStepIndex(trackedOrder.status) === 4 ? 'active' : ''}`}>
+                        <div className="timeline-node">
+                          <span className="node-icon">🎉</span>
+                        </div>
+                        <div className="timeline-content">
+                          <h4>Delivered</h4>
+                          <p>{getStatusStepIndex(trackedOrder.status) >= 4 ? "Enjoy your delivery! Thank you." : "Delivery completion pending."}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Map */}
                   <div className="leaflet-mock-map-sidebar border-glow">
@@ -5961,18 +6043,37 @@ function App() {
                   </div>
 
                   {/* Rider Information Panel */}
-                  {trackedOrder.deliveryPartnerId ? (
-                    <div className="rider-card-sidebar border-glow">
-                      <div className="rider-avatar-sidebar">🛵</div>
-                      <div className="rider-desc-sidebar">
-                        <h4>{trackedOrder.deliveryPartnerName}</h4>
-                        <p>Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}</p>
+                  {trackedOrder.deliveryPartnerId ? (() => {
+                    const riderPhone = deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.phone || trackedOrder.deliveryPartnerPhone || '9251054064';
+                    return (
+                      <div className="rider-card-sidebar border-glow" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                          <div className="rider-avatar-sidebar">🛵</div>
+                          <div className="rider-desc-sidebar" style={{ textAlign: 'left' }}>
+                            <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold' }}>{trackedOrder.deliveryPartnerName}</h4>
+                            <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                              Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}
+                            </p>
+                          </div>
+                          <div className="otp-badge-sidebar">
+                            <span>OTP: <strong>{trackedOrder.otp}</strong></span>
+                          </div>
+                        </div>
+                        {riderPhone && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--color-border)', paddingTop: '8px', marginTop: '4px' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: '500' }}>📞 {riderPhone}</span>
+                            <a 
+                              href={`tel:${riderPhone}`} 
+                              className="neon-btn" 
+                              style={{ padding: '6px 12px', fontSize: '11px', textDecoration: 'none', background: 'var(--color-primary)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#000000', fontWeight: 'bold', boxShadow: 'none' }}
+                            >
+                              <Phone size={11} /> Call Rider
+                            </a>
+                          </div>
+                        )}
                       </div>
-                      <div className="otp-badge-sidebar">
-                        <span>OTP: <strong>{trackedOrder.otp}</strong></span>
-                      </div>
-                    </div>
-                  ) : (
+                    );
+                  })() : (
                     <div className="rider-pending-sidebar">
                       <RefreshCw size={14} className="spin" />
                       <span>Assigning courier...</span>
