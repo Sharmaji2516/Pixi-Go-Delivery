@@ -11,6 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
+import { getDistance, calculateDeliveryRates, fetchRoadDistance } from './distanceUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -33,11 +34,11 @@ const INITIAL_PRODUCTS = [
 ];
 
 const INITIAL_SHOPS = [
-  { id: 'merch_bake_house', storeName: 'Bake House', name: 'Bake House', category: 'Bakery', phone: '9251054064', address: 'C-Scheme, Jaipur', verified: true, docs: 'Approved' },
-  { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Mansarovar, Jaipur', verified: true, docs: 'Approved' },
-  { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Vaishali Nagar, Jaipur', verified: true, docs: 'Approved' },
-  { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'C-Scheme, Jaipur', verified: true, docs: 'Approved' },
-  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Mansarovar, Jaipur', verified: true, docs: 'Approved' }
+  { id: 'merch_bake_house', storeName: 'Bake House', name: 'Bake House', category: 'Bakery', phone: '9251054064', address: 'Collectorate Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '23:00', lat: 24.8887, lng: 74.6269 },
+  { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Bojunda, Chittorgarh', verified: true, docs: 'Approved', openTime: '07:00', closeTime: '22:00', lat: 24.8600, lng: 74.5800 },
+  { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Police Line, Chittorgarh', verified: true, docs: 'Approved', openTime: '06:00', closeTime: '21:00', lat: 24.8850, lng: 74.6200 },
+  { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'Birla Hospital Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '11:00', closeTime: '23:30', lat: 24.8960, lng: 74.6550 },
+  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Pauta Chowk, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '20:00', lat: 24.8800, lng: 74.6400 }
 ];
 
 const INITIAL_DELIVERY_PARTNERS = [];
@@ -238,6 +239,38 @@ const LeafletMap = ({
   return <div ref={containerRef} style={{ width: '100%', height: '100%', minHeight: '180px' }} />;
 };
 
+const getShopOpenStatus = (shop) => {
+  if (!shop) return { isOpen: false, reason: 'Unknown Store' };
+  
+  // 1. Check manual toggle status (defaults to true if undefined)
+  if (shop.isAcceptingOrders === false) {
+    return { isOpen: false, reason: 'MANUAL_CLOSED' };
+  }
+  
+  // 2. Check automatic operating hours scheduler
+  const openTime = shop.openTime || "09:00";
+  const closeTime = shop.closeTime || "22:00";
+  
+  const now = new Date();
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  
+  const [openH, openM] = openTime.split(':').map(Number);
+  const [closeH, closeM] = closeTime.split(':').map(Number);
+  
+  const currentTotalMinutes = currentHour * 60 + currentMinute;
+  const openTotalMinutes = openH * 60 + openM;
+  const closeTotalMinutes = closeH * 60 + closeM;
+  
+  const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
+  
+  if (!isWithinHours) {
+    return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
+  }
+  
+  return { isOpen: true, reason: 'OPEN' };
+};
+
 function App() {
   // --- STATE DECLARATIONS ---
   const [activeTab, setActiveTab] = useState('customer'); // customer | admin | delivery | merchant
@@ -280,6 +313,8 @@ function App() {
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
   const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
   const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || 'Vaishali Nagar, Jaipur (RJ)');
+  const [deliveryDistance, setDeliveryDistance] = useState(null);
+  const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('ONLINE');
   const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({});
@@ -384,6 +419,8 @@ function App() {
   const [shopDocAadhaar, setShopDocAadhaar] = useState(false);
   const [shopDocPan, setShopDocPan] = useState(false);
   const [shopDocFssai, setShopDocFssai] = useState(false);
+  const [shopDocLat, setShopDocLat] = useState('');
+  const [shopDocLng, setShopDocLng] = useState('');
 
   // --- HELPER FUNCTIONS ---
   const showToast = (message) => {
@@ -536,6 +573,49 @@ function App() {
   };
 
   // --- SIDE EFFECTS (useEffect) ---
+
+  // Fetch actual road distance dynamically when customer coordinates or cart items change
+  useEffect(() => {
+    let active = true;
+    const calculateDistance = async () => {
+      const storeName = cart[0]?.store || '';
+      const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
+      const customerCoords = parseCoords(customerAddress);
+      
+      if (cartShop && customerCoords) {
+        setIsDistanceLoading(true);
+        const shopLat = cartShop.lat || 24.8887;
+        const shopLng = cartShop.lng || 74.6269;
+        
+        try {
+          const dist = await fetchRoadDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
+          if (active) {
+            setDeliveryDistance(dist);
+          }
+        } catch (error) {
+          console.error("Error fetching dynamic road distance:", error);
+          if (active) {
+            setDeliveryDistance(1.0); // Safe fallback
+          }
+        } finally {
+          if (active) {
+            setIsDistanceLoading(false);
+          }
+        }
+      } else {
+        if (active) {
+          setDeliveryDistance(null);
+          setIsDistanceLoading(false);
+        }
+      }
+    };
+
+    calculateDistance();
+
+    return () => {
+      active = false;
+    };
+  }, [customerAddress, cart, shops]);
 
   // Simple Frontend URL Router
   useEffect(() => {
@@ -1403,7 +1483,7 @@ function App() {
     totalDeliveryFee: orders.reduce((acc, o) => acc + o.deliveryCharge, 0),
     netProfit: orders.reduce((acc, o) => {
       // Net Profit = Total Commission - Total Delivery Boy Payouts
-      const riderPayout = o.status === 'COMPLETED' ? o.deliveryCharge : 0;
+      const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
       return acc + (o.commissionAmount - riderPayout);
     }, 0)
   };
@@ -1677,14 +1757,21 @@ function App() {
 
   // Checkout and Order Placement
   const handlePlaceOrder = async () => {
-    // Check operational hours: 10:00 AM to 8:00 PM (10:00 to 20:00)
-    const currentHour = new Date().getHours();
-    if (currentHour < 10 || currentHour >= 20) {
-      alert("We don't provide service for this time. Operational hours are from 10:00 AM to 8:00 PM.");
+    if (cart.length === 0) return alert('Your cart is empty!');
+
+    // Check store-specific operating hours and manual toggle status
+    const storeName = cart[0]?.store || 'Store';
+    const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
+    const shopStatus = getShopOpenStatus(cartShop);
+    if (!shopStatus.isOpen) {
+      if (shopStatus.reason === 'OUTSIDE_HOURS') {
+        alert(`Sorry! ${storeName} is currently closed. Operating hours are ${cartShop?.openTime || '09:00'} to ${cartShop?.closeTime || '22:00'}.`);
+      } else {
+        alert(`Sorry! ${storeName} is currently not accepting orders.`);
+      }
       return;
     }
 
-    if (cart.length === 0) return alert('Your cart is empty!');
     if (!customerAddress) return alert('Please input your delivery coordinates / address!');
 
     // Check if customer already has an active order in progress
@@ -1700,11 +1787,25 @@ function App() {
     }
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-    const delCharge = baseDeliveryCharge + perKmCharge * 3; // Mock 3km distance
+    
+    // Calculate dynamic distance and rates
+    const customerCoords = parseCoords(customerAddress);
+    const shopLat = cartShop?.lat || 24.8887;
+    const shopLng = cartShop?.lng || 74.6269;
+    
+    let distanceVal = 1.0;
+    if (deliveryDistance !== null) {
+      distanceVal = deliveryDistance;
+    } else if (customerCoords) {
+      distanceVal = await fetchRoadDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
+    }
+      
+    const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
+    const delCharge = customerCharge;
+
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
 
-    const storeName = cart[0]?.store || 'Store';
     const merchantId = 'merch_' + storeName.replace(/\s+/g, '_').toLowerCase();
 
     // Determine dual order routing option based on store name and category
@@ -1721,6 +1822,8 @@ function App() {
       items: [...cart],
       totalAmount: total,
       deliveryCharge: delCharge,
+      riderPayout: riderPayoutVal,
+      distance: distanceVal,
       discountAmount: appliedDiscount,
       commissionAmount: comm,
       netMerchantEarning: total - comm,
@@ -1871,6 +1974,24 @@ function App() {
         console.error("Error submitting re-routed order to Firestore:", err);
       }
     }
+  };
+
+  // Merchant: Toggle order acceptance status (Manual override)
+  const handleToggleAcceptingOrders = async (shop, currentStatus) => {
+    const newStatus = !currentStatus;
+    
+    // Update local state first
+    setShops(prevShops => prevShops.map(s => s.id === shop.id ? { ...s, isAcceptingOrders: newStatus } : s));
+    
+    if (shop.firestoreId) {
+      try {
+        const docRef = doc(db, "merchants", shop.firestoreId);
+        await updateDoc(docRef, { isAcceptingOrders: newStatus });
+      } catch (err) {
+        console.error("Error updating shop order acceptance in Firestore:", err);
+      }
+    }
+    showToast(`Store is now ${newStatus ? 'OPEN' : 'CLOSED'}`);
   };
 
   // Merchant: Accept / Confirm Order
@@ -2326,6 +2447,8 @@ function App() {
     setShopDocAadhaar(shop.hasAadhaar || false);
     setShopDocPan(shop.hasPan || false);
     setShopDocFssai(shop.hasFssai || false);
+    setShopDocLat(shop.lat !== undefined ? shop.lat.toString() : '');
+    setShopDocLng(shop.lng !== undefined ? shop.lng.toString() : '');
     setTempAuthEmail(shop.email || '');
     setTempAuthPassword('');
     setIsShopModalOpen(true);
@@ -2333,23 +2456,36 @@ function App() {
 
   const handleAdminSaveShopDocs = async () => {
     if (!selectedShopDetails) return;
+    
+    const parsedLat = shopDocLat.trim() !== '' ? parseFloat(shopDocLat) : null;
+    const parsedLng = shopDocLng.trim() !== '' ? parseFloat(shopDocLng) : null;
+
     try {
       if (selectedShopDetails.firestoreId) {
         const docRef = doc(db, "merchants", selectedShopDetails.firestoreId);
         await updateDoc(docRef, {
           hasAadhaar: shopDocAadhaar,
           hasPan: shopDocPan,
-          hasFssai: shopDocFssai
+          hasFssai: shopDocFssai,
+          lat: parsedLat,
+          lng: parsedLng
         });
       }
       // Update local shops state
-      setShops(shops.map(s => s.id === selectedShopDetails.id ? { ...s, hasAadhaar: shopDocAadhaar, hasPan: shopDocPan, hasFssai: shopDocFssai } : s));
-      showToast('Shop documents updated successfully!');
+      setShops(shops.map(s => s.id === selectedShopDetails.id ? { 
+        ...s, 
+        hasAadhaar: shopDocAadhaar, 
+        hasPan: shopDocPan, 
+        hasFssai: shopDocFssai,
+        lat: parsedLat !== null ? parsedLat : undefined,
+        lng: parsedLng !== null ? parsedLng : undefined
+      } : s));
+      showToast('Shop details and coordinates updated successfully!');
       setIsShopModalOpen(false);
       setSelectedShopDetails(null);
     } catch (err) {
       console.error("Error updating shop documents:", err);
-      alert(`Failed to save document updates: ${err.message}`);
+      alert(`Failed to save updates: ${err.message}`);
     }
   };
 
@@ -2491,22 +2627,30 @@ function App() {
     if (order.deliveryPartnerId) {
       try {
         const riderDocRef = doc(db, "delivery_boys", order.deliveryPartnerId);
+        const riderObj = deliveryPartners.find(d => d.id === order.deliveryPartnerId);
+        const currentDeliveries = riderObj?.totalDeliveries || 0;
+        const currentPayout = riderObj?.pendingPayout || 0;
+        const payoutIncrement = order.riderPayout !== undefined ? order.riderPayout : order.deliveryCharge;
+        
         await setDoc(riderDocRef, {
           status: 'available',
+          totalDeliveries: currentDeliveries + 1,
+          pendingPayout: currentPayout + payoutIncrement,
           updatedAt: new Date().toISOString()
         }, { merge: true });
       } catch (err) {
-        console.error("Error updating delivery boy status to available in Firestore:", err);
+        console.error("Error updating delivery boy status and payouts in Firestore:", err);
       }
     }
 
-    // Update Rider totals
+    // Update Rider totals locally
     setDeliveryPartners(deliveryPartners.map(d => {
       if (d.id === order.deliveryPartnerId) {
+        const payoutIncrement = order.riderPayout !== undefined ? order.riderPayout : order.deliveryCharge;
         return {
           ...d,
           totalDeliveries: d.totalDeliveries + 1,
-          pendingPayout: d.pendingPayout + order.deliveryCharge
+          pendingPayout: d.pendingPayout + payoutIncrement
         };
       }
       return d;
@@ -2896,33 +3040,53 @@ function App() {
             </div>
 
             {/* Pricing summary */}
-            <div className="price-summary">
-              <div className="summary-row">
-                <span>Items Subtotal</span>
-                <span>{formatINR(cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0))}</span>
-              </div>
-              <div className="summary-row">
-                <span>Delivery Fee</span>
-                <span>{formatINR(baseDeliveryCharge + perKmCharge * 3)}</span>
-              </div>
-              {appliedDiscount > 0 && (
-                <div className="summary-row discount-row">
-                  <span>Coupon Discount</span>
-                  <span>-{formatINR(appliedDiscount)}</span>
-                </div>
-              )}
-              <div className="divider"></div>
-              <div className="summary-row total-row">
-                <span>Grand Total</span>
-                <span>
-                  {formatINR(
-                    cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0) + 
-                    (baseDeliveryCharge + perKmCharge * 3) - 
-                    appliedDiscount
+            {(() => {
+              const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+              const storeName = cart[0]?.store || '';
+              const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
+              const customerCoords = parseCoords(customerAddress);
+              
+              let distanceText = '';
+              let fee = 33; // Default fallback (standard 2km base)
+              
+              if (cartShop && customerCoords) {
+                let dist = deliveryDistance;
+                if (dist === null) {
+                  const shopLat = cartShop.lat || 24.8887;
+                  const shopLng = cartShop.lng || 74.6269;
+                  dist = getDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
+                }
+                distanceText = isDistanceLoading 
+                  ? ' (Calculating route...)' 
+                  : ` (${dist.toFixed(2)} km)`;
+                const rates = calculateDeliveryRates(dist);
+                fee = rates.customerCharge;
+              }
+              
+              return (
+                <div className="price-summary">
+                  <div className="summary-row">
+                    <span>Items Subtotal</span>
+                    <span>{formatINR(subtotal)}</span>
+                  </div>
+                  <div className="summary-row">
+                    <span>Delivery Fee{distanceText}</span>
+                    <span>{formatINR(fee)}</span>
+                  </div>
+                  {appliedDiscount > 0 && (
+                    <div className="summary-row discount-row">
+                      <span>Coupon Discount</span>
+                      <span>-{formatINR(appliedDiscount)}</span>
+                    </div>
                   )}
-                </span>
-              </div>
-            </div>
+                  <div className="divider"></div>
+                  <div className="summary-row total-row">
+                    <span>Grand Total</span>
+                    <span>{formatINR(subtotal + fee - appliedDiscount)}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="policy-notice">
               <AlertCircle size={16} className="text-warning" />
@@ -3755,56 +3919,106 @@ function App() {
 
               {/* Product Grid */}
               <div className="products-grid">
-                {filteredProducts.map(p => (
-                  <div key={p.id} className="product-card glass-panel">
-                    <div className="prod-img-wrap">
-                      {p.image && p.image.startsWith('http') ? (
-                        <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
-                          e.target.style.display = 'none';
-                        }} />
-                      ) : (
-                        <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
-                      )}
-                    </div>
-                    <div className="prod-meta">
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                        <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
-                        <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
-                          <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
-                        </span>
+                {filteredProducts.map(p => {
+                  const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+                  const statusInfo = getShopOpenStatus(pShop);
+                  const isClosed = !statusInfo.isOpen;
+
+                  return (
+                    <div key={p.id} className={`product-card glass-panel`} style={{ position: 'relative' }}>
+                      <div className="prod-img-wrap" style={{ position: 'relative' }}>
+                        {p.image && p.image.startsWith('http') ? (
+                          <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
+                            e.target.style.display = 'none';
+                          }} />
+                        ) : (
+                          <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
+                        )}
+                        {isClosed && (
+                          <div style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            background: 'rgba(0,0,0,0.6)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 2,
+                            borderRadius: '12px 12px 0 0'
+                          }}>
+                            <span style={{
+                              background: 'var(--color-danger)',
+                              color: '#fff',
+                              padding: '4px 8px',
+                              fontSize: '10px',
+                              fontWeight: 'bold',
+                              borderRadius: '4px',
+                              textTransform: 'uppercase'
+                            }}>
+                              {statusInfo.reason === 'OUTSIDE_HOURS' ? 'Closed' : 'Offline'}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <span className="prod-store">{p.store}</span>
-                      <p className="prod-category">{p.category}</p>
-                      
-                      {(p.originalPrice > p.price || p.offerText) && (
-                        <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
-                            {p.offerText || `SAVE ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%`}
+                      <div className="prod-meta" style={{ opacity: isClosed ? 0.6 : 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
+                          <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
+                            <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
                           </span>
                         </div>
-                      )}
-
-                      <div className="prod-buy">
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                          <span className="prod-price" style={{ color: p.originalPrice > p.price ? 'var(--color-success)' : 'inherit' }}>
-                            {formatINR(p.price)}
-                          </span>
-                          {p.originalPrice > p.price && (
-                            <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
-                              {formatINR(p.originalPrice)}
+                        <span className="prod-store">
+                          {p.store}
+                          {isClosed && (
+                            <span style={{ color: 'var(--color-danger)', fontSize: '10px', fontWeight: 'bold', marginLeft: '6px' }}>
+                              ({statusInfo.reason === 'OUTSIDE_HOURS' ? 'Closed' : 'Offline'})
                             </span>
                           )}
+                        </span>
+                        <p className="prod-category">{p.category}</p>
+                        
+                        {(p.originalPrice > p.price || p.offerText) && (
+                          <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
+                              {p.offerText || `SAVE ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%`}
+                            </span>
+                          </div>
+                        )}
+
+                        <div className="prod-buy">
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                            <span className="prod-price" style={{ color: p.originalPrice > p.price ? 'var(--color-success)' : 'inherit' }}>
+                              {formatINR(p.price)}
+                            </span>
+                            {p.originalPrice > p.price && (
+                              <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
+                                {formatINR(p.originalPrice)}
+                              </span>
+                            )}
+                          </div>
+                          <button 
+                            className="add-to-cart-btn" 
+                            disabled={isClosed}
+                            onClick={() => {
+                              if (isClosed) {
+                                showToast(`⚠️ Cannot add item. ${p.store} is currently closed.`);
+                                return;
+                              }
+                              handleAddToCart(p);
+                            }}
+                            style={{
+                              background: isClosed ? 'rgba(255,255,255,0.05)' : 'var(--color-primary)',
+                              color: isClosed ? 'var(--color-text-muted)' : '#000',
+                              border: isClosed ? '1px solid var(--color-border)' : 'none',
+                              cursor: isClosed ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {isClosed ? 'Closed' : <><Plus size={16} /> Add</>}
+                          </button>
                         </div>
-                        <button 
-                          className="add-to-cart-btn" 
-                          onClick={() => handleAddToCart(p)}
-                        >
-                          <Plus size={16} /> Add
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div> {/* Closes .catalog-section */}
 
@@ -3970,7 +4184,14 @@ function App() {
                                     o.status?.startsWith('CANCELLED') ? 'badge-danger' :
                                     'badge-warning'
                                   }`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
-                                    {o.status || 'PLACED'}
+                                    {(() => {
+                                      const statusUpper = o.status?.toUpperCase() || 'PLACED';
+                                      if (statusUpper === 'PLACED') return 'ORDER PLACED';
+                                      if (statusUpper === 'ACCEPTED') return 'ACCEPTED BY MERCHANT';
+                                      if (statusUpper === 'ASSIGNED') return 'ASSIGNED';
+                                      if (statusUpper === 'COMPLETED') return 'ORDER DELIVERED';
+                                      return statusUpper;
+                                    })()}
                                   </span>
                                 </div>
                               </td>
@@ -5548,7 +5769,7 @@ function App() {
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
                             <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                              {formatINR(o.deliveryCharge || 0)}
+                              {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
                             </div>
                           </div>
                         </div>
@@ -5609,7 +5830,7 @@ function App() {
                           <div style={{ textAlign: 'right' }}>
                             <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
                             <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                              {formatINR(o.deliveryCharge || 0)}
+                              {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
                             </div>
                           </div>
                         </div>
@@ -5718,7 +5939,7 @@ function App() {
                           <div style={{ textAlign: 'right' }}>
                             <span className="badge badge-success" style={{ display: 'inline-block', marginBottom: '4px' }}>Delivered ✓</span>
                             <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                              +{formatINR(o.deliveryCharge || 0)}
+                              +{formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
                             </div>
                           </div>
                         </div>
@@ -5826,6 +6047,53 @@ function App() {
                       Logged in as: <strong>{user?.email}</strong>. If your shop is not linked, please contact the Administrator.
                     </p>
                   )}
+                  {(() => {
+                    const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
+                    if (!matchedShop) return null;
+                    return (
+                      <div className="glass-panel" style={{
+                        marginTop: '16px',
+                        padding: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: matchedShop.isAcceptingOrders !== false ? 'rgba(104, 166, 0, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                        border: '1px solid ' + (matchedShop.isAcceptingOrders !== false ? 'rgba(104, 166, 0, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{ textAlign: 'left' }}>
+                          <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              background: matchedShop.isAcceptingOrders !== false ? 'var(--color-success)' : 'var(--color-danger)',
+                              boxShadow: '0 0 8px ' + (matchedShop.isAcceptingOrders !== false ? 'var(--color-success)' : 'var(--color-danger)')
+                            }}></span>
+                            Order Acceptance Status: <strong>{matchedShop.isAcceptingOrders !== false ? 'OPEN' : 'CLOSED'}</strong>
+                          </h4>
+                          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                            {matchedShop.isAcceptingOrders !== false 
+                              ? `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).` 
+                              : 'Your shop is currently closed. Customers cannot place new orders.'}
+                          </p>
+                        </div>
+                        <button 
+                          className="neon-btn"
+                          onClick={() => handleToggleAcceptingOrders(matchedShop, matchedShop.isAcceptingOrders !== false)}
+                          style={{
+                            background: matchedShop.isAcceptingOrders !== false ? 'var(--color-danger)' : 'var(--color-success)',
+                            borderColor: matchedShop.isAcceptingOrders !== false ? 'var(--color-danger)' : 'var(--color-success)',
+                            color: '#fff',
+                            fontWeight: 'bold',
+                            padding: '8px 16px'
+                          }}
+                        >
+                          {matchedShop.isAcceptingOrders !== false ? 'Close Shop' : 'Open Shop'}
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Merchant Stats Bar */}
@@ -6970,6 +7238,94 @@ function App() {
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Address:</span>
                 <span>{selectedShopDetails.address || 'Vaishali Market, Jaipur (RJ)'}</span>
               </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>GPS Location:</span>
+                <input 
+                  type="number"
+                  step="0.000001"
+                  placeholder="Lat (e.g. 24.8887)"
+                  value={shopDocLat}
+                  onChange={(e) => setShopDocLat(e.target.value)}
+                  className="custom-input-premium"
+                  style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%' }}
+                />
+                <input 
+                  type="number"
+                  step="0.000001"
+                  placeholder="Lng (e.g. 74.6269)"
+                  value={shopDocLng}
+                  onChange={(e) => setShopDocLng(e.target.value)}
+                  className="custom-input-premium"
+                  style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
+                <span></span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    type="button"
+                    className="neon-btn small-btn"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          (position) => {
+                            setShopDocLat(position.coords.latitude.toFixed(6));
+                            setShopDocLng(position.coords.longitude.toFixed(6));
+                            showToast("Shop location auto-detected!");
+                          },
+                          (error) => {
+                            console.error("Geolocation failed:", error);
+                            alert("Could not detect location. Please check browser permissions.");
+                          }
+                        );
+                      } else {
+                        alert("Geolocation is not supported by your browser.");
+                      }
+                    }}
+                    style={{ padding: '6px 10px', fontSize: '11px', flex: 1, whiteSpace: 'nowrap' }}
+                  >
+                    🎯 Detect My GPS
+                  </button>
+                  <button
+                    type="button"
+                    className="neon-btn small-btn"
+                    onClick={async () => {
+                      const address = selectedShopDetails.address || selectedShopDetails.storeName || selectedShopDetails.name;
+                      if (!address) {
+                        alert("Shop address is empty! Please verify shop details.");
+                        return;
+                      }
+                      try {
+                        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+                        const data = await response.json();
+                        if (data && data.length > 0) {
+                          setShopDocLat(parseFloat(data[0].lat).toFixed(6));
+                          setShopDocLng(parseFloat(data[0].lon).toFixed(6));
+                          showToast("Coordinates found from address!");
+                        } else {
+                          const retryResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ", Chittorgarh")}&limit=1`);
+                          const retryData = await retryResponse.json();
+                          if (retryData && retryData.length > 0) {
+                            setShopDocLat(parseFloat(retryData[0].lat).toFixed(6));
+                            setShopDocLng(parseFloat(retryData[0].lon).toFixed(6));
+                            showToast("Coordinates found from address search!");
+                          } else {
+                            alert("Could not find coordinates for: " + address);
+                          }
+                        }
+                      } catch (error) {
+                        console.error("Geocoding failed:", error);
+                        alert("Failed to fetch coordinates from address.");
+                      }
+                    }}
+                    style={{ padding: '6px 10px', fontSize: '11px', flex: 1, whiteSpace: 'nowrap' }}
+                  >
+                    🔍 Find from Address
+                  </button>
+                </div>
+              </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Documents Status:</span>
@@ -7122,15 +7478,28 @@ function App() {
                     selectedOrderDetails.status?.startsWith('CANCELLED') ? 'badge-danger' :
                     'badge-warning'
                   }`}>
-                    {selectedOrderDetails.status || 'PLACED'}
+                    {(() => {
+                      const statusUpper = selectedOrderDetails.status?.toUpperCase() || 'PLACED';
+                      if (statusUpper === 'PLACED') return 'ORDER PLACED';
+                      if (statusUpper === 'ACCEPTED') return 'ACCEPTED BY MERCHANT';
+                      if (statusUpper === 'ASSIGNED') return 'ASSIGNED';
+                      if (statusUpper === 'COMPLETED') return 'ORDER DELIVERED';
+                      return statusUpper;
+                    })()}
                   </span>
                 </div>
 
                 {/* Progress bar simulation */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '15px 0 5px 0', padding: '0 5px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '15px 0 45px 0', padding: '0 5px' }}>
                   {['PLACED', 'ACCEPTED', 'ASSIGNED', 'COMPLETED'].map((step, idx, arr) => {
                     const statusIdx = arr.indexOf(selectedOrderDetails.status || 'PLACED');
                     const isActive = statusIdx >= idx && !selectedOrderDetails.status?.startsWith('CANCELLED');
+                    
+                    let displayName = 'Order Placed';
+                    if (step === 'ACCEPTED') displayName = 'Accepted by Merchant';
+                    else if (step === 'ASSIGNED') displayName = 'Assigned';
+                    else if (step === 'COMPLETED') displayName = 'Order Delivered';
+
                     return (
                       <React.Fragment key={step}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1 }}>
@@ -7142,16 +7511,49 @@ function App() {
                             boxShadow: isActive ? '0 0 6px var(--color-primary)' : 'none',
                             zIndex: 2
                           }}></div>
-                          <span style={{ fontSize: '9px', color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)', marginTop: '4px', fontWeight: '500' }}>
-                            {step}
-                          </span>
+                          
+                          {/* Absolute container for labels to keep dot/line alignment clean */}
+                          <div style={{
+                            position: 'absolute',
+                            top: '18px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            width: '110px',
+                            textAlign: 'center',
+                            pointerEvents: 'none'
+                          }}>
+                            <span style={{ 
+                              fontSize: '9px', 
+                              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)', 
+                              fontWeight: '600',
+                              lineHeight: '1.2'
+                            }}>
+                              {displayName}
+                            </span>
+                            {step === 'ASSIGNED' && selectedOrderDetails.deliveryPartnerName && (
+                              <span style={{ 
+                                fontSize: '8px', 
+                                color: 'var(--color-text-muted)', 
+                                marginTop: '2px', 
+                                fontWeight: 'normal',
+                                maxWidth: '100px',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}>
+                                {selectedOrderDetails.deliveryPartnerName}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {idx < arr.length - 1 && (
                           <div style={{ 
                             flexGrow: 1, 
                             height: '2px', 
                             background: (statusIdx > idx && !selectedOrderDetails.status?.startsWith('CANCELLED')) ? 'var(--color-primary)' : 'var(--color-border)', 
-                            marginTop: '-14px',
                             zIndex: 1
                           }}></div>
                         )}
