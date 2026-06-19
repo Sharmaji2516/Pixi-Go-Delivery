@@ -35,10 +35,10 @@ const INITIAL_PRODUCTS = [
 
 const INITIAL_SHOPS = [
   { id: 'merch_bake_house', storeName: 'Bake House', name: 'Bake House', category: 'Bakery', phone: '9251054064', address: 'Collectorate Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '23:00', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Bojunda, Chittorgarh', verified: true, docs: 'Approved', openTime: '07:00', closeTime: '22:00', lat: 24.8600, lng: 74.5800 },
-  { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Police Line, Chittorgarh', verified: true, docs: 'Approved', openTime: '06:00', closeTime: '21:00', lat: 24.8850, lng: 74.6200 },
-  { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'Birla Hospital Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '11:00', closeTime: '23:30', lat: 24.8960, lng: 74.6550 },
-  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Pauta Chowk, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '20:00', lat: 24.8800, lng: 74.6400 }
+  { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Bojunda, Chittorgarh', verified: true, docs: 'Approved', openTime: '07:00', closeTime: '22:00', lat: 24.8887, lng: 74.6269 },
+  { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Police Line, Chittorgarh', verified: true, docs: 'Approved', openTime: '06:00', closeTime: '21:00', lat: 24.8887, lng: 74.6269 },
+  { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'Birla Hospital Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '11:00', closeTime: '23:30', lat: 24.8887, lng: 74.6269 },
+  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Pauta Chowk, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '20:00', lat: 24.8887, lng: 74.6269 }
 ];
 
 const INITIAL_DELIVERY_PARTNERS = [];
@@ -279,7 +279,6 @@ function App() {
   const [riderWatchId, setRiderWatchId] = useState(null);
   const [riderTrackingOrderId, setRiderTrackingOrderId] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [riderPhoneInput, setRiderPhoneInput] = useState('');
   const [riderVehicleInput, setRiderVehicleInput] = useState('');
   const [riderEmailInput, setRiderEmailInput] = useState('');
@@ -689,48 +688,6 @@ function App() {
       },
       { enableHighAccuracy: true, timeout: 3500, maximumAge: 0 }
     );
-  };
-
-  const handleSearchAddress = async (addressStr, setAddressCallback) => {
-    if (!addressStr || !addressStr.trim()) {
-      showToast("Please enter an address to search.", "warning");
-      return;
-    }
-    if (addressStr.trim().length < 3) {
-      showToast("Search query must be at least 3 characters.", "warning");
-      return;
-    }
-    setIsSearchingAddress(true);
-    try {
-      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressStr)}&limit=1`, {
-        headers: {
-          'Accept-Language': 'en'
-        }
-      });
-      const data = await response.json();
-      if (data && data.length > 0) {
-        const result = data[0];
-        const lat = parseFloat(result.lat);
-        const lon = parseFloat(result.lon);
-        let readable = "";
-        if (result.display_name) {
-          const parts = result.display_name.split(',');
-          readable = parts.slice(0, 4).join(',').trim();
-        } else {
-          readable = addressStr.trim();
-        }
-        const formatted = `${readable} (Lat: ${lat.toFixed(6)}, Lng: ${lon.toFixed(6)})`;
-        setAddressCallback(formatted);
-        showToast("Coordinates resolved successfully!", "success");
-      } else {
-        showToast("Could not find this address. Try adding city/landmark.", "warning");
-      }
-    } catch (error) {
-      console.error("Nominatim Search failed:", error);
-      showToast("Address lookup failed. Check connection.", "error");
-    } finally {
-      setIsSearchingAddress(false);
-    }
   };
 
   const handleMapLocationChange = async (lat, lng) => {
@@ -3575,28 +3532,16 @@ function App() {
                 onChange={(e) => setCustomerAddress(e.target.value)} 
                 className="custom-input"
               />
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
-                <button
-                  type="button"
-                  className="auto-detect-btn"
-                  onClick={() => handleAutoDetectLocation(setCustomerAddress)}
-                  disabled={isLocating}
-                  style={{ margin: 0 }}
-                >
-                  <Compass size={14} className={isLocating ? "spin" : ""} />
-                  {isLocating ? "Detecting..." : "🎯 Auto-Detect"}
-                </button>
-                <button
-                  type="button"
-                  className="auto-detect-btn"
-                  onClick={() => handleSearchAddress(customerAddress, setCustomerAddress)}
-                  disabled={isSearchingAddress}
-                  style={{ margin: 0, background: 'rgba(218, 165, 32, 0.08)', borderColor: 'rgba(218, 165, 32, 0.25)', color: '#ffd700' }}
-                >
-                  {isSearchingAddress ? <RefreshCw size={14} className="spin" /> : <Search size={14} />}
-                  {isSearchingAddress ? "Searching..." : "🔍 Search Address"}
-                </button>
-              </div>
+              <button
+                type="button"
+                className="auto-detect-btn"
+                onClick={() => handleAutoDetectLocation(setCustomerAddress)}
+                disabled={isLocating}
+                style={{ marginBottom: '6px' }}
+              >
+                <Compass size={14} className={isLocating ? "spin" : ""} />
+                {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
+              </button>
 
               {/* Interactive map adjustment for Customer */}
               <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
@@ -7330,28 +7275,16 @@ function App() {
                   rows="3"
                   required
                 />
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                  <button
-                    type="button"
-                    className="auto-detect-btn"
-                    onClick={() => handleAutoDetectLocation(setCustomerAddress)}
-                    disabled={isLocating}
-                    style={{ margin: 0 }}
-                  >
-                    <Compass size={14} className={isLocating ? "spin" : ""} />
-                    {isLocating ? "Detecting..." : "🎯 Auto-Detect"}
-                  </button>
-                  <button
-                    type="button"
-                    className="auto-detect-btn"
-                    onClick={() => handleSearchAddress(customerAddress, setCustomerAddress)}
-                    disabled={isSearchingAddress}
-                    style={{ margin: 0, background: 'rgba(218, 165, 32, 0.08)', borderColor: 'rgba(218, 165, 32, 0.25)', color: '#ffd700' }}
-                  >
-                    {isSearchingAddress ? <RefreshCw size={14} className="spin" /> : <Search size={14} />}
-                    {isSearchingAddress ? "Searching..." : "🔍 Search Address"}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  className="auto-detect-btn"
+                  onClick={() => handleAutoDetectLocation(setCustomerAddress)}
+                  disabled={isLocating}
+                  style={{ marginTop: '8px' }}
+                >
+                  <Compass size={14} className={isLocating ? "spin" : ""} />
+                  {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
+                </button>
                 <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '130px', marginTop: '8px' }}>
                   <LeafletMap
                     merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
