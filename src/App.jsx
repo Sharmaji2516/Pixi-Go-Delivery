@@ -3,7 +3,7 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag, 
   MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown, Users
+  Mail, Settings, ChevronDown, Users, Info, Code
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
@@ -342,6 +342,7 @@ function App() {
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
+  const [isAboutDeveloperOpen, setIsAboutDeveloperOpen] = useState(false);
   const [adminSubView, setAdminSubView] = useState('sales'); // sales | orders | shops | riders
   const [allAdmins, setAllAdmins] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
@@ -372,6 +373,7 @@ function App() {
   const [adminNewProductCategory, setAdminNewProductCategory] = useState('Bakery');
   const [adminNewProductStore, setAdminNewProductStore] = useState('');
   const [adminNewProductIsVeg, setAdminNewProductIsVeg] = useState(true);
+  const [adminNewProductSpecs, setAdminNewProductSpecs] = useState('');
   const [adminCustomCategory, setAdminCustomCategory] = useState('');
   const [adminCustomStore, setAdminCustomStore] = useState('');
   const [isAdminAddFormOpen, setIsAdminAddFormOpen] = useState(false);
@@ -1635,6 +1637,30 @@ function App() {
     ...dynamicCategories
   ])];
 
+  const getCategoryEmoji = (category) => {
+    const mapping = {
+      'All': '🌟',
+      'General Store': '🏪',
+      'Vegetable': '🍅',
+      'Dairy': '🥛',
+      'Bakery': '🍰',
+      'Fast Food': '🍔',
+      'Restaurant Cafe': '🍛',
+      'Icecream and dessert': '🍨',
+      'Medical and fitness': '💊',
+      'Juice and drink': '🍹',
+      'Snacks and breakfast': '☕'
+    };
+    return mapping[category] || '📦';
+  };
+
+  const getCategoryProductCount = (category) => {
+    if (category === 'All') {
+      return products.filter(p => p.approved !== false).length;
+    }
+    return products.filter(p => p.category === category && p.approved !== false).length;
+  };
+
   // System Stats for Admin View
   const stats = {
     totalOrders: orders.length,
@@ -1776,7 +1802,7 @@ function App() {
   };
 
   // Admin: Update product catalog details
-  const handleAdminUpdateProductCatalog = async (productId, newPrice, newOriginalPrice, newOfferText, newImage) => {
+  const handleAdminUpdateProductCatalog = async (productId, newPrice, newOriginalPrice, newOfferText, newImage, newSpecs) => {
     const price = parseFloat(newPrice);
     const originalPrice = parseFloat(newOriginalPrice) || 0;
     
@@ -1792,7 +1818,8 @@ function App() {
       price: price,
       originalPrice: originalPrice,
       offerText: newOfferText,
-      image: newImage || prod.image || ''
+      image: newImage || prod.image || '',
+      specs: newSpecs || ''
     };
 
     if (prod.firestoreId) {
@@ -1846,6 +1873,7 @@ function App() {
       store: finalStore,
       image: adminNewProductImage || '🍔',
       isVeg: adminNewProductIsVeg,
+      specs: adminNewProductSpecs.trim(),
       approved: true, // Admin catalog additions are pre-approved!
       createdAt: new Date().toISOString()
     };
@@ -1861,6 +1889,7 @@ function App() {
       setAdminNewProductImage('');
       setAdminNewProductCategory('Bakery');
       setAdminNewProductStore('');
+      setAdminNewProductSpecs('');
       setAdminCustomCategory('');
       setAdminCustomStore('');
       setAdminNewProductIsVeg(true);
@@ -3396,6 +3425,17 @@ function App() {
           </div>
         ) : (
           <div className="cart-items-list">
+            <div className="blinkit-delivery-banner">
+              <div className="banner-icon-wrap">
+                <Bike size={20} className="banner-icon" />
+              </div>
+              <div className="banner-text-wrap">
+                <div className="banner-title">Delivery in 10 minutes</div>
+                <div className="banner-subtitle">
+                  Shipment of {cart.reduce((acc, item) => acc + item.quantity, 0)} item{cart.reduce((acc, item) => acc + item.quantity, 0) > 1 ? 's' : ''}
+                </div>
+              </div>
+            </div>
             {cart.map(item => (
               <div key={item.id} className="cart-row">
                 <div className="cart-item-img-wrap">
@@ -3481,35 +3521,57 @@ function App() {
                 fee = rates.customerCharge;
               }
               
+              const totalAmount = subtotal + fee - appliedDiscount;
               return (
-                <div className="price-summary">
-                  <div className="summary-row">
-                    <span>Items Subtotal</span>
-                    <span>{formatINR(subtotal)}</span>
-                  </div>
-                  <div className="summary-row">
-                    <span>Delivery Fee{distanceText}</span>
-                    <span>{isOutOfRange ? 'N/A' : formatINR(fee)}</span>
-                  </div>
-                  {appliedDiscount > 0 && (
-                    <div className="summary-row discount-row">
-                      <span>Coupon Discount</span>
-                      <span>-{formatINR(appliedDiscount)}</span>
+                <>
+                  <div className="blinkit-bill-details">
+                    <h3 className="bill-details-header">Bill details</h3>
+                    
+                    <div className="bill-row">
+                      <span className="bill-label">
+                        <span className="bill-label-icon">📄</span> Items total
+                      </span>
+                      <span className="bill-value">{formatINR(subtotal)}</span>
                     </div>
-                  )}
-                  <div className="divider"></div>
-                  <div className="summary-row total-row">
-                    <span>Grand Total</span>
-                    <span>{isOutOfRange ? 'N/A' : formatINR(subtotal + fee - appliedDiscount)}</span>
+                    
+                    <div className="bill-row">
+                      <span className="bill-label">
+                        <span className="bill-label-icon">🚴</span> Delivery charge {distanceText}
+                        <button className="bill-info-trigger" type="button" onClick={() => alert("Delivery partner fee based on store distance")}>
+                          <Info size={12} />
+                        </button>
+                      </span>
+                      <span className="bill-value">
+                        {isOutOfRange ? 'N/A' : (fee === 0 ? 'FREE' : formatINR(fee))}
+                      </span>
+                    </div>
+                    
+                    {appliedDiscount > 0 && (
+                      <div className="bill-row discount-row">
+                        <span className="bill-label">
+                          <span className="bill-label-icon">🏷️</span> Coupon Discount
+                        </span>
+                        <span className="bill-value text-success">-{formatINR(appliedDiscount)}</span>
+                      </div>
+                    )}
+                    
+                    <div className="bill-divider"></div>
+                    
+                    <div className="bill-row grand-total-row">
+                      <span className="bill-label">Grand total</span>
+                      <span className="bill-value">{isOutOfRange ? 'N/A' : formatINR(totalAmount)}</span>
+                    </div>
                   </div>
-                </div>
+
+                  <div className="blinkit-cancellation-card">
+                    <h4 className="cancellation-title">Cancellation Policy</h4>
+                    <p className="cancellation-desc">
+                      Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
+                    </p>
+                  </div>
+                </>
               );
             })()}
-
-            <div className="policy-notice">
-              <AlertCircle size={16} className="text-warning" />
-              <span><strong>Policies:</strong> Non-refundable & Non-returnable order.</span>
-            </div>
 
             <div className="divider"></div>
 
@@ -4120,6 +4182,12 @@ function App() {
               </button>
             )}
 
+            {activeTab === 'customer' && (
+              <button className="cart-header-icon-btn" onClick={() => setIsAboutDeveloperOpen(true)} title="About Developer">
+                <Code size={20} />
+              </button>
+            )}
+
             {user ? (
               <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
                 <span className="user-welcome">Hi, {user.name.split('@')[0]}</span>
@@ -4197,8 +4265,30 @@ function App() {
             )}
 
             <div className="customer-grid">
-            {/* Storefront Layout */}
-            <div className="catalog-section">
+              {/* Left Categories Sidebar (Desktop only) */}
+              <div className="categories-sidebar desktop-only glass-panel">
+                <h3 className="sidebar-title">Explore</h3>
+                <div className="categories-list">
+                  {categories.map(cat => {
+                    const emoji = getCategoryEmoji(cat);
+                    const count = getCategoryProductCount(cat);
+                    return (
+                      <button
+                        key={cat}
+                        className={`category-sidebar-item ${selectedCategory === cat ? 'active' : ''}`}
+                        onClick={() => setSelectedCategory(cat)}
+                      >
+                        <span className="category-item-icon">{emoji}</span>
+                        <span className="category-item-name">{cat}</span>
+                        <span className="category-item-count">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Storefront Layout */}
+              <div className="catalog-section">
               {/* Category selector */}
               <div className="cat-selector-scroll">
                 {categories.map(cat => (
@@ -4348,7 +4438,10 @@ function App() {
 
                   return (
                     <div key={p.id} className={`product-card glass-panel`} style={{ position: 'relative' }}>
-                      <div className="prod-img-wrap" style={{ position: 'relative' }}>
+                      <div className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} style={{ position: 'relative' }}>
+                        {p.offerText && (
+                          <span className="prod-img-badge">{p.offerText}</span>
+                        )}
                         {p.image && p.image.startsWith('http') ? (
                           <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
                             e.target.style.display = 'none';
@@ -4364,6 +4457,9 @@ function App() {
                             <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
                           </span>
                         </div>
+                        {p.specs && (
+                          <div className="prod-specs-text">{p.specs}</div>
+                        )}
                         <span className="prod-store">
                           {p.store}
                           {shopDistance !== null && (
@@ -4393,28 +4489,42 @@ function App() {
                               </span>
                             )}
                           </div>
-                          <button 
-                            className="add-to-cart-btn" 
-                            onClick={() => {
-                              if (isClosed) {
-                                showToast(`We do not deliver at your location. Store is closed.`, 'warning');
-                                return;
-                              }
-                              if (isOutOfRange) {
-                                showToast(`We do not deliver at your location.`, 'warning');
-                                return;
-                              }
-                              handleAddToCart(p);
-                            }}
-                            style={{
-                              background: 'var(--color-primary)',
-                              color: '#000',
-                              border: 'none',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            <Plus size={16} /> Add
-                          </button>
+                          {(() => {
+                            const cartItem = cart.find(item => item.id === p.id);
+                            if (cartItem) {
+                              return (
+                                <div className="prod-qty-selector">
+                                  <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
+                                  <span className="qty-val">{cartItem.quantity}</span>
+                                  <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
+                                </div>
+                              );
+                            }
+                            return (
+                              <button 
+                                className="add-to-cart-btn" 
+                                onClick={() => {
+                                  if (isClosed) {
+                                    showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                                    return;
+                                  }
+                                  if (isOutOfRange) {
+                                    showToast(`We do not deliver at your location.`, 'warning');
+                                    return;
+                                  }
+                                  handleAddToCart(p);
+                                }}
+                                style={{
+                                  background: 'var(--color-primary)',
+                                  color: '#000',
+                                  border: 'none',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ADD
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -4586,6 +4696,30 @@ function App() {
               {renderCartContent(false)}
             </div>
           </div> {/* Closes .customer-grid */}
+
+          {/* ChittorTech Branding Footer */}
+          <div className="chittortech-brand-footer">
+            <div className="brand-badge-pill">
+              <div className="brand-badge-logo-container">
+                <div className="brand-logo-white-box">
+                  <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" className="brand-logo-img-src" />
+                </div>
+                <div className="brand-badge-text">
+                  <span className="brand-badge-sub">A PRODUCT OF</span>
+                  <span className="brand-badge-main">ChittorTech</span>
+                </div>
+              </div>
+            </div>
+            <div className="brand-credentials-list">
+              <div className="cred-item">
+                <span className="cred-bullet">•</span> Recognized by iStart Rajasthan
+              </div>
+              <div className="cred-item">
+                <span className="cred-bullet">•</span> Registered MSME | Startup India
+              </div>
+            </div>
+          </div>
+
         </div> /* Closes .customer-portal-layout */
       )}
 
@@ -5234,6 +5368,16 @@ function App() {
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Specs / Unit (e.g. 500g, 1 pack)</label>
+                        <input 
+                          type="text" 
+                          value={adminNewProductSpecs} 
+                          onChange={(e) => setAdminNewProductSpecs(e.target.value)} 
+                          className="custom-input" 
+                          placeholder="e.g. 500 ml, 1 pack"
+                        />
+                      </div>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Dietary Type</label>
                         <select 
                           value={adminNewProductIsVeg ? 'veg' : 'nonveg'} 
@@ -5321,6 +5465,7 @@ function App() {
                         <th>Selling Price (₹)</th>
                         <th>Original Price (₹)</th>
                         <th>Offer Title</th>
+                        <th>Specs / Unit</th>
                         <th>Final Price</th>
                         <th>Actions</th>
                       </tr>
@@ -5328,7 +5473,7 @@ function App() {
                     <tbody>
                       {filteredAdminProducts.length === 0 ? (
                         <tr>
-                          <td colSpan="9" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="10" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                             No products match search query.
                           </td>
                         </tr>
@@ -5389,6 +5534,16 @@ function App() {
                                 />
                               </td>
                               <td>
+                                <input 
+                                  type="text"
+                                  id={`specs-${p.id}`}
+                                  defaultValue={p.specs || ''}
+                                  placeholder="e.g. 500 ml"
+                                  className="rider-select"
+                                  style={{ width: '100px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                />
+                              </td>
+                              <td>
                                 <span style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>
                                   {formatINR(p.price)}
                                 </span>
@@ -5402,12 +5557,14 @@ function App() {
                                       const origPriceInput = document.getElementById(`orig-price-${p.id}`);
                                       const offerInput = document.getElementById(`offer-${p.id}`);
                                       const imageInput = document.getElementById(`image-${p.id}`);
+                                      const specsInput = document.getElementById(`specs-${p.id}`);
                                       handleAdminUpdateProductCatalog(
                                         p.id, 
                                         priceInput.value, 
                                         origPriceInput.value, 
                                         offerInput.value,
-                                        imageInput.value
+                                        imageInput.value,
+                                        specsInput.value
                                       );
                                     }}
                                     style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)', padding: '4px 10px' }}
@@ -7118,6 +7275,8 @@ function App() {
         </button>
       )}
 
+
+
       {/* Firebase Authentication Modal */}
       {isAuthModalOpen && (
         <div className="modal-backdrop fade-in" onClick={() => { setIsAuthModalOpen(false); setAuthError(''); }}>
@@ -7456,6 +7615,14 @@ function App() {
               >
                 <Phone size={18} className="text-neon" />
                 <span>Contact Us</span>
+              </button>
+
+              <button 
+                className="mobile-menu-link" 
+                onClick={() => { setIsAboutDeveloperOpen(true); setIsMobileMenuOpen(false); }}
+              >
+                <Code size={18} className="text-neon" />
+                <span>About Developer</span>
               </button>
             </div>
 
@@ -7824,6 +7991,87 @@ function App() {
                   <p>pixigo</p>
                 </div>
                 <ArrowRight size={16} className="contact-arrow" />
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* About Developer Modal */}
+      {isAboutDeveloperOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsAboutDeveloperOpen(false)}>
+          <div className="developer-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsAboutDeveloperOpen(false)}>
+              <X size={20} />
+            </button>
+            
+            <div className="developer-modal-header">
+              <div className="developer-logo-wrap">
+                <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" className="developer-logo-img" />
+              </div>
+              <h3 className="section-title-premium" style={{ marginBottom: '4px' }}>ChittorTech</h3>
+              <p className="developer-subtitle" style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted)', fontWeight: '500' }}>
+                Premium IT Solutions & Web Agency
+              </p>
+              
+              <div className="developer-badges" style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '12px' }}>
+                <span className="badge badge-success">MSME Registered</span>
+                <span className="badge badge-primary">iStart Startup</span>
+              </div>
+            </div>
+            
+            <div className="developer-content" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <p className="developer-desc" style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--color-text-muted)', textAlign: 'center', margin: 0 }}>
+                ChittorTech is an iStart Rajasthan recognized startup and registered MSME company specializing in high-performance custom software, responsive web apps, and digital growth systems.
+              </p>
+              
+              <div className="developer-services-section">
+                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '6px' }}>
+                  Our Technical Specialties
+                </h4>
+                <div className="developer-services-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                    <div className="service-bullet" style={{ fontSize: '16px' }}>🚀</div>
+                    <div className="service-info" style={{ textAlign: 'left' }}>
+                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>Custom Web Apps</h5>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>CRMs, SaaS portals, and APIs.</p>
+                    </div>
+                  </div>
+                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                    <div className="service-bullet" style={{ fontSize: '16px' }}>📱</div>
+                    <div className="service-info" style={{ textAlign: 'left' }}>
+                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>Mobile Apps</h5>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>iOS & Android via React Native.</p>
+                    </div>
+                  </div>
+                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                    <div className="service-bullet" style={{ fontSize: '16px' }}>🛒</div>
+                    <div className="service-info" style={{ textAlign: 'left' }}>
+                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>E-Commerce</h5>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>Digital stores & payment portals.</p>
+                    </div>
+                  </div>
+                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                    <div className="service-bullet" style={{ fontSize: '16px' }}>📈</div>
+                    <div className="service-info" style={{ textAlign: 'left' }}>
+                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>SEO & Growth</h5>
+                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>Organic rank & ad conversions.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="developer-footer" style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
+              <a 
+                href="https://chittortech.online" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="neon-btn developer-cta-btn"
+                style={{ width: '100%', textDecoration: 'none', padding: '12px' }}
+              >
+                <Code size={18} />
+                <span>Visit chittortech.online</span>
               </a>
             </div>
           </div>
