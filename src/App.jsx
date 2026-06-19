@@ -279,6 +279,7 @@ function App() {
   const [riderWatchId, setRiderWatchId] = useState(null);
   const [riderTrackingOrderId, setRiderTrackingOrderId] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   const [riderPhoneInput, setRiderPhoneInput] = useState('');
   const [riderVehicleInput, setRiderVehicleInput] = useState('');
   const [riderEmailInput, setRiderEmailInput] = useState('');
@@ -688,6 +689,48 @@ function App() {
       },
       { enableHighAccuracy: true, timeout: 3500, maximumAge: 0 }
     );
+  };
+
+  const handleSearchAddress = async (addressStr, setAddressCallback) => {
+    if (!addressStr || !addressStr.trim()) {
+      showToast("Please enter an address to search.", "warning");
+      return;
+    }
+    if (addressStr.trim().length < 3) {
+      showToast("Search query must be at least 3 characters.", "warning");
+      return;
+    }
+    setIsSearchingAddress(true);
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressStr)}&limit=1`, {
+        headers: {
+          'Accept-Language': 'en'
+        }
+      });
+      const data = await response.json();
+      if (data && data.length > 0) {
+        const result = data[0];
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
+        let readable = "";
+        if (result.display_name) {
+          const parts = result.display_name.split(',');
+          readable = parts.slice(0, 4).join(',').trim();
+        } else {
+          readable = addressStr.trim();
+        }
+        const formatted = `${readable} (Lat: ${lat.toFixed(6)}, Lng: ${lon.toFixed(6)})`;
+        setAddressCallback(formatted);
+        showToast("Coordinates resolved successfully!", "success");
+      } else {
+        showToast("Could not find this address. Try adding city/landmark.", "warning");
+      }
+    } catch (error) {
+      console.error("Nominatim Search failed:", error);
+      showToast("Address lookup failed. Check connection.", "error");
+    } finally {
+      setIsSearchingAddress(false);
+    }
   };
 
   const handleMapLocationChange = async (lat, lng) => {
@@ -3532,16 +3575,28 @@ function App() {
                 onChange={(e) => setCustomerAddress(e.target.value)} 
                 className="custom-input"
               />
-              <button
-                type="button"
-                className="auto-detect-btn"
-                onClick={() => handleAutoDetectLocation(setCustomerAddress)}
-                disabled={isLocating}
-                style={{ marginBottom: '6px' }}
-              >
-                <Compass size={14} className={isLocating ? "spin" : ""} />
-                {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                <button
+                  type="button"
+                  className="auto-detect-btn"
+                  onClick={() => handleAutoDetectLocation(setCustomerAddress)}
+                  disabled={isLocating}
+                  style={{ margin: 0 }}
+                >
+                  <Compass size={14} className={isLocating ? "spin" : ""} />
+                  {isLocating ? "Detecting..." : "🎯 Auto-Detect"}
+                </button>
+                <button
+                  type="button"
+                  className="auto-detect-btn"
+                  onClick={() => handleSearchAddress(customerAddress, setCustomerAddress)}
+                  disabled={isSearchingAddress}
+                  style={{ margin: 0, background: 'rgba(218, 165, 32, 0.08)', borderColor: 'rgba(218, 165, 32, 0.25)', color: '#ffd700' }}
+                >
+                  {isSearchingAddress ? <RefreshCw size={14} className="spin" /> : <Search size={14} />}
+                  {isSearchingAddress ? "Searching..." : "🔍 Search Address"}
+                </button>
+              </div>
 
               {/* Interactive map adjustment for Customer */}
               <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
@@ -7275,15 +7330,28 @@ function App() {
                   rows="3"
                   required
                 />
-                <button
-                  type="button"
-                  className="auto-detect-btn"
-                  onClick={() => handleAutoDetectLocation(setCustomerAddress)}
-                  disabled={isLocating}
-                >
-                  <Compass size={14} className={isLocating ? "spin" : ""} />
-                  {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
-                </button>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    className="auto-detect-btn"
+                    onClick={() => handleAutoDetectLocation(setCustomerAddress)}
+                    disabled={isLocating}
+                    style={{ margin: 0 }}
+                  >
+                    <Compass size={14} className={isLocating ? "spin" : ""} />
+                    {isLocating ? "Detecting..." : "🎯 Auto-Detect"}
+                  </button>
+                  <button
+                    type="button"
+                    className="auto-detect-btn"
+                    onClick={() => handleSearchAddress(customerAddress, setCustomerAddress)}
+                    disabled={isSearchingAddress}
+                    style={{ margin: 0, background: 'rgba(218, 165, 32, 0.08)', borderColor: 'rgba(218, 165, 32, 0.25)', color: '#ffd700' }}
+                  >
+                    {isSearchingAddress ? <RefreshCw size={14} className="spin" /> : <Search size={14} />}
+                    {isSearchingAddress ? "Searching..." : "🔍 Search Address"}
+                  </button>
+                </div>
                 <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '130px', marginTop: '8px' }}>
                   <LeafletMap
                     merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
