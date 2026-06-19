@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag, 
-  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, Phone, RefreshCw, Menu,
+  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
   Mail, Settings, ChevronDown, Users
 } from 'lucide-react';
 import './App.css';
@@ -271,6 +271,8 @@ const getShopOpenStatus = (shop) => {
   return { isOpen: true, reason: 'OPEN' };
 };
 
+const MAX_DELIVERY_RADIUS_KM = 10.0;
+
 function App() {
   // --- STATE DECLARATIONS ---
   const [activeTab, setActiveTab] = useState('customer'); // customer | admin | delivery | merchant
@@ -322,6 +324,8 @@ function App() {
   const [rerouteSelectedShop, setRerouteSelectedShop] = useState('');
   const [rerouteSelectedRider, setRerouteSelectedRider] = useState('');
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState('cart'); // cart | payment
+  const [pendingPaymentOrder, setPendingPaymentOrder] = useState(null);
   const [logoError, setLogoError] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [user, setUser] = useState(null);
@@ -329,7 +333,7 @@ function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState('');
-  const [toast, setToast] = useState({ show: false, message: '' });
+  const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [toastTimeoutId, setToastTimeoutId] = useState(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -338,7 +342,7 @@ function App() {
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
-  const [adminSubView, setAdminSubView] = useState('orders'); // orders | shops | riders
+  const [adminSubView, setAdminSubView] = useState('sales'); // sales | orders | shops | riders
   const [allAdmins, setAllAdmins] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
@@ -371,6 +375,14 @@ function App() {
   const [adminCustomCategory, setAdminCustomCategory] = useState('');
   const [adminCustomStore, setAdminCustomStore] = useState('');
   const [isAdminAddFormOpen, setIsAdminAddFormOpen] = useState(false);
+  const [isSalesUnlocked, setIsSalesUnlocked] = useState(() => sessionStorage.getItem('pixigo_sales_unlocked') === 'true');
+  const [salesPinInput, setSalesPinInput] = useState('');
+  const [salesPinError, setSalesPinError] = useState('');
+  const [showSalesPin, setShowSalesPin] = useState(false);
+  const [selectedAnalyticsMerchant, setSelectedAnalyticsMerchant] = useState(null);
+  const [selectedAnalyticsRider, setSelectedAnalyticsRider] = useState(null);
+  const [selectedAnalyticsSalesGroup, setSelectedAnalyticsSalesGroup] = useState(null);
+  const [salesTab, setSalesTab] = useState('merchants'); // merchants | riders
 
   const audioContextRef = useRef(null);
 
@@ -423,14 +435,150 @@ function App() {
   const [shopDocLng, setShopDocLng] = useState('');
 
   // --- HELPER FUNCTIONS ---
-  const showToast = (message) => {
+  const getAnalytics = () => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayOrders = orders.filter(o => {
+      if (!o.createdAt) return false;
+      return new Date(o.createdAt) >= todayStart;
+    });
+
+    const todayStats = {
+      grossSales: todayOrders.filter(o => !o.status?.startsWith('CANCELLED')).reduce((acc, o) => acc + (o.totalAmount || 0), 0),
+      placedCount: todayOrders.length,
+      completedCount: todayOrders.filter(o => o.status === 'COMPLETED').length,
+      cancelledCount: todayOrders.filter(o => o.status?.startsWith('CANCELLED')).length,
+    };
+
+    const allTimeStats = {
+      grossSales: orders.filter(o => !o.status?.startsWith('CANCELLED')).reduce((acc, o) => acc + (o.totalAmount || 0), 0),
+      placedCount: orders.length,
+      completedCount: orders.filter(o => o.status === 'COMPLETED').length,
+      cancelledCount: orders.filter(o => o.status?.startsWith('CANCELLED')).length,
+    };
+
+    // Aggregated Merchant Stats
+    const merchantStatsMap = {};
+    // Initialize with all existing shops
+    shops.forEach(s => {
+      const sName = s.storeName || s.name;
+      if (sName) {
+        merchantStatsMap[sName] = {
+          id: s.id,
+          name: sName,
+          category: s.category || 'N/A',
+          phone: s.phone || 'N/A',
+          completedCount: 0,
+          activeCount: 0,
+          cancelledCount: 0,
+          grossSales: 0,
+          netEarnings: 0
+        };
+      }
+    });
+
+    // Aggregate from orders
+    orders.forEach(o => {
+      const mName = o.merchantName || o.storeName || (o.items && o.items[0]?.store);
+      if (!mName) return;
+
+      if (!merchantStatsMap[mName]) {
+        merchantStatsMap[mName] = {
+          id: o.merchantId || `merch_unknown`,
+          name: mName,
+          category: (o.items && o.items[0]?.category) || 'N/A',
+          phone: 'N/A',
+          completedCount: 0,
+          activeCount: 0,
+          cancelledCount: 0,
+          grossSales: 0,
+          netEarnings: 0
+        };
+      }
+
+      const isCancelled = o.status?.startsWith('CANCELLED');
+      if (o.status === 'COMPLETED') {
+        merchantStatsMap[mName].completedCount += 1;
+      } else if (isCancelled) {
+        merchantStatsMap[mName].cancelledCount += 1;
+      } else {
+        merchantStatsMap[mName].activeCount += 1;
+      }
+
+      if (!isCancelled) {
+        merchantStatsMap[mName].grossSales += (o.totalAmount || 0);
+        merchantStatsMap[mName].netEarnings += (o.netMerchantEarning || 0);
+      }
+    });
+
+    // Aggregated Rider Stats
+    const riderStatsMap = {};
+    // Initialize with all existing delivery partners
+    deliveryPartners.forEach(r => {
+      if (r.id) {
+        riderStatsMap[r.id] = {
+          id: r.id,
+          name: r.name || 'Rider',
+          vehicle: r.vehicle || 'N/A',
+          phone: r.phone || 'N/A',
+          completedCount: 0,
+          totalPayout: 0
+        };
+      }
+    });
+
+    // Aggregate from orders
+    orders.forEach(o => {
+      const rId = o.deliveryPartnerId;
+      if (!rId) return;
+
+      const rName = o.deliveryPartnerName || 'Rider';
+      if (!riderStatsMap[rId]) {
+        riderStatsMap[rId] = {
+          id: rId,
+          name: rName,
+          vehicle: 'N/A',
+          phone: 'N/A',
+          completedCount: 0,
+          totalPayout: 0
+        };
+      }
+
+      if (o.status === 'COMPLETED') {
+        riderStatsMap[rId].completedCount += 1;
+        riderStatsMap[rId].totalPayout += (o.riderPayout || 0);
+      }
+    });
+
+    return {
+      todayStats,
+      allTimeStats,
+      merchantStats: Object.values(merchantStatsMap),
+      riderStats: Object.values(riderStatsMap)
+    };
+  };
+
+  const handleUnlockSales = (e) => {
+    e.preventDefault();
+    if (salesPinInput.trim() === '9251' || salesPinInput.trim() === 'admin123') {
+      setIsSalesUnlocked(true);
+      sessionStorage.setItem('pixigo_sales_unlocked', 'true');
+      setSalesPinError('');
+      setSalesPinInput('');
+    } else {
+      setSalesPinError('Invalid Admin PIN. Please try again.');
+    }
+  };
+
+  const showToast = (message, type = 'info') => {
     if (toastTimeoutId) {
       clearTimeout(toastTimeoutId);
     }
-    setToast({ show: true, message });
+    setToast({ show: true, message, type });
     const id = setTimeout(() => {
-      setToast({ show: false, message: '' });
-    }, 2500);
+      setToast({ show: false, message: '', type: 'info' });
+    }, 3000);
     setToastTimeoutId(id);
   };
 
@@ -889,8 +1037,19 @@ function App() {
           ...data
         });
       });
-      // Merge with INITIAL_SHOPS to keep mock ones visible
-      const mergedShops = [...fetchedShops];
+      // Merge fetched shops with initial mock shops to retain missing fields (like openTime, closeTime, lat, lng)
+      const mergedShops = fetchedShops.map(fs => {
+        const mockShop = INITIAL_SHOPS.find(ms => ms.id === fs.id);
+        if (mockShop) {
+          return {
+            ...mockShop,
+            ...fs // Firestore data overrides mock data
+          };
+        }
+        return fs;
+      });
+      
+      // Also add any mock shops that aren't in Firestore at all
       INITIAL_SHOPS.forEach(mockShop => {
         if (!mergedShops.some(s => s.id === mockShop.id)) {
           mergedShops.push(mockShop);
@@ -1440,6 +1599,12 @@ function App() {
   };
 
   const handleLogout = () => {
+    sessionStorage.removeItem('pixigo_sales_unlocked');
+    setIsSalesUnlocked(false);
+    setSelectedAnalyticsMerchant(null);
+    setSelectedAnalyticsRider(null);
+    setSelectedAnalyticsSalesGroup(null);
+    setSalesTab('merchants');
     localStorage.removeItem('pixigo_rider_session');
     localStorage.removeItem('pixigo_customerName');
     localStorage.removeItem('pixigo_customerPhone');
@@ -1723,7 +1888,7 @@ function App() {
     } else {
       setCart([...cart, { ...product, quantity: 1 }]);
     }
-    showToast(`${product.name} added to cart!`);
+    showToast(`${product.name} added to cart!`, 'success');
   };
 
   // Update Cart Quantity
@@ -1800,6 +1965,11 @@ function App() {
       distanceVal = await fetchRoadDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
     }
       
+    if (distanceVal > MAX_DELIVERY_RADIUS_KM) {
+      alert(`Cannot place order. The store (${storeName}) is ${distanceVal.toFixed(2)} km away, which exceeds our maximum delivery radius of ${MAX_DELIVERY_RADIUS_KM} km.`);
+      return;
+    }
+      
     const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
     const delCharge = customerCharge;
 
@@ -1840,6 +2010,13 @@ function App() {
       routingOption, // Set routing flow dynamically
       createdAt: new Date().toISOString()
     };
+
+    if (selectedPayment === 'ONLINE') {
+      setPendingPaymentOrder(newOrder);
+      setCheckoutStep('payment');
+      setIsCartDrawerOpen(true);
+      return;
+    }
 
     try {
       // Save order to Firestore Database
@@ -2961,8 +3138,239 @@ function App() {
   const trackingOrderIdForHook = currentOrderTracking || activeCustomerOrders[0]?.id;
   const liveRiderCoords = useRiderLocation(trackingOrderIdForHook);
 
+  // UPI payment success confirmation & WhatsApp redirection
+  const handleConfirmUpiPayment = async (isDrawer) => {
+    if (!pendingPaymentOrder) return;
+    
+    try {
+      // Save order to Firestore Database
+      await addDoc(collection(db, "orders"), pendingPaymentOrder);
+
+      // Auto-sync merchant profile doc if it does not exist
+      const merchantId = pendingPaymentOrder.merchantId;
+      const storeName = pendingPaymentOrder.merchantName;
+      try {
+        const merchantDocRef = doc(db, "merchants", merchantId);
+        const merchSnap = await getDoc(merchantDocRef);
+        if (!merchSnap.exists()) {
+          await setDoc(merchantDocRef, {
+            storeName: storeName,
+            category: pendingPaymentOrder.items[0]?.category || 'General',
+            address: 'Store Address, Chittorgarh',
+            status: 'active',
+            createdAt: new Date().toISOString()
+          });
+        }
+      } catch (err) {
+        console.error("Error auto-syncing merchant document:", err);
+      }
+
+      // Update local state for immediate UI tracking feedback
+      setOrders([pendingPaymentOrder, ...orders]);
+      setCart([]);
+      setCouponCode('');
+      setAppliedDiscount(0);
+      setCurrentOrderTracking(pendingPaymentOrder.id);
+      setIsTrackingDrawerOpen(true);
+      
+      // WhatsApp message template construction
+      const message = `Hello, I have placed order ${pendingPaymentOrder.id} for ₹${pendingPaymentOrder.totalAmount}. Here is my payment screenshot.`;
+      const waUrl = `https://wa.me/918233816674?text=${encodeURIComponent(message)}`;
+      
+      // Reset checkout states
+      setCheckoutStep('cart');
+      setPendingPaymentOrder(null);
+      if (isDrawer) setIsCartDrawerOpen(false);
+
+      showToast("Order placed! Redirecting to WhatsApp...", "success");
+      
+      // Open WhatsApp
+      window.open(waUrl, '_blank');
+    } catch (error) {
+      alert(`Failed to save order to Database: ${error.message}`);
+    }
+  };
+
   // Reusable cart content rendering (sidebar & mobile drawer)
   const renderCartContent = (isDrawer = false) => {
+    if (checkoutStep === 'payment' && pendingPaymentOrder) {
+      const upiUrl = `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${pendingPaymentOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${pendingPaymentOrder.id}`;
+      return (
+        <div className={`cart-card ${!isDrawer ? 'glass-panel' : ''}`} style={{ textAlign: 'left' }}>
+          <div className="cart-header-row">
+            <h2 className="section-title" style={{ color: 'var(--color-primary)' }}>
+              🔒 UPI Payment Instructions
+            </h2>
+            {isDrawer && (
+              <button className="close-drawer-btn" onClick={() => setIsCartDrawerOpen(false)}>
+                <X size={20} />
+              </button>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+            
+            {/* Gateway Progress Notification */}
+            <div className="payment-alert-box" style={{
+              background: 'rgba(239, 68, 68, 0.04)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '12px',
+              padding: '12px',
+              color: '#f87171',
+              fontSize: '12px',
+              lineHeight: '1.5',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '6px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'bold' }}>
+                ⚙️ Payment Gateway Integration in Progress
+              </div>
+              <p style={{ margin: 0 }}>
+                Our automatic payment system is currently being set up. Meanwhile, please make payment using the UPI details below and send the transaction screenshot on WhatsApp to confirm your order.
+              </p>
+            </div>
+
+            {/* Total Amount to Pay */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <span style={{ fontSize: '15px', color: 'var(--color-text-muted)' }}>Total Amount to Pay:</span>
+              <strong style={{ fontSize: '24px', color: '#ffb300' }}>
+                {formatINR(pendingPaymentOrder.totalAmount)}
+              </strong>
+            </div>
+
+            {/* Step 1 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
+                Step 1: Copy our UPI ID and pay
+              </span>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'rgba(218, 165, 32, 0.08)',
+                border: '1px solid rgba(218, 165, 32, 0.25)',
+                borderRadius: '24px',
+                padding: '8px 16px',
+                fontSize: '14px'
+              }}>
+                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText('8233816674@upi');
+                    showToast('UPI ID copied to clipboard!', 'success');
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#ffd700',
+                    fontWeight: 'bold',
+                    fontSize: '11px',
+                    cursor: 'pointer',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}
+                >
+                  Copy ID
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
+                Step 2: Pay instantly via any UPI App
+              </span>
+              <a 
+                href={upiUrl}
+                className="neon-btn"
+                style={{
+                  background: 'var(--color-danger)',
+                  borderColor: 'var(--color-danger)',
+                  color: '#ffffff',
+                  width: '100%',
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px',
+                  fontWeight: 'bold',
+                  boxShadow: 'none'
+                }}
+              >
+                Pay via UPI / Paytm App
+              </a>
+            </div>
+
+            {/* Step 3 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+              <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
+                Step 3: Send screenshot to WhatsApp
+              </span>
+              <button 
+                onClick={() => handleConfirmUpiPayment(isDrawer)}
+                className="neon-btn"
+                style={{
+                  background: '#25D366',
+                  borderColor: '#25D366',
+                  color: '#ffffff',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  padding: '12px',
+                  fontWeight: 'bold',
+                  boxShadow: '0 4px 15px rgba(37, 211, 102, 0.2)'
+                }}
+              >
+                <MessageCircle size={18} /> Confirm on WhatsApp
+              </button>
+            </div>
+
+            <div className="divider" style={{ margin: '8px 0' }}></div>
+
+            {/* Cancel Payment */}
+            <button 
+              onClick={() => {
+                setCheckoutStep('cart');
+                setPendingPaymentOrder(null);
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--color-text-muted)',
+                fontSize: '13px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                textDecoration: 'underline'
+              }}
+            >
+              Cancel & Go Back
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const storeName = cart[0]?.store || '';
+    const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
+    const customerCoords = parseCoords(customerAddress);
+    
+    let dist = null;
+    let isOutOfRange = false;
+    if (cart[0] && cartShop && customerCoords) {
+      dist = deliveryDistance;
+      if (dist === null) {
+        const shopLat = cartShop.lat || 24.8887;
+        const shopLng = cartShop.lng || 74.6269;
+        dist = getDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
+      }
+      isOutOfRange = dist > MAX_DELIVERY_RADIUS_KM;
+    }
+
     return (
       <div className={`cart-card ${!isDrawer ? 'glass-panel' : ''}`}>
         <div className="cart-header-row">
@@ -3039,23 +3447,35 @@ function App() {
               </button>
             </div>
 
+            {isOutOfRange && dist !== null && (
+              <div className="cart-warning-banner" style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                marginBottom: '14px',
+                color: '#f87171',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                textAlign: 'left'
+              }}>
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Delivery Range Exceeded:</strong> {storeName} is {dist.toFixed(2)} km away. We only deliver up to {MAX_DELIVERY_RADIUS_KM} km. Please select a closer address or clear cart to order from elsewhere.
+                </span>
+              </div>
+            )}
+
             {/* Pricing summary */}
             {(() => {
               const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-              const storeName = cart[0]?.store || '';
-              const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
-              const customerCoords = parseCoords(customerAddress);
               
               let distanceText = '';
               let fee = 33; // Default fallback (standard 2km base)
               
-              if (cartShop && customerCoords) {
-                let dist = deliveryDistance;
-                if (dist === null) {
-                  const shopLat = cartShop.lat || 24.8887;
-                  const shopLng = cartShop.lng || 74.6269;
-                  dist = getDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
-                }
+              if (dist !== null) {
                 distanceText = isDistanceLoading 
                   ? ' (Calculating route...)' 
                   : ` (${dist.toFixed(2)} km)`;
@@ -3071,7 +3491,7 @@ function App() {
                   </div>
                   <div className="summary-row">
                     <span>Delivery Fee{distanceText}</span>
-                    <span>{formatINR(fee)}</span>
+                    <span>{isOutOfRange ? 'N/A' : formatINR(fee)}</span>
                   </div>
                   {appliedDiscount > 0 && (
                     <div className="summary-row discount-row">
@@ -3082,7 +3502,7 @@ function App() {
                   <div className="divider"></div>
                   <div className="summary-row total-row">
                     <span>Grand Total</span>
-                    <span>{formatINR(subtotal + fee - appliedDiscount)}</span>
+                    <span>{isOutOfRange ? 'N/A' : formatINR(subtotal + fee - appliedDiscount)}</span>
                   </div>
                 </div>
               );
@@ -3126,10 +3546,10 @@ function App() {
               {/* Interactive map adjustment for Customer */}
               <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
                 <LeafletMap
-                  merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
-                  customerCoords={parseCoords(customerAddress)}
+                  merchantCoords={cartShop ? { lat: cartShop.lat || 24.8887, lng: cartShop.lng || 74.6269 } : { lat: 26.9015, lng: 75.7482 }}
+                  customerCoords={customerCoords}
                   customerName={customerName || 'Customer'}
-                  merchantName="Pixo Go Hub"
+                  merchantName={storeName || "Store"}
                   isInteractive={true}
                   onLocationChange={handleMapLocationChange}
                 />
@@ -3152,11 +3572,31 @@ function App() {
             </div>
 
             {/* Checkout Button */}
-            <button className="neon-btn checkout-btn" onClick={() => {
-              handlePlaceOrder();
-              if (isDrawer) setIsCartDrawerOpen(false);
-            }}>
-              Confirm & Place Order <ArrowRight size={18} />
+            <button 
+              className="neon-btn checkout-btn" 
+              disabled={isOutOfRange || isDistanceLoading}
+              onClick={() => {
+                if (isOutOfRange) {
+                  showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
+                  return;
+                }
+                handlePlaceOrder();
+                if (isDrawer) setIsCartDrawerOpen(false);
+              }}
+              style={{
+                background: isOutOfRange ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
+                color: isOutOfRange ? 'var(--color-text-muted)' : '#000',
+                border: isOutOfRange ? '1px solid var(--color-border)' : 'none',
+                cursor: isOutOfRange ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isOutOfRange ? (
+                <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
+              ) : isDistanceLoading ? (
+                <>Calculating Route... <RefreshCw size={18} className="spin" /></>
+              ) : (
+                <>Confirm & Place Order <ArrowRight size={18} /></>
+              )}
             </button>
           </div>
         )}
@@ -3554,6 +3994,13 @@ function App() {
           {activeTab === 'admin' && (
             <nav className="header-nav">
               <button 
+                className={`nav-link ${adminSubView === 'sales' ? 'active' : ''}`}
+                onClick={() => { setAdminSubView('sales'); setAdminSearchQuery(''); }}
+              >
+                <Activity size={16} style={{ marginRight: '6px' }} />
+                Sales Dashboard
+              </button>
+              <button 
                 className={`nav-link ${adminSubView === 'orders' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}
               >
@@ -3751,37 +4198,6 @@ function App() {
               </div>
             )}
 
-            {/* Store Closed Warning Banner */}
-            {(() => {
-              const currentHour = new Date().getHours();
-              if (currentHour < 10 || currentHour >= 20) {
-                return (
-                  <div className="store-closed-banner fade-in" style={{
-                    margin: '0 auto 16px auto',
-                    padding: '10px 16px',
-                    background: 'rgba(239, 68, 68, 0.12)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: '24px',
-                    color: '#f87171',
-                    fontSize: '13px',
-                    fontWeight: 'bold',
-                    textAlign: 'center',
-                    width: '100%',
-                    maxWidth: '1200px',
-                    boxShadow: '0 0 10px rgba(239, 68, 68, 0.05)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}>
-                    <span>🌙</span>
-                    <span>We don't provide service for this time. Operational hours are 10:00 AM to 8:00 PM.</span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
             <div className="customer-grid">
             {/* Storefront Layout */}
             <div className="catalog-section">
@@ -3924,6 +4340,14 @@ function App() {
                   const statusInfo = getShopOpenStatus(pShop);
                   const isClosed = !statusInfo.isOpen;
 
+                  const customerCoords = parseCoords(customerAddress);
+                  let shopDistance = null;
+                  let isOutOfRange = false;
+                  if (pShop && pShop.lat && pShop.lng && customerCoords) {
+                    shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
+                    isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
+                  }
+
                   return (
                     <div key={p.id} className={`product-card glass-panel`} style={{ position: 'relative' }}>
                       <div className="prod-img-wrap" style={{ position: 'relative' }}>
@@ -3934,32 +4358,8 @@ function App() {
                         ) : (
                           <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
                         )}
-                        {isClosed && (
-                          <div style={{
-                            position: 'absolute',
-                            top: 0, left: 0, right: 0, bottom: 0,
-                            background: 'rgba(0,0,0,0.6)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            zIndex: 2,
-                            borderRadius: '12px 12px 0 0'
-                          }}>
-                            <span style={{
-                              background: 'var(--color-danger)',
-                              color: '#fff',
-                              padding: '4px 8px',
-                              fontSize: '10px',
-                              fontWeight: 'bold',
-                              borderRadius: '4px',
-                              textTransform: 'uppercase'
-                            }}>
-                              {statusInfo.reason === 'OUTSIDE_HOURS' ? 'Closed' : 'Offline'}
-                            </span>
-                          </div>
-                        )}
                       </div>
-                      <div className="prod-meta" style={{ opacity: isClosed ? 0.6 : 1 }}>
+                      <div className="prod-meta" style={{ opacity: 1 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                           <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
                           <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
@@ -3968,9 +4368,9 @@ function App() {
                         </div>
                         <span className="prod-store">
                           {p.store}
-                          {isClosed && (
-                            <span style={{ color: 'var(--color-danger)', fontSize: '10px', fontWeight: 'bold', marginLeft: '6px' }}>
-                              ({statusInfo.reason === 'OUTSIDE_HOURS' ? 'Closed' : 'Offline'})
+                          {shopDistance !== null && (
+                            <span style={{ color: 'var(--color-neon-cyan)', fontSize: '11px', marginLeft: '6px' }}>
+                              ({shopDistance.toFixed(1)} km)
                             </span>
                           )}
                         </span>
@@ -3997,22 +4397,25 @@ function App() {
                           </div>
                           <button 
                             className="add-to-cart-btn" 
-                            disabled={isClosed}
                             onClick={() => {
                               if (isClosed) {
-                                showToast(`⚠️ Cannot add item. ${p.store} is currently closed.`);
+                                showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                                return;
+                              }
+                              if (isOutOfRange) {
+                                showToast(`We do not deliver at your location.`, 'warning');
                                 return;
                               }
                               handleAddToCart(p);
                             }}
                             style={{
-                              background: isClosed ? 'rgba(255,255,255,0.05)' : 'var(--color-primary)',
-                              color: isClosed ? 'var(--color-text-muted)' : '#000',
-                              border: isClosed ? '1px solid var(--color-border)' : 'none',
-                              cursor: isClosed ? 'not-allowed' : 'pointer'
+                              background: 'var(--color-primary)',
+                              color: '#000',
+                              border: 'none',
+                              cursor: 'pointer'
                             }}
                           >
-                            {isClosed ? 'Closed' : <><Plus size={16} /> Add</>}
+                            <Plus size={16} /> Add
                           </button>
                         </div>
                       </div>
@@ -4081,6 +4484,82 @@ function App() {
                           </div>
                         </div>
 
+                        {/* Scan & Pay on Delivery UPI QR code for COD orders */}
+                        {trackedOrder.paymentMethod === 'COD' && 
+                         !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) && 
+                         !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
+                          <div className="cod-qr-card border-glow" style={{
+                            background: 'rgba(218, 165, 32, 0.04)',
+                            border: '1px dashed rgba(218, 165, 32, 0.3)',
+                            borderRadius: '12px',
+                            padding: '16px',
+                            textAlign: 'center',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '12px',
+                            marginTop: '8px',
+                            marginBottom: '8px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                              💵 Scan & Pay on Delivery
+                            </div>
+                            <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
+                              Scan the QR code using any UPI app (GPay, Paytm, PhonePe) to pay the rider digitally on delivery.
+                            </p>
+                            <div style={{
+                              background: '#ffffff',
+                              padding: '8px',
+                              borderRadius: '8px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: '1px solid var(--color-border)'
+                            }}>
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                                  `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
+                                )}`} 
+                                alt="UPI Payment QR Code"
+                                style={{ width: '130px', height: '130px', display: 'block' }}
+                              />
+                            </div>
+                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
+                              Amount: {formatINR(trackedOrder.totalAmount)}
+                            </div>
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              width: '100%',
+                              background: 'rgba(218, 165, 32, 0.08)',
+                              border: '1px solid rgba(218, 165, 32, 0.25)',
+                              borderRadius: '24px',
+                              padding: '6px 14px',
+                              fontSize: '12px'
+                            }}>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                              <button 
+                                onClick={() => {
+                                  navigator.clipboard.writeText('8233816674@upi');
+                                  showToast('UPI ID copied to clipboard!', 'success');
+                                }}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#ffd700',
+                                  fontWeight: 'bold',
+                                  fontSize: '10px',
+                                  cursor: 'pointer',
+                                  textTransform: 'uppercase'
+                                }}
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Rider Information Panel */}
                         {trackedOrder.deliveryPartnerId ? (
                           <div className="rider-card-sidebar border-glow">
@@ -4116,6 +4595,242 @@ function App() {
         {activeTab === 'admin' && renderPortalGuard('Admin Console', (
           <div className="admin-grid fade-in">
             {/* Dynamic Dashboard Subview Content */}
+            {adminSubView === 'sales' && (
+              !isSalesUnlocked ? (
+                <div className="analytics-dashboard-container fade-in" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '350px', width: '100%' }}>
+                  <div className="glass-panel" style={{ padding: '40px', maxWidth: '400px', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ margin: '0 auto 10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Shield size={32} style={{ color: '#ef4444' }} />
+                    </div>
+                    <h2 style={{ fontSize: '20px', fontWeight: 'bold' }}>Dashboard Locked</h2>
+                    <p style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>
+                      This Sales and Analytics Dashboard contains sensitive financial data and is restricted to Administrators only.
+                    </p>
+                    {salesPinError && (
+                      <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '8px', borderRadius: '8px', fontSize: '12px' }}>
+                        ⚠️ {salesPinError}
+                      </div>
+                    )}
+                    <form onSubmit={handleUnlockSales} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ position: 'relative', width: '100%' }}>
+                        <input 
+                          type={showSalesPin ? "text" : "password"} 
+                          placeholder="Enter Admin PIN" 
+                          value={salesPinInput}
+                          onChange={(e) => setSalesPinInput(e.target.value)}
+                          style={{ width: '100%', background: 'rgba(15, 23, 42, 0.05)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '10px 40px 10px 14px', color: 'var(--color-text-main)', fontSize: '14px', textAlign: 'center', outline: 'none' }}
+                          required
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSalesPin(!showSalesPin)}
+                          style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0 }}
+                          title={showSalesPin ? "Hide PIN" : "Show PIN"}
+                        >
+                          {showSalesPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                      <button type="submit" className="neon-btn" style={{ width: '100%', padding: '10px' }}>
+                        Unlock Dashboard
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ) : (() => {
+                const analytics = getAnalytics();
+                return (
+                  <div className="analytics-dashboard-container fade-in">
+                    <div className="panel-header">
+                      <h2>Sales & Operations Dashboard</h2>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span className="analytics-badge-pill analytics-badge-success" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Activity size={14} /> Real-Time Sync Active
+                        </span>
+                        <button 
+                          onClick={() => {
+                            setIsSalesUnlocked(false);
+                            sessionStorage.removeItem('pixigo_sales_unlocked');
+                          }}
+                          className="secondary-btn"
+                          style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}
+                        >
+                          Lock Dashboard
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Summary Cards Grid */}
+                    <div className="analytics-cards-grid">
+                      {/* Today's Sales */}
+                      <div className="analytics-card card-grad-primary" onClick={() => setSelectedAnalyticsSalesGroup('today')} style={{ cursor: 'pointer' }}>
+                        <div className="analytics-card-title">Today's Gross Sales</div>
+                        <div className="analytics-card-value">₹{analytics.todayStats.grossSales}</div>
+                        <div className="analytics-card-footer">
+                          <span>Orders: {analytics.todayStats.placedCount}</span>
+                          <span>Delivered: {analytics.todayStats.completedCount}</span>
+                        </div>
+                      </div>
+
+                      {/* All-Time Sales */}
+                      <div className="analytics-card card-grad-profit" onClick={() => setSelectedAnalyticsSalesGroup('all-time')} style={{ cursor: 'pointer' }}>
+                        <div className="analytics-card-title">All-Time Gross Sales</div>
+                        <div className="analytics-card-value">₹{analytics.allTimeStats.grossSales}</div>
+                        <div className="analytics-card-footer">
+                          <span>Total Orders: {analytics.allTimeStats.placedCount}</span>
+                          <span>Delivered: {analytics.allTimeStats.completedCount}</span>
+                        </div>
+                      </div>
+
+                      {/* Net Profit */}
+                      <div className="analytics-card card-grad-success">
+                        <div className="analytics-card-title">All-Time Net Profit</div>
+                        <div className="analytics-card-value">₹{stats.netProfit}</div>
+                        <div className="analytics-card-footer">
+                          <span>Commission: {commissionPercent}%</span>
+                        </div>
+                      </div>
+
+                      {/* Cancelled */}
+                      <div className="analytics-card card-grad-cancelled" onClick={() => setSelectedAnalyticsSalesGroup('cancelled')} style={{ cursor: 'pointer' }}>
+                        <div className="analytics-card-title">Cancelled Orders</div>
+                        <div className="analytics-card-value">{analytics.allTimeStats.cancelledCount}</div>
+                        <div className="analytics-card-footer">
+                          <span>Today's Cancelled: {analytics.todayStats.cancelledCount}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sales Sub-Tabs Selector */}
+                    <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px', margin: '20px 0 10px 0', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => setSalesTab('merchants')}
+                        className={`nav-link ${salesTab === 'merchants' ? 'active' : ''}`}
+                        style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      >
+                        <Store size={15} />
+                        Merchant Earnings Summary
+                      </button>
+                      <button
+                        onClick={() => setSalesTab('riders')}
+                        className={`nav-link ${salesTab === 'riders' ? 'active' : ''}`}
+                        style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      >
+                        <Bike size={15} />
+                        Rider Payouts Summary
+                      </button>
+                    </div>
+
+                    {/* Main Render container for Tables */}
+                    <div className="analytics-grid-one-col" style={{ width: '100%' }}>
+                      {/* Merchant Performance Section */}
+                      {salesTab === 'merchants' && (
+                        <div className="glass-panel fade-in" style={{ padding: '24px', width: '100%' }}>
+                          <div className="analytics-search-row" style={{ marginBottom: '16px' }}>
+                            <h3>🏪 Merchant Earnings Overview</h3>
+                          </div>
+                          <div className="analytics-table-wrapper" style={{ maxHeight: '550px' }}>
+                            <table className="analytics-table">
+                              <thead>
+                                <tr>
+                                  <th>Shop Name</th>
+                                  <th>Category</th>
+                                  <th>Orders</th>
+                                  <th>Gross Sales</th>
+                                  <th>Net Earnings</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {analytics.merchantStats.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="5" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                                      No merchants registered.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  analytics.merchantStats.map(m => (
+                                    <tr key={m.id} onClick={() => setSelectedAnalyticsMerchant(m)} className="clickable-row" style={{ cursor: 'pointer' }}>
+                                      <td>
+                                        <strong>{m.name}</strong>
+                                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{m.phone}</div>
+                                      </td>
+                                      <td>{m.category}</td>
+                                      <td>
+                                        <span className="analytics-badge-pill analytics-badge-info" style={{ marginRight: '4px' }}>
+                                          {m.completedCount} Done
+                                        </span>
+                                        {m.activeCount > 0 && (
+                                          <span className="analytics-badge-pill analytics-badge-warning">
+                                            {m.activeCount} Active
+                                          </span>
+                                        )}
+                                      </td>
+                                      <td>₹{m.grossSales}</td>
+                                      <td>
+                                        <strong style={{ color: '#4ade80' }}>₹{m.netEarnings}</strong>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Rider Performance Section */}
+                      {salesTab === 'riders' && (
+                        <div className="glass-panel fade-in" style={{ padding: '24px', width: '100%' }}>
+                          <div className="analytics-search-row" style={{ marginBottom: '16px' }}>
+                            <h3> 🛵 Rider Payouts Overview</h3>
+                          </div>
+                          <div className="analytics-table-wrapper" style={{ maxHeight: '550px' }}>
+                            <table className="analytics-table">
+                              <thead>
+                                <tr>
+                                  <th>Rider Name</th>
+                                  <th>Vehicle</th>
+                                  <th>Completed Runs</th>
+                                  <th>Total Payout</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {analytics.riderStats.length === 0 ? (
+                                  <tr>
+                                    <td colSpan="4" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                                      No delivery agents registered.
+                                    </td>
+                                  </tr>
+                                ) : (
+                                  analytics.riderStats.map(r => (
+                                    <tr key={r.id} onClick={() => setSelectedAnalyticsRider(r)} className="clickable-row" style={{ cursor: 'pointer' }}>
+                                      <td>
+                                        <strong>{r.name}</strong>
+                                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{r.phone}</div>
+                                      </td>
+                                      <td>{r.vehicle}</td>
+                                      <td>
+                                        <span className="analytics-badge-pill analytics-badge-success">
+                                          {r.completedCount} Deliveries
+                                        </span>
+                                      </td>
+                                      <td>
+                                        <strong style={{ color: '#fbbf24' }}>₹{r.totalPayout}</strong>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
+            )}
+
             {adminSubView === 'orders' && (<>
               <div className="admin-orders-table glass-panel fade-in">
                 <div className="panel-header">
@@ -6914,6 +7629,81 @@ function App() {
                     </div>
                   </div>
 
+                  {/* Scan & Pay on Delivery UPI QR code for COD orders */}
+                  {trackedOrder.paymentMethod === 'COD' && 
+                   !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) && 
+                   !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
+                    <div className="cod-qr-card border-glow" style={{
+                      background: 'rgba(218, 165, 32, 0.04)',
+                      border: '1px dashed rgba(218, 165, 32, 0.3)',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '12px',
+                      marginTop: '8px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                        💵 Scan & Pay on Delivery
+                      </div>
+                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
+                        Scan the QR code using any UPI app (GPay, Paytm, PhonePe) to pay the rider digitally on delivery.
+                      </p>
+                      <div style={{
+                        background: '#ffffff',
+                        padding: '8px',
+                        borderRadius: '8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '1px solid var(--color-border)'
+                      }}>
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                            `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
+                          )}`} 
+                          alt="UPI Payment QR Code"
+                          style={{ width: '130px', height: '130px', display: 'block' }}
+                        />
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
+                        Amount: {formatINR(trackedOrder.totalAmount)}
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        width: '100%',
+                        background: 'rgba(218, 165, 32, 0.08)',
+                        border: '1px solid rgba(218, 165, 32, 0.25)',
+                        borderRadius: '24px',
+                        padding: '6px 14px',
+                        fontSize: '12px'
+                      }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText('8233816674@upi');
+                            showToast('UPI ID copied to clipboard!', 'success');
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ffd700',
+                            fontWeight: 'bold',
+                            fontSize: '10px',
+                            cursor: 'pointer',
+                            textTransform: 'uppercase'
+                          }}
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Rider Information Panel */}
                   {trackedOrder.deliveryPartnerId ? (() => {
                     const riderPhone = deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.phone || trackedOrder.deliveryPartnerPhone || '9251054064';
@@ -7747,10 +8537,302 @@ function App() {
         </div>
       )}
 
+      {/* Merchant Order Detail Modal */}
+      {selectedAnalyticsMerchant && (
+        <div className="modal-backdrop fade-in" onClick={() => setSelectedAnalyticsMerchant(null)}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '700px' }}>
+            <button className="modal-close-btn" onClick={() => setSelectedAnalyticsMerchant(null)}>
+              <X size={20} />
+            </button>
+            
+            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div className="profile-avatar-glow" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
+                <Store size={40} style={{ color: 'var(--color-warning)' }} />
+              </div>
+              <h3 className="section-title-premium">{selectedAnalyticsMerchant.name} Order Log</h3>
+              <p className="profile-sub" style={{ marginTop: '4px' }}>Category: <strong>{selectedAnalyticsMerchant.category}</strong> | Contact: <strong>{selectedAnalyticsMerchant.phone}</strong></p>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
+              <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
+                <table className="analytics-table">
+                  <thead>
+                    <tr>
+                      <th>Order ID</th>
+                      <th>Date & Time</th>
+                      <th>Customer</th>
+                      <th>Items Ordered</th>
+                      <th>Net Earning</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const merchantOrders = orders.filter(o => {
+                        const mName = o.merchantName || o.storeName || (o.items && o.items[0]?.store);
+                        return mName === selectedAnalyticsMerchant.name;
+                      });
+
+                      if (merchantOrders.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                              No orders found for this merchant.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return merchantOrders.map(o => (
+                        <tr key={o.id}>
+                          <td><strong>{o.id}</strong></td>
+                          <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
+                          <td>
+                            <div>{o.customerName}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                              {o.items?.map((item, idx) => (
+                                <div key={idx} style={{ fontSize: '12px' }}>
+                                  • {item.name} <span style={{ color: 'var(--color-text-muted)' }}>(x{item.quantity || 1})</span>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          <td>
+                            <strong style={{ color: o.status?.startsWith('CANCELLED') ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                              {o.status?.startsWith('CANCELLED') ? '₹0' : `₹${o.netMerchantEarning || 0}`}
+                            </strong>
+                          </td>
+                          <td>
+                            <span className={`analytics-badge-pill ${
+                              o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                              'analytics-badge-info'
+                            }`}>
+                              {o.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
+              <button 
+                className="neon-btn" 
+                onClick={() => setSelectedAnalyticsMerchant(null)}
+                style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
+              >
+                Close Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rider Deliveries Detail Modal */}
+      {selectedAnalyticsRider && (
+        <div className="modal-backdrop fade-in" onClick={() => setSelectedAnalyticsRider(null)}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '700px' }}>
+            <button className="modal-close-btn" onClick={() => setSelectedAnalyticsRider(null)}>
+              <X size={20} />
+            </button>
+            
+            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
+                <Bike size={40} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium">{selectedAnalyticsRider.name} Delivery Run Log</h3>
+              <p className="profile-sub" style={{ marginTop: '4px' }}>Vehicle: <strong>{selectedAnalyticsRider.vehicle}</strong> | Contact: <strong>{selectedAnalyticsRider.phone}</strong></p>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
+              <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
+                <table className="analytics-table">
+                  <thead>
+                    <tr>
+                      <th>Order ID</th>
+                      <th>Date & Time</th>
+                      <th>Merchant (Pickup)</th>
+                      <th>Customer (Delivery)</th>
+                      <th>Payout</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const riderOrders = orders.filter(o => o.deliveryPartnerId === selectedAnalyticsRider.id);
+
+                      if (riderOrders.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                              No delivery runs found for this agent.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return riderOrders.map(o => (
+                        <tr key={o.id}>
+                          <td><strong>{o.id}</strong></td>
+                          <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
+                          <td><strong>{o.merchantName}</strong></td>
+                          <td>
+                            <div>{o.customerName}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
+                          </td>
+                          <td>
+                            <strong style={{ color: o.status === 'COMPLETED' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                              ₹{o.riderPayout || 0}
+                            </strong>
+                          </td>
+                          <td>
+                            <span className={`analytics-badge-pill ${
+                              o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                              'analytics-badge-info'
+                            }`}>
+                              {o.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
+              <button 
+                className="neon-btn" 
+                onClick={() => setSelectedAnalyticsRider(null)}
+                style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
+              >
+                Close Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sales Group Detail Modal */}
+      {selectedAnalyticsSalesGroup && (
+        <div className="modal-backdrop fade-in" onClick={() => setSelectedAnalyticsSalesGroup(null)}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '750px' }}>
+            <button className="modal-close-btn" onClick={() => setSelectedAnalyticsSalesGroup(null)}>
+              <X size={20} />
+            </button>
+            
+            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div className="profile-avatar-glow" style={{ background: 'rgba(139, 92, 246, 0.1)' }}>
+                <DollarSign size={40} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium">
+                {selectedAnalyticsSalesGroup === 'today' ? "Today's Gross Sales Log" : 
+                 selectedAnalyticsSalesGroup === 'all-time' ? "All-Time Gross Sales Log" : 
+                 "Cancelled Orders Log"}
+              </h3>
+              <p className="profile-sub" style={{ marginTop: '4px' }}>Detailed list of transaction records</p>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
+              <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
+                <table className="analytics-table">
+                  <thead>
+                    <tr>
+                      <th>Order ID</th>
+                      <th>Date & Time</th>
+                      <th>Merchant</th>
+                      <th>Customer</th>
+                      <th>Total Amount</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const todayStart = new Date();
+                      todayStart.setHours(0, 0, 0, 0);
+
+                      const targetOrders = orders.filter(o => {
+                        if (selectedAnalyticsSalesGroup === 'today') {
+                          return o.createdAt && new Date(o.createdAt) >= todayStart && !o.status?.startsWith('CANCELLED');
+                        }
+                        if (selectedAnalyticsSalesGroup === 'all-time') {
+                          return !o.status?.startsWith('CANCELLED');
+                        }
+                        // cancelled
+                        return o.status?.startsWith('CANCELLED');
+                      });
+
+                      if (targetOrders.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                              No order records found in this group.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return targetOrders.map(o => (
+                        <tr key={o.id}>
+                          <td><strong>{o.id}</strong></td>
+                          <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
+                          <td><strong>{o.merchantName}</strong></td>
+                          <td>
+                            <div>{o.customerName}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
+                          </td>
+                          <td>
+                            <strong style={{ color: o.status?.startsWith('CANCELLED') ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                              ₹{o.totalAmount || 0}
+                            </strong>
+                          </td>
+                          <td>
+                            <span className={`analytics-badge-pill ${
+                              o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                              'analytics-badge-info'
+                            }`}>
+                              {o.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
+              <button 
+                className="neon-btn" 
+                onClick={() => setSelectedAnalyticsSalesGroup(null)}
+                style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
+              >
+                Close Log List
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Toast Notification */}
       {toast.show && (
-        <div className="toast-notification fade-in">
-          <Check size={18} style={{ strokeWidth: 3, color: 'var(--color-primary)' }} />
+        <div className={`toast-notification ${toast.type} fade-in`}>
+          {toast.type === 'error' || toast.type === 'warning' ? (
+            <AlertCircle size={18} style={{ strokeWidth: 3, color: 'var(--color-danger)' }} />
+          ) : (
+            <Check size={18} style={{ strokeWidth: 3, color: 'var(--color-primary)' }} />
+          )}
           <span>{toast.message}</span>
         </div>
       )}
