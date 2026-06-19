@@ -330,6 +330,14 @@ function App() {
   const [cart, setCart] = useState([]);
   const [couponCode, setCouponCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
+  const [coupons, setCoupons] = useState([]);
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponDiscount, setNewCouponDiscount] = useState('');
+  const [newCouponMinCart, setNewCouponMinCart] = useState('');
+  const [newCouponType, setNewCouponType] = useState('flat'); // 'flat' | 'percentage'
+  const [newCouponMaxDiscount, setNewCouponMaxDiscount] = useState('');
+  const [isCouponsModalOpen, setIsCouponsModalOpen] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(null);
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('pixigo_customerName') || 'Raj Malhotra');
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
   const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
@@ -647,9 +655,9 @@ function App() {
     showToast('Profile settings saved successfully!');
     setIsProfileOpen(false);
   };
-  const handleAutoDetectLocation = (setAddressCallback) => {
+  const handleAutoDetectLocation = (setAddressCallback, isAutomatic = false) => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser.");
+      if (!isAutomatic) alert("Geolocation is not supported by your browser.");
       return;
     }
     setIsLocating(true);
@@ -690,7 +698,11 @@ function App() {
         },
         (error) => {
           console.error("Fallback Geolocation failed:", error);
-          alert(`Failed to detect location: ${error.message}`);
+          if (!isAutomatic) {
+            alert(`Failed to detect location: ${error.message}`);
+          } else {
+            console.log(`Silent auto-detect fallback failed: ${error.message}`);
+          }
           setIsLocating(false);
         },
         { enableHighAccuracy: false, timeout: 15000, maximumAge: 10000 }
@@ -744,7 +756,7 @@ function App() {
 
   // Automatically trigger auto-detect location on load
   useEffect(() => {
-    handleAutoDetectLocation(setCustomerAddress);
+    handleAutoDetectLocation(setCustomerAddress, true);
   }, []);
 
   // Fetch actual road distance dynamically when customer coordinates or cart items change
@@ -1218,6 +1230,100 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Fetch real-time coupons from Firestore and auto-populate defaults if empty
+  useEffect(() => {
+    const couponsRef = collection(db, "coupons");
+    const unsubscribe = onSnapshot(couponsRef, async (snapshot) => {
+      const fetchedCoupons = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        fetchedCoupons.push({
+          firestoreId: docSnap.id,
+          ...data
+        });
+      });
+      
+      setCoupons(fetchedCoupons);
+
+      // If empty, auto-create default coupons for testing
+      if (snapshot.empty) {
+        const defaultCoupons = [
+          {
+            code: 'WELCOME100',
+            discount: 100,
+            type: 'flat',
+            minCart: 200,
+            isActive: true,
+            createdAt: new Date().toISOString()
+          },
+          {
+            code: 'PIXIGO10',
+            discount: 10,
+            type: 'percentage',
+            maxDiscount: 50,
+            minCart: 150,
+            isActive: true,
+            createdAt: new Date().toISOString()
+          },
+          {
+            code: 'FREE50',
+            discount: 50,
+            type: 'flat',
+            minCart: 100,
+            isActive: true,
+            createdAt: new Date().toISOString()
+          }
+        ];
+        
+        for (const coupon of defaultCoupons) {
+          try {
+            await addDoc(collection(db, "coupons"), coupon);
+          } catch (e) {
+            console.error("Error creating default coupon: ", e);
+          }
+        }
+      }
+    }, (error) => {
+      console.error("Firestore coupons subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Recalculate/validate coupon discount dynamically when cart or coupons collection change
+  useEffect(() => {
+    if (cart.length === 0) {
+      setAppliedDiscount(0);
+      setCouponCode('');
+    } else if (appliedDiscount > 0 && couponCode) {
+      const codeUpper = couponCode.trim().toUpperCase();
+      const coupon = coupons.find(c => c.code?.toUpperCase() === codeUpper);
+      if (coupon && coupon.isActive) {
+        const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+        const minCartVal = Number(coupon.minCart) || 0;
+        if (cartSubtotal >= minCartVal) {
+          let discountAmt = 0;
+          if (coupon.type === 'flat') {
+            discountAmt = Number(coupon.discount) || 0;
+          } else if (coupon.type === 'percentage') {
+            const pct = Number(coupon.discount) || 0;
+            const calculated = Math.round(cartSubtotal * (pct / 100));
+            const maxLimit = Number(coupon.maxDiscount) || Infinity;
+            discountAmt = Math.min(calculated, maxLimit);
+          }
+          discountAmt = Math.min(discountAmt, cartSubtotal);
+          setAppliedDiscount(discountAmt);
+        } else {
+          // No longer meets minCart, remove discount
+          setAppliedDiscount(0);
+          setCouponCode('');
+        }
+      } else {
+        setAppliedDiscount(0);
+        setCouponCode('');
+      }
+    }
+  }, [cart, coupons]);
 
   // Watch for tracked order cancellation and notify user / close panel
   useEffect(() => {
@@ -1952,18 +2058,63 @@ function App() {
     setCart(cart.filter(i => i.id !== id));
   };
 
-  // Apply Discount Coupon Code
+  // Apply Discount Coupon Code (Dynamic from Firestore with minCart, single-use, and type validation)
   const handleApplyCoupon = () => {
-    if (couponCode.toUpperCase() === 'WELCOME100') {
-      setAppliedDiscount(100);
-      alert('Coupon Applied Successfully: Flat ₹100 Off!');
-    } else if (couponCode.toUpperCase() === 'PIXIGO10') {
-      const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-      setAppliedDiscount(Math.round(cartSubtotal * 0.1));
-      alert('Coupon Applied Successfully: 10% Off!');
-    } else {
-      alert('Invalid or expired coupon code!');
+    if (!couponCode.trim()) {
+      alert('Please enter a coupon code.');
+      return;
     }
+    
+    const codeUpper = couponCode.trim().toUpperCase();
+    const coupon = coupons.find(c => c.code?.toUpperCase() === codeUpper);
+    
+    if (!coupon) {
+      alert('Invalid coupon code!');
+      return;
+    }
+    
+    if (!coupon.isActive) {
+      alert('This coupon is no longer active!');
+      return;
+    }
+    
+    const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+    const minCartVal = Number(coupon.minCart) || 0;
+    if (cartSubtotal < minCartVal) {
+      alert(`Min cart value of ₹${minCartVal} required to apply this coupon. Your subtotal is ₹${cartSubtotal}.`);
+      return;
+    }
+    
+    // Single-use validation: A user cannot reuse a coupon unless the previous order applying it was cancelled.
+    const currentUserId = auth.currentUser ? auth.currentUser.uid : (customerPhone ? `guest_${customerPhone}` : 'anonymous');
+    
+    const isAlreadyUsed = orders.some(o => {
+      const isSameUser = o.customerId === currentUserId || (auth.currentUser && o.userId === auth.currentUser.uid);
+      const isSameCoupon = o.couponCode?.toUpperCase() === codeUpper;
+      const isNotCancelled = !o.status?.toUpperCase().startsWith('CANCEL');
+      return isSameUser && isSameCoupon && isNotCancelled;
+    });
+    
+    if (isAlreadyUsed) {
+      alert('You have already used this coupon code on a prior order.');
+      return;
+    }
+    
+    let discountAmt = 0;
+    if (coupon.type === 'flat') {
+      discountAmt = Number(coupon.discount) || 0;
+    } else if (coupon.type === 'percentage') {
+      const pct = Number(coupon.discount) || 0;
+      const calculated = Math.round(cartSubtotal * (pct / 100));
+      const maxLimit = Number(coupon.maxDiscount) || Infinity;
+      discountAmt = Math.min(calculated, maxLimit);
+    }
+    
+    // Ensure discount doesn't exceed subtotal
+    discountAmt = Math.min(discountAmt, cartSubtotal);
+    
+    setAppliedDiscount(discountAmt);
+    alert(`Coupon "${codeUpper}" applied successfully! Discount: ₹${discountAmt}`);
   };
 
   // Checkout and Order Placement
@@ -2041,6 +2192,7 @@ function App() {
       riderPayout: riderPayoutVal,
       distance: distanceVal,
       discountAmount: appliedDiscount,
+      couponCode: appliedDiscount > 0 ? couponCode.trim().toUpperCase() : '',
       commissionAmount: comm,
       netMerchantEarning: total - comm,
       paymentMethod: selectedPayment,
@@ -2751,6 +2903,71 @@ function App() {
     } catch (e) {
       console.error("Error rejecting product:", e);
       alert(`Failed to reject product: ${e.message}`);
+    }
+  };
+
+  // Admin: Coupon Actions
+  const handleAddCoupon = async (e) => {
+    e.preventDefault();
+    if (!newCouponCode.trim() || !newCouponDiscount) {
+      alert('Please fill out the Coupon Code and Discount value.');
+      return;
+    }
+    
+    const codeUpper = newCouponCode.trim().toUpperCase();
+    
+    // Check if code already exists
+    const exists = coupons.some(c => c.code?.toUpperCase() === codeUpper);
+    if (exists) {
+      alert('A coupon with this code already exists!');
+      return;
+    }
+    
+    const couponData = {
+      code: codeUpper,
+      discount: Number(newCouponDiscount),
+      type: newCouponType,
+      minCart: Number(newCouponMinCart) || 0,
+      maxDiscount: newCouponType === 'percentage' && newCouponMaxDiscount ? Number(newCouponMaxDiscount) : null,
+      isActive: true,
+      createdAt: new Date().toISOString()
+    };
+    
+    try {
+      await addDoc(collection(db, "coupons"), couponData);
+      showToast(`Coupon "${codeUpper}" created successfully!`);
+      // Reset form
+      setNewCouponCode('');
+      setNewCouponDiscount('');
+      setNewCouponMinCart('');
+      setNewCouponMaxDiscount('');
+      setNewCouponType('flat');
+    } catch (err) {
+      console.error("Error adding coupon:", err);
+      alert(`Failed to create coupon: ${err.message}`);
+    }
+  };
+
+  const handleToggleCouponActive = async (id, currentStatus) => {
+    try {
+      const docRef = doc(db, "coupons", id);
+      await updateDoc(docRef, { isActive: !currentStatus });
+      showToast(`Coupon status updated.`);
+    } catch (err) {
+      console.error("Error toggling coupon status:", err);
+      alert(`Failed to update coupon status: ${err.message}`);
+    }
+  };
+
+  const handleDeleteCoupon = async (id, code) => {
+    if (!window.confirm(`Are you sure you want to delete coupon "${code}"?`)) return;
+    try {
+      const docRef = doc(db, "coupons", id);
+      await deleteDoc(docRef);
+      showToast(`Coupon "${code}" deleted successfully.`);
+    } catch (err) {
+      console.error("Error deleting coupon:", err);
+      alert(`Failed to delete coupon: ${err.message}`);
     }
   };
 
@@ -3491,17 +3708,39 @@ function App() {
             <div className="divider"></div>
 
             {/* Coupons and Promos */}
-            <div className="coupon-box">
-              <input
-                type="text"
-                placeholder="Coupon (e.g. WELCOME100)"
-                value={couponCode}
-                onChange={(e) => setCouponCode(e.target.value)}
-                className="custom-input coupon-input"
-              />
-              <button className="neon-btn coupon-btn" onClick={handleApplyCoupon}>
-                Apply
-              </button>
+            <div className="coupon-container" style={{ display: 'flex', flexDirection: 'column', gap: '6px', margin: '12px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: '600', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Promo Coupon Code</span>
+                <button
+                  type="button"
+                  onClick={() => setIsCouponsModalOpen(true)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    outline: 'none',
+                    color: 'var(--color-primary)',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    textDecoration: 'underline',
+                    padding: 0
+                  }}
+                >
+                  View Offers
+                </button>
+              </div>
+              <div className="coupon-box">
+                <input
+                  type="text"
+                  placeholder="Coupon (e.g. WELCOME100)"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value)}
+                  className="custom-input coupon-input"
+                />
+                <button className="neon-btn coupon-btn" onClick={handleApplyCoupon}>
+                  Apply
+                </button>
+              </div>
             </div>
 
             {isOutOfRange && dist !== null && (
@@ -4115,6 +4354,13 @@ function App() {
                 All Users ({compiledAllUsers.length})
               </button>
               <button
+                className={`nav-link ${adminSubView === 'coupons' ? 'active' : ''}`}
+                onClick={() => { setAdminSubView('coupons'); setAdminSearchQuery(''); }}
+              >
+                <Tag size={16} style={{ marginRight: '6px' }} />
+                Coupons ({coupons.length})
+              </button>
+              <button
                 className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('settings'); setAdminSearchQuery(''); }}
               >
@@ -4209,7 +4455,7 @@ function App() {
 
             {user ? (
               <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
-                <span className="user-welcome">Hi, {user.name.split('@')[0]}</span>
+                <span className="user-welcome">Hi, {(user.name || user.displayName || user.email || 'User').split('@')[0]}</span>
                 <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
               </div>
             ) : (
@@ -4560,13 +4806,19 @@ function App() {
 
                           {/* Mini Map */}
                           <div className="leaflet-mock-map-sidebar border-glow">
-                            <LeafletMap
-                              riderCoords={trackedOrder.id === trackingOrderIdForHook ? liveRiderCoords : null}
-                              merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
-                              customerCoords={parseCoords(trackedOrder.customerLocation)}
-                              customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
-                              merchantName={trackedOrder.items[0]?.store || 'Merchant'}
-                            />
+                            {(() => {
+                              const trackedOrderShop = shops.find(s => s.name === trackedOrder.storeName || s.storeName === trackedOrder.storeName || (trackedOrder.items && s.name === trackedOrder.items[0]?.store));
+                              const merchantCoords = trackedOrderShop ? { lat: trackedOrderShop.lat || 24.8887, lng: trackedOrderShop.lng || 74.6269 } : { lat: 24.8887, lng: 74.6269 };
+                              return (
+                                <LeafletMap
+                                  riderCoords={liveRiderCoords}
+                                  merchantCoords={merchantCoords}
+                                  customerCoords={parseCoords(trackedOrder.customerLocation)}
+                                  customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
+                                  merchantName={trackedOrder.items?.[0]?.store || 'Merchant'}
+                                />
+                              );
+                            })()}
                           </div>
 
                           {/* Sidebar Details Grid */}
@@ -4672,7 +4924,7 @@ function App() {
                               <div className="rider-avatar-sidebar">🛵</div>
                               <div className="rider-desc-sidebar">
                                 <h4>{trackedOrder.deliveryPartnerName}</h4>
-                                <p>Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}</p>
+                                <p>Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle?.split(' (')[0] || '🛵'}</p>
                               </div>
                               <div className="otp-badge-sidebar">
                                 <span>OTP: <strong>{trackedOrder.otp}</strong></span>
@@ -6565,6 +6817,181 @@ function App() {
                 </div>
               </div>
             )}
+
+            {adminSubView === 'coupons' && (
+              <div className="admin-orders-table glass-panel fade-in">
+                <div className="panel-header" style={{ marginBottom: '24px' }}>
+                  <h2>Coupons & Promo Codes Management ({coupons.length})</h2>
+                  <p style={{ color: 'var(--color-text-muted)', fontSize: '13px', margin: '4px 0 0' }}>
+                    Create, toggle, and delete discounts for customer checkouts.
+                  </p>
+                </div>
+
+                {/* Form to Add New Coupon */}
+                <div className="glass-panel" style={{ padding: '24px', marginBottom: '24px', border: '1px solid var(--color-border)', background: 'rgba(255, 255, 255, 0.02)' }}>
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--color-primary)' }}>
+                    ➕ Create New Promo Coupon
+                  </h3>
+                  
+                  <form onSubmit={handleAddCoupon} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Code</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. SAVE20"
+                        value={newCouponCode}
+                        onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                        className="custom-input"
+                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                        required
+                      />
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
+                      <select
+                        value={newCouponType}
+                        onChange={(e) => setNewCouponType(e.target.value)}
+                        className="custom-input"
+                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                      >
+                        <option value="flat">Flat Discount (₹)</option>
+                        <option value="percentage">Percentage Discount (%)</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>
+                        Discount {newCouponType === 'flat' ? 'Value (₹)' : 'Rate (%)'}
+                      </label>
+                      <input
+                        type="number"
+                        placeholder={newCouponType === 'flat' ? 'e.g. 100' : 'e.g. 10'}
+                        value={newCouponDiscount}
+                        onChange={(e) => setNewCouponDiscount(e.target.value)}
+                        className="custom-input"
+                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                        min="1"
+                        required
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Min Cart Subtotal (₹)</label>
+                      <input
+                        type="number"
+                        placeholder="e.g. 150"
+                        value={newCouponMinCart}
+                        onChange={(e) => setNewCouponMinCart(e.target.value)}
+                        className="custom-input"
+                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                        min="0"
+                      />
+                    </div>
+
+                    {newCouponType === 'percentage' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Max Discount Limit (₹)</label>
+                        <input
+                          type="number"
+                          placeholder="e.g. 50 (Optional)"
+                          value={newCouponMaxDiscount}
+                          onChange={(e) => setNewCouponMaxDiscount(e.target.value)}
+                          className="custom-input"
+                          style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                          min="1"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <button type="submit" className="neon-btn" style={{ width: '100%', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <Plus size={16} /> Create Coupon
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Table list of Coupons */}
+                <div className="table-responsive">
+                  <table className="order-log-table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Type</th>
+                        <th>Discount</th>
+                        <th>Min Cart</th>
+                        <th>Max Limit</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coupons.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                            No coupon codes configured yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        [...coupons]
+                          .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+                          .map(c => (
+                            <tr key={c.firestoreId}>
+                              <td>
+                                <strong style={{ color: 'var(--color-primary)', letterSpacing: '0.5px' }}>{c.code}</strong>
+                              </td>
+                              <td style={{ textTransform: 'capitalize' }}>{c.type}</td>
+                              <td>{c.type === 'flat' ? `₹${c.discount}` : `${c.discount}%`}</td>
+                              <td>₹{c.minCart || 0}</td>
+                              <td>{c.type === 'percentage' && c.maxDiscount ? `₹${c.maxDiscount}` : 'None'}</td>
+                              <td>
+                                <span className={`badge ${c.isActive ? 'badge-success' : 'badge-danger'}`}>
+                                  {c.isActive ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                  <button
+                                    onClick={() => handleToggleCouponActive(c.firestoreId, c.isActive)}
+                                    className="custom-btn"
+                                    style={{
+                                      background: c.isActive ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                                      color: c.isActive ? '#ef4444' : '#10b981',
+                                      border: `1px solid ${c.isActive ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
+                                      padding: '4px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '11px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    {c.isActive ? 'Disable' : 'Enable'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCoupon(c.firestoreId, c.code)}
+                                    className="custom-btn"
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.05)',
+                                      color: '#ef4444',
+                                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                                      padding: '4px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '11px',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    <Trash2 size={12} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         ))
         }
@@ -7534,12 +7961,12 @@ function App() {
                 const isEmailMatch = emailVal === targetEmail;
                 const isUidMatch = user && o.userId && o.userId === user.uid;
                 const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
-                const isCompleted = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED');
-                return (isEmailMatch || isUidMatch || isPhoneMatch) && isCompleted;
+                const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
+                return (isEmailMatch || isUidMatch || isPhoneMatch) && isFinished;
               }).length === 0 ? (
                 <div className="no-past-orders-premium">
                   <ShoppingCart size={40} style={{ color: 'var(--color-text-muted)', opacity: 0.4 }} />
-                  <p>You have no past completed orders.</p>
+                  <p>You have no past completed or cancelled orders.</p>
                 </div>
               ) : (
                 orders.filter(o => {
@@ -7548,13 +7975,17 @@ function App() {
                   const isEmailMatch = emailVal === targetEmail;
                   const isUidMatch = user && o.userId && o.userId === user.uid;
                   const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
-                  const isCompleted = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED');
-                  return (isEmailMatch || isUidMatch || isPhoneMatch) && isCompleted;
+                  const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
+                  return (isEmailMatch || isUidMatch || isPhoneMatch) && isFinished;
                 }).map(o => (
                   <div key={o.id} className="past-order-card-premium border-glow">
                     <div className="past-order-header-premium">
                       <span className="order-id-premium">Order ID: <strong>{o.id}</strong></span>
-                      <span className="badge badge-success">Delivered</span>
+                      {o.status && o.status.toUpperCase().startsWith('CANCEL') ? (
+                        <span className="badge badge-danger">Cancelled</span>
+                      ) : (
+                        <span className="badge badge-success">Delivered</span>
+                      )}
                     </div>
                     <div className="past-order-body-premium">
                       <p className="order-items-summary-premium">
@@ -7568,6 +7999,166 @@ function App() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Available Coupons Modal */}
+      {isCouponsModalOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsCouponsModalOpen(false)}>
+          <div className="past-orders-modal-card glass-panel border-glow" style={{ maxWidth: '420px', padding: '28px' }} onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsCouponsModalOpen(false)}>
+              <X size={20} />
+            </button>
+
+            <div className="modal-header-premium" style={{ marginBottom: '20px', textAlign: 'center' }}>
+              <h3 className="section-title-premium" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', margin: 0 }}>
+                <Tag size={22} className="text-neon" /> PIXIGO PROMOS
+              </h3>
+              <p className="profile-sub" style={{ marginTop: '4px' }}>Click any coupon code below to copy & apply it!</p>
+            </div>
+
+            {/* List of active coupons */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
+              {coupons.filter(c => c.isActive).length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--color-text-muted)', fontSize: '14px' }}>
+                  😔 No active coupons available at the moment. Please check back later!
+                </div>
+              ) : (
+                coupons.filter(c => c.isActive).map(c => {
+                  const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+                  const meetsMinCart = subtotal >= (c.minCart || 0);
+
+                  return (
+                    <div
+                      key={c.firestoreId}
+                      style={{
+                        display: 'flex',
+                        background: '#ffffff',
+                        border: `1px solid ${copiedCode === c.code ? 'var(--color-primary)' : '#e2e8f0'}`,
+                        borderRadius: '14px',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        boxShadow: copiedCode === c.code ? '0 0 15px rgba(0, 255, 242, 0.25)' : '0 4px 12px rgba(0, 0, 0, 0.05)',
+                        transition: 'all 0.25s ease',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => {
+                        navigator.clipboard.writeText(c.code);
+                        setCouponCode(c.code);
+                        setCopiedCode(c.code);
+                        setTimeout(() => setCopiedCode(null), 2000);
+                        showToast(`Coupon "${c.code}" applied to checkout!`);
+                      }}
+                      onMouseEnter={(e) => {
+                        if (copiedCode !== c.code) {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.borderColor = 'var(--color-primary)';
+                          e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.1)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (copiedCode !== c.code) {
+                          e.currentTarget.style.transform = 'none';
+                          e.currentTarget.style.borderColor = '#e2e8f0';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
+                        }
+                      }}
+                    >
+                      {/* Left side color accent strip depending on meetsMinCart */}
+                      <div style={{
+                        width: '6px',
+                        background: meetsMinCart 
+                          ? 'linear-gradient(180deg, #10b981 0%, #059669 100%)' 
+                          : 'linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%)',
+                        transition: 'background 0.3s'
+                      }}></div>
+
+                      {/* Card Content body */}
+                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', color: '#0f172a' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: meetsMinCart ? '#059669' : '#64748b', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                            {c.type === 'flat' ? 'Flat Discount' : 'Percentage Off'}
+                          </span>
+                          
+                          {/* Copy status action badge */}
+                          {copiedCode === c.code ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: '#d1fae5',
+                              border: '1px solid #10b981',
+                              color: '#065f46',
+                              padding: '2px 8px',
+                              borderRadius: '20px',
+                              fontSize: '11px',
+                              fontWeight: '700'
+                            }}>
+                              ✓ APPLIED
+                            </span>
+                          ) : (
+                            <span style={{
+                              background: '#f8fafc',
+                              border: '1px dashed #cbd5e1',
+                              color: '#0f172a',
+                              padding: '3px 10px',
+                              borderRadius: '8px',
+                              fontSize: '12px',
+                              fontWeight: 'bold',
+                              fontFamily: 'monospace',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {c.code}
+                            </span>
+                          )}
+                        </div>
+
+                        <div>
+                          <h4 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                            {c.type === 'flat' ? `₹${c.discount} OFF` : `${c.discount}% OFF`}
+                          </h4>
+                          <p style={{ fontSize: '12px', color: '#475569', margin: '4px 0 0', lineHeight: '1.4' }}>
+                            {c.type === 'flat' 
+                              ? `Save flat ₹${c.discount} on your total order value.` 
+                              : `Get ${c.discount}% off up to ₹${c.maxDiscount || 50} on your subtotal.`}
+                          </p>
+                        </div>
+
+                        <div style={{
+                          borderTop: '1px dashed #e2e8f0',
+                          paddingTop: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '11px',
+                          color: '#475569'
+                        }}>
+                          <div>
+                            Min. Cart: <strong>₹{c.minCart || 0}</strong>
+                          </div>
+                          {cart.length > 0 && (
+                            <div style={{ color: meetsMinCart ? '#059669' : '#dc2626', fontWeight: '700' }}>
+                              {meetsMinCart ? '✓ Meets criteria' : `✗ Needs ₹${c.minCart - subtotal} more`}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={{ marginTop: '24px', textAlign: 'center' }}>
+              <button
+                className="neon-btn"
+                style={{ width: '100%' }}
+                onClick={() => setIsCouponsModalOpen(false)}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>
@@ -7591,11 +8182,11 @@ function App() {
             {/* Profile Summary in Menu */}
             <div className="mobile-menu-profile-summary">
               <div className="mobile-avatar-circle">
-                <User size={24} style={{ color: 'var(--color-primary)' }} />
+                <User size={22} style={{ color: '#ffffff' }} />
               </div>
               <div className="mobile-profile-info">
-                <h4>{user ? user.name : 'Guest Customer'}</h4>
-                <p>{user ? user.email : 'Log in to place orders'}</p>
+                <h4>{user ? (customerName || user.name || 'Customer') : 'Guest Customer'}</h4>
+                <p>{user ? (user.email || customerEmail) : 'Log in to place orders'}</p>
               </div>
             </div>
 
@@ -7624,7 +8215,7 @@ function App() {
                     const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
                     return isEmailMatch || isUidMatch || isPhoneMatch;
                   });
-                  const activeOrdersList = customerOrders.filter(o => !o.status || (o.status.toUpperCase() !== 'COMPLETED' && o.status.toUpperCase() !== 'DELIVERED'));
+                  const activeOrdersList = customerOrders.filter(o => o.status && o.status.toUpperCase() !== 'COMPLETED' && o.status.toUpperCase() !== 'DELIVERED' && !o.status.toUpperCase().startsWith('CANCEL'));
                   if (activeOrdersList.length > 0) {
                     setCurrentOrderTracking(activeOrdersList[0].id);
                     setIsTrackingDrawerOpen(true);
@@ -7647,6 +8238,17 @@ function App() {
               >
                 <FileText size={18} className="text-neon" />
                 <span>My Past Orders</span>
+              </button>
+
+              <button
+                className="mobile-menu-link"
+                onClick={() => {
+                  setIsCouponsModalOpen(true);
+                  setIsMobileMenuOpen(false);
+                }}
+              >
+                <Tag size={18} className="text-neon" />
+                <span>My Coupons</span>
               </button>
 
               <button
@@ -7809,13 +8411,19 @@ function App() {
 
                   {/* Map */}
                   <div className="leaflet-mock-map-sidebar border-glow">
-                    <LeafletMap
-                      riderCoords={trackedOrder.id === trackingOrderIdForHook ? liveRiderCoords : null}
-                      merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
-                      customerCoords={parseCoords(trackedOrder.customerLocation)}
-                      customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
-                      merchantName={trackedOrder.items[0]?.store || 'Merchant'}
-                    />
+                    {(() => {
+                      const trackedOrderShop = shops.find(s => s.name === trackedOrder.storeName || s.storeName === trackedOrder.storeName || (trackedOrder.items && s.name === trackedOrder.items[0]?.store));
+                      const merchantCoords = trackedOrderShop ? { lat: trackedOrderShop.lat || 24.8887, lng: trackedOrderShop.lng || 74.6269 } : { lat: 24.8887, lng: 74.6269 };
+                      return (
+                        <LeafletMap
+                          riderCoords={liveRiderCoords}
+                          merchantCoords={merchantCoords}
+                          customerCoords={parseCoords(trackedOrder.customerLocation)}
+                          customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
+                          merchantName={trackedOrder.items?.[0]?.store || 'Merchant'}
+                        />
+                      );
+                    })()}
                   </div>
 
                   {/* Details Grid */}
@@ -7932,7 +8540,7 @@ function App() {
                           <div className="rider-desc-sidebar" style={{ textAlign: 'left' }}>
                             <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 'bold' }}>{trackedOrder.deliveryPartnerName}</h4>
                             <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                              Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}
+                              Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle?.split(' (')[0] || '🛵'}
                             </p>
                           </div>
                           <div className="otp-badge-sidebar">
