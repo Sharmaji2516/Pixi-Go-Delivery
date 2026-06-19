@@ -836,7 +836,6 @@ function App() {
               localName = data.name || localName;
               localPhone = data.phone || localPhone;
               localEmail = data.email || localEmail;
-              localAddress = data.address || localAddress;
 
               localStorage.setItem('pixigo_customerName', localName);
               localStorage.setItem('pixigo_customerPhone', localPhone);
@@ -929,7 +928,6 @@ function App() {
         setCustomerEmail(localEmail);
         setCustomerName(localName);
         setCustomerPhone(localPhone);
-        setCustomerAddress(localAddress);
       } else {
         const savedRider = localStorage.getItem('pixigo_rider_session');
         if (savedRider) {
