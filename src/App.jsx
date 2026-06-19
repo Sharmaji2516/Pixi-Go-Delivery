@@ -418,7 +418,7 @@ function App() {
   const [dealOfTheDay, setDealOfTheDay] = useState({
     image: 'https://images.unsplash.com/photo-1562376502-6f769499887d?w=800&auto=format&fit=crop&q=80',
     text: 'Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!',
-    active: true,
+    active: false,
     verticalOffset: '50',
     horizontalOffset: '50',
     zoom: '1'
@@ -1119,14 +1119,14 @@ function App() {
         setDealOfTheDay({
           image: data.image || 'https://images.unsplash.com/photo-1562376502-6f769499887d?w=800&auto=format&fit=crop&q=80',
           text: data.text || 'Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!',
-          active: data.active !== false,
+          active: data.active === true,
           verticalOffset: data.verticalOffset || '50',
           horizontalOffset: data.horizontalOffset || '50',
           zoom: data.zoom || '1'
         });
         setDealTextEdit(data.text || '');
         setDealImageEdit(data.image || '');
-        setDealActiveEdit(data.active !== false);
+        setDealActiveEdit(data.active === true);
         setDealVerticalOffsetEdit(data.verticalOffset || '50');
         setDealHorizontalOffsetEdit(data.horizontalOffset || '50');
         setDealZoomEdit(data.zoom || '1');
@@ -4695,62 +4695,81 @@ function App() {
               </div>
             </div> {/* Closes .customer-grid */}
 
-            {/* Wavy Forest Green Footer */}
+            {/* Premium Customer Storefront Footer */}
             <div className="wavy-footer-container">
-              <div className="footer-wave-top">
-                <svg data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
-                  <path d="M985.66,92.83C906.67,72,823.78,31,743.84,14.19c-82.26-17.34-168.06-16.33-250.45.39-57.84,11.73-114,31.07-172,41.86A600.21,600.21,0,0,1,0,27.35V120H1200V95.8C1130.5,107.49,1051.13,109.83,985.66,92.83Z" className="shape-fill"></path>
-                </svg>
-              </div>
-
               <div className="footer-columns">
+                {/* Brand & Recognitions Column */}
                 <div className="footer-col">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                    <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" style={{ height: '36px', background: '#fff', padding: '4px', borderRadius: '6px' }} />
-                    <span style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'var(--font-heading)' }}>ChittorTech</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                    <div style={{
+                      background: '#ffffff',
+                      padding: '5px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
+                    }}>
+                      <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" style={{ height: '36px', width: 'auto' }} />
+                    </div>
+                    <span style={{ fontSize: '22px', fontWeight: '800', fontFamily: 'var(--font-heading)', color: '#ffffff', letterSpacing: '-0.5px' }}>ChittorTech</span>
                   </div>
-                  <p>
+                  <p style={{ marginBottom: '20px', fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.65)' }}>
                     Empowering local merchants and delivery partners in Chittorgarh with cutting-edge hyper-local delivery solutions.
                   </p>
-                  <div style={{ marginTop: '20px' }}>
-                    <div style={{ display: 'flex', gap: '6px', margin: '4px 0', fontSize: '12px', color: '#81C784' }}>
-                      ✔ iStart Rajasthan Recognized
+                  <div className="trust-badges-container">
+                    <div className="trust-badge-pill">
+                      <Check size={13} className="trust-badge-icon" />
+                      <span>iStart Rajasthan Recognized</span>
                     </div>
-                    <div style={{ display: 'flex', gap: '6px', margin: '4px 0', fontSize: '12px', color: '#81C784' }}>
-                      ✔ Registered MSME | Startup India
+                    <div className="trust-badge-pill">
+                      <Check size={13} className="trust-badge-icon" />
+                      <span>Registered MSME | Startup India</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="footer-col">
-                  <h3>Quick Links</h3>
-                  <ul>
-                    <li><a href="#catalog" onClick={(e) => { e.preventDefault(); setSelectedCategory('All'); }}>Storefront Catalog</a></li>
-                    <li><a href="#faq" onClick={(e) => { e.preventDefault(); alert("FAQ Section coming soon!"); }}>Frequently Asked Questions</a></li>
-                    <li><a href="#about" onClick={(e) => { e.preventDefault(); setIsAboutDeveloperOpen(true); }}>About Developer</a></li>
-                    <li><a href="#contact" onClick={(e) => { e.preventDefault(); setIsContactOpen(true); }}>Contact Support</a></li>
-                  </ul>
-                </div>
-
+                {/* Contact support card Column */}
                 <div className="footer-col">
                   <h3>Contact Support</h3>
-                  <p style={{ marginBottom: '10px' }}>
-                    Have questions or need help with your orders? Feel free to reach out to our local team.
-                  </p>
-                  <p style={{ fontWeight: 'bold', color: 'var(--color-accent-yellow)' }}>
-                    📞 +91 92510 54064
-                  </p>
-                  <p style={{ fontSize: '12px', marginTop: '6px' }}>
-                    📍 Collectorate Road, Chittorgarh, Rajasthan - 312001
-                  </p>
+                  <div className="contact-glass-card">
+                    <div className="contact-item">
+                      <Phone size={16} className="contact-item-icon" />
+                      <div className="contact-item-text">
+                        <strong style={{ display: 'block', color: '#ffffff', marginBottom: '2px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Call Support</strong>
+                        <a href="tel:+919251054064" style={{ color: 'var(--color-accent-yellow)', textDecoration: 'none', fontWeight: '600', fontSize: '14px' }}>+91 92510 54064</a>
+                      </div>
+                    </div>
+                    <div className="contact-item">
+                      <Mail size={16} className="contact-item-icon" />
+                      <div className="contact-item-text">
+                        <strong style={{ display: 'block', color: '#ffffff', marginBottom: '2px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Email Support</strong>
+                        <a href="mailto:pixigodelivery@gmail.com" style={{ color: 'rgba(255, 255, 255, 0.75)', textDecoration: 'none', fontSize: '14px' }}>pixigodelivery@gmail.com</a>
+                      </div>
+                    </div>
+                    <div className="contact-item">
+                      <MapPin size={16} className="contact-item-icon" />
+                      <div className="contact-item-text">
+                        <strong style={{ display: 'block', color: '#ffffff', marginBottom: '2px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Location</strong>
+                        <span style={{ fontSize: '13px' }}>Collectorate Road, Chittorgarh, Rajasthan - 312001</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
+              {/* Bottom Copyright & Socials */}
               <div className="footer-bottom">
-                <span>© {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by ChittorTech.</span>
+                <span className="footer-bottom-text">
+                  © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <span style={{ color: '#ffffff', fontWeight: '600' }}>ChittorTech</span>.
+                </span>
                 <div className="footer-socials">
-                  <span className="social-badge" title="WhatsApp" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>💬</span>
-                  <span className="social-badge" title="Phone" onClick={() => window.open('tel:+919251054064', '_blank')}>📞</span>
+                  <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>
+                    <MessageCircle size={18} />
+                  </span>
+                  <span className="social-badge" title="Call Team" onClick={() => window.open('tel:+919251054064', '_blank')}>
+                    <Phone size={18} />
+                  </span>
                 </div>
               </div>
             </div>
