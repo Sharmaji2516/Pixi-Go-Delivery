@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
+import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
-  FileText, Check, X, ArrowRight, Download, Search, Tag, 
+  FileText, Check, X, ArrowRight, Download, Search, Tag,
   MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
   Mail, Settings, ChevronDown, Users, Info, Code
 } from 'lucide-react';
@@ -96,14 +96,14 @@ function useRiderLocation(trackingOrderId) {
   return riderCoords;
 }
 
-const LeafletMap = ({ 
-  riderCoords, 
-  merchantCoords, 
-  customerCoords, 
-  customerName = 'Customer', 
-  merchantName = 'Store', 
-  isInteractive = false, 
-  onLocationChange = null 
+const LeafletMap = ({
+  riderCoords,
+  merchantCoords,
+  customerCoords,
+  customerName = 'Customer',
+  merchantName = 'Store',
+  isInteractive = false,
+  onLocationChange = null
 }) => {
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -170,7 +170,7 @@ const LeafletMap = ({
         }
       }
       markersRef.current.customer.bindPopup(`<h4>🏠 ${customerName}</h4><p>Delivery Destination</p>`);
-      
+
       if (isInteractive) {
         markersRef.current.customer.off('dragend');
         markersRef.current.customer.on('dragend', (e) => {
@@ -241,34 +241,53 @@ const LeafletMap = ({
 
 const getShopOpenStatus = (shop) => {
   if (!shop) return { isOpen: false, reason: 'Unknown Store' };
-  
+
   // 1. Check manual toggle status (defaults to true if undefined)
   if (shop.isAcceptingOrders === false) {
     return { isOpen: false, reason: 'MANUAL_CLOSED' };
   }
-  
+
   // 2. Check automatic operating hours scheduler
   const openTime = shop.openTime || "09:00";
   const closeTime = shop.closeTime || "22:00";
-  
+
   const now = new Date();
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
-  
+
   const [openH, openM] = openTime.split(':').map(Number);
   const [closeH, closeM] = closeTime.split(':').map(Number);
-  
+
   const currentTotalMinutes = currentHour * 60 + currentMinute;
   const openTotalMinutes = openH * 60 + openM;
   const closeTotalMinutes = closeH * 60 + closeM;
-  
+
   const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
-  
+
   if (!isWithinHours) {
     return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
   }
-  
+
   return { isOpen: true, reason: 'OPEN' };
+};
+
+const getCategoryBgClass = (cat) => {
+  switch (cat) {
+    case 'Vegetable': return 'cat-bg-veg';
+    case 'Dairy': return 'cat-bg-dairy';
+    case 'Bakery': return 'cat-bg-bakery';
+    case 'General Store': return 'cat-bg-general';
+    case 'Fast Food': return 'cat-bg-fast';
+    case 'Restaurant Cafe': return 'cat-bg-cafe';
+    default: return 'cat-bg-veg';
+  }
+};
+
+const getProductRating = (id) => {
+  const code = id.charCodeAt(id.length - 1) || 0;
+  const rating = 4.2 + (code % 8) * 0.1;
+  const reviews = 25 + (code % 80);
+  return { rating: rating.toFixed(1), reviews };
 };
 
 const MAX_DELIVERY_RADIUS_KM = 10.0;
@@ -735,12 +754,12 @@ function App() {
       const storeName = cart[0]?.store || '';
       const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
       const customerCoords = parseCoords(customerAddress);
-      
+
       if (cartShop && customerCoords) {
         setIsDistanceLoading(true);
         const shopLat = cartShop.lat || 24.8887;
         const shopLng = cartShop.lng || 74.6269;
-        
+
         try {
           const dist = await fetchRoadDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
           if (active) {
@@ -785,7 +804,7 @@ function App() {
         setActiveTab('customer');
       }
     };
-    
+
     handleLocationChange();
     window.addEventListener('popstate', handleLocationChange);
     return () => window.removeEventListener('popstate', handleLocationChange);
@@ -886,7 +905,7 @@ function App() {
             const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
             const riderQuery2 = query(ridersRef, where("email", "==", currentUser.email));
             const [riderSnap1, riderSnap2] = await Promise.all([getDocs(riderQuery1), getDocs(riderQuery2)]);
-            
+
             let riderDoc = null;
             if (!riderSnap1.empty) riderDoc = riderSnap1.docs[0];
             else if (!riderSnap2.empty) riderDoc = riderSnap2.docs[0];
@@ -904,7 +923,7 @@ function App() {
               const merchQuery1 = query(merchantsRef, where("authUid", "==", currentUser.uid));
               const merchQuery2 = query(merchantsRef, where("email", "==", currentUser.email));
               const [merchSnap1, merchSnap2] = await Promise.all([getDocs(merchQuery1), getDocs(merchQuery2)]);
-              
+
               let merchDoc = null;
               if (!merchSnap1.empty) merchDoc = merchSnap1.docs[0];
               else if (!merchSnap2.empty) merchDoc = merchSnap2.docs[0];
@@ -946,7 +965,7 @@ function App() {
           setUser(null);
           setUserRole(null);
         }
-        
+
         // Reset customer states on logout
         localStorage.removeItem('pixigo_customerName');
         localStorage.removeItem('pixigo_customerPhone');
@@ -964,7 +983,7 @@ function App() {
   useEffect(() => {
     const ordersRef = collection(db, "orders");
     const q = query(ordersRef, orderBy("createdAt", "desc"));
-    
+
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedOrders = [];
       snapshot.forEach((doc) => {
@@ -993,7 +1012,7 @@ function App() {
       setDbError(error.message);
       setOrders(INITIAL_ORDERS);
     });
-    
+
     return () => unsubscribe();
   }, [user]);
 
@@ -1049,7 +1068,7 @@ function App() {
         }
         return fs;
       });
-      
+
       // Also add any mock shops that aren't in Firestore at all
       INITIAL_SHOPS.forEach(mockShop => {
         if (!mergedShops.some(s => s.id === mockShop.id)) {
@@ -1215,7 +1234,7 @@ function App() {
           } else if (statusUpper === 'CANCELLED_BY_ADMIN') {
             msg = `Your order ${trackedOrder.id} has been Cancelled by Admin.`;
           }
-          
+
           setCurrentOrderTracking(null);
           setIsTrackingDrawerOpen(false);
           alert(msg);
@@ -1264,7 +1283,7 @@ function App() {
         audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
       const audioCtx = audioContextRef.current;
-      
+
       const playBeep = (freq, duration, delay) => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -1349,7 +1368,7 @@ function App() {
   }, [availablePoolJobs.length, activeTab]);
 
   // Get active merchant shop based on email or phone
-  const loggedInMerchantShop = user ? shops.find(s => 
+  const loggedInMerchantShop = user ? shops.find(s =>
     (s.email && s.email.toLowerCase() === user.email.toLowerCase()) ||
     (s.phone && s.phone.trim() === user.email.trim())
   ) : null;
@@ -1372,7 +1391,7 @@ function App() {
   useEffect(() => {
     if (activeTab === 'merchant' && user && currentMerchantShopName) {
       // Find orders for this merchant shop that are pending acceptance
-      const merchantPendingOrders = orders.filter(o => 
+      const merchantPendingOrders = orders.filter(o =>
         (o.merchantName === currentMerchantShopName || (o.items && o.items.some(i => i.store === currentMerchantShopName))) &&
         ['PLACED', 'PENDING'].includes(o.status)
       );
@@ -1382,7 +1401,7 @@ function App() {
           play30SecondBeepAlert();
           const latestOrder = merchantPendingOrders[0];
           showToast(`🔔 New order received for your shop! Order ID: ${latestOrder.id}`);
-          
+
           setTimeout(() => {
             alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nAmount: ${formatINR(latestOrder.totalAmount)}\nPlease accept the order to prepare it.`);
           }, 100);
@@ -1438,7 +1457,7 @@ function App() {
           setAuthError(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
           return;
         }
-        
+
         const newRiderId = `rider_${Date.now()}`;
         const newRiderDoc = {
           id: newRiderId,
@@ -1457,7 +1476,7 @@ function App() {
         try {
           const riderDocRef = doc(db, "delivery_boys", newRiderId);
           await setDoc(riderDocRef, newRiderDoc);
-          
+
           const sessionData = {
             uid: newRiderId,
             name: authEmail.trim(),
@@ -1467,7 +1486,7 @@ function App() {
           localStorage.setItem('pixigo_rider_session', JSON.stringify(sessionData));
           setUser(sessionData);
           setUserRole('rider');
-          
+
           showToast("Rider account registered successfully! Pending Admin verification.");
           setAuthEmail('');
           setAuthPassword('');
@@ -1480,7 +1499,7 @@ function App() {
           setAuthError(`Registration failed: ${err.message}`);
         }
       } else {
-        const matchedRider = deliveryPartners.find(d => 
+        const matchedRider = deliveryPartners.find(d =>
           d.name.toLowerCase() === authEmail.trim().toLowerCase() ||
           (d.email && d.email.toLowerCase() === authEmail.trim().toLowerCase())
         );
@@ -1495,7 +1514,7 @@ function App() {
             localStorage.setItem('pixigo_rider_session', JSON.stringify(sessionData));
             setUser(sessionData);
             setUserRole('rider');
-            
+
             showToast(`Welcome back, ${matchedRider.name}!`);
             setAuthEmail('');
             setAuthPassword('');
@@ -1511,7 +1530,7 @@ function App() {
     }
 
     let targetEmail = authEmail;
-    
+
     if (isSignUp) {
       const emailClean = targetEmail.trim().toLowerCase();
       const existingRole = getRoleForEmail(emailClean);
@@ -1627,8 +1646,8 @@ function App() {
 
   // Active Category list derived from standard categories + custom product categories
   const standardCategories = [
-    'All', 'General Store', 'Vegetable', 'Dairy', 'Bakery', 'Fast Food', 
-    'Restaurant Cafe', 'Icecream and dessert', 'Medical and fitness', 
+    'All', 'General Store', 'Vegetable', 'Dairy', 'Bakery', 'Fast Food',
+    'Restaurant Cafe', 'Icecream and dessert', 'Medical and fitness',
     'Juice and drink', 'Snacks and breakfast'
   ];
   const dynamicCategories = [...new Set(products.filter(p => p.approved !== false).map(p => p.category))].filter(Boolean);
@@ -1805,7 +1824,7 @@ function App() {
   const handleAdminUpdateProductCatalog = async (productId, newPrice, newOriginalPrice, newOfferText, newImage, newSpecs) => {
     const price = parseFloat(newPrice);
     const originalPrice = parseFloat(newOriginalPrice) || 0;
-    
+
     if (isNaN(price) || price < 0) {
       alert("Please enter a valid price!");
       return;
@@ -1968,8 +1987,8 @@ function App() {
 
     // Check if customer already has an active order in progress
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
-    const hasActiveOrder = orders.some(o => 
-      (o.customerId === customerId || (o.customerPhone === customerPhone && customerPhone)) && 
+    const hasActiveOrder = orders.some(o =>
+      (o.customerId === customerId || (o.customerPhone === customerPhone && customerPhone)) &&
       !['COMPLETED', 'DELIVERED'].includes(o.status?.toUpperCase()) &&
       !o.status?.toUpperCase().startsWith('CANCEL')
     );
@@ -1979,24 +1998,24 @@ function App() {
     }
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-    
+
     // Calculate dynamic distance and rates
     const customerCoords = parseCoords(customerAddress);
     const shopLat = cartShop?.lat || 24.8887;
     const shopLng = cartShop?.lng || 74.6269;
-    
+
     let distanceVal = 1.0;
     if (deliveryDistance !== null) {
       distanceVal = deliveryDistance;
     } else if (customerCoords) {
       distanceVal = await fetchRoadDistance(shopLat, shopLng, customerCoords.lat, customerCoords.lng);
     }
-      
+
     if (distanceVal > MAX_DELIVERY_RADIUS_KM) {
       alert(`Cannot place order. The store (${storeName}) is ${distanceVal.toFixed(2)} km away, which exceeds our maximum delivery radius of ${MAX_DELIVERY_RADIUS_KM} km.`);
       return;
     }
-      
+
     const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
     const delCharge = customerCharge;
 
@@ -2006,8 +2025,8 @@ function App() {
     const merchantId = 'merch_' + storeName.replace(/\s+/g, '_').toLowerCase();
 
     // Determine dual order routing option based on store name and category
-    const isShopDirect = ['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe', 'Burger Club', 'Pizza Corner', 'Gelato Heaven'].includes(storeName) || 
-                         ['Bakery', 'Fast Food', 'Restaurant Cafe', 'Icecream and dessert'].includes(cart[0]?.category);
+    const isShopDirect = ['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe', 'Burger Club', 'Pizza Corner', 'Gelato Heaven'].includes(storeName) ||
+      ['Bakery', 'Fast Food', 'Restaurant Cafe', 'Icecream and dessert'].includes(cart[0]?.category);
     const routingOption = isShopDirect ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)';
 
     const newOrder = {
@@ -2065,7 +2084,7 @@ function App() {
       } catch (err) {
         console.error("Error auto-syncing merchant document:", err);
       }
-      
+
       // Update local state for immediate UI tracking feedback
       setOrders([newOrder, ...orders]);
       setCart([]);
@@ -2115,7 +2134,7 @@ function App() {
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { 
+        await updateDoc(orderRef, {
           status: 'CANCELLED_BY_ADMIN',
           cancelledBy: 'Admin',
           cancelledAt: new Date().toISOString()
@@ -2169,7 +2188,7 @@ function App() {
         const orderRef = doc(db, "orders", order.firestoreId);
         await updateDoc(orderRef, updatedFields);
         showToast(`Order ${orderId} successfully re-routed!`);
-        
+
         // Reset states
         setReroutingOrderId(null);
         setRerouteSelectedShop('');
@@ -2183,10 +2202,10 @@ function App() {
   // Merchant: Toggle order acceptance status (Manual override)
   const handleToggleAcceptingOrders = async (shop, currentStatus) => {
     const newStatus = !currentStatus;
-    
+
     // Update local state first
     setShops(prevShops => prevShops.map(s => s.id === shop.id ? { ...s, isAcceptingOrders: newStatus } : s));
-    
+
     if (shop.firestoreId) {
       try {
         const docRef = doc(db, "merchants", shop.firestoreId);
@@ -2228,7 +2247,7 @@ function App() {
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { 
+        await updateDoc(orderRef, {
           status: 'CANCELLED_BY_STORE',
           cancelledBy: 'Merchant',
           cancelledAt: new Date().toISOString()
@@ -2443,7 +2462,7 @@ function App() {
       setNewRiderPassword('');
       setNewRiderPhone('');
       setNewRiderVehicle('');
-      
+
       alert(`Rider "${tempRiderName}" created & authorized successfully! They can log in immediately.`);
     } catch (error) {
       console.error("Admin Rider Creation Error:", error);
@@ -2494,7 +2513,7 @@ function App() {
       setNewShopPhone('');
       setNewShopAddress('');
       setNewShopEmail('');
-      
+
       alert(`Shop "${tempShopName}" registered & authorized successfully!`);
     } catch (error) {
       console.error("Admin Shop Creation Error:", error);
@@ -2660,7 +2679,7 @@ function App() {
 
   const handleAdminSaveShopDocs = async () => {
     if (!selectedShopDetails) return;
-    
+
     const parsedLat = shopDocLat.trim() !== '' ? parseFloat(shopDocLat) : null;
     const parsedLng = shopDocLng.trim() !== '' ? parseFloat(shopDocLng) : null;
 
@@ -2676,10 +2695,10 @@ function App() {
         });
       }
       // Update local shops state
-      setShops(shops.map(s => s.id === selectedShopDetails.id ? { 
-        ...s, 
-        hasAadhaar: shopDocAadhaar, 
-        hasPan: shopDocPan, 
+      setShops(shops.map(s => s.id === selectedShopDetails.id ? {
+        ...s,
+        hasAadhaar: shopDocAadhaar,
+        hasPan: shopDocPan,
         hasFssai: shopDocFssai,
         lat: parsedLat !== null ? parsedLat : undefined,
         lng: parsedLng !== null ? parsedLng : undefined
@@ -2835,7 +2854,7 @@ function App() {
         const currentDeliveries = riderObj?.totalDeliveries || 0;
         const currentPayout = riderObj?.pendingPayout || 0;
         const payoutIncrement = order.riderPayout !== undefined ? order.riderPayout : order.deliveryCharge;
-        
+
         await setDoc(riderDocRef, {
           status: 'available',
           totalDeliveries: currentDeliveries + 1,
@@ -3006,7 +3025,7 @@ function App() {
       alert("Password must be at least 6 characters long.");
       return;
     }
-    
+
     let targetEmail = email.trim();
     if (!targetEmail.includes('@')) {
       targetEmail = `${targetEmail.toLowerCase().replace(/\s+/g, '')}@pixigo.com`;
@@ -3014,14 +3033,14 @@ function App() {
 
     try {
       showToast("Creating auth account... Please wait.");
-      
+
       const tempAppName = `TempApp_${Date.now()}`;
       const tempApp = initializeApp(firebaseConfig, tempAppName);
       const tempAuth = getAuth(tempApp);
-      
+
       const userCredential = await createUserWithEmailAndPassword(tempAuth, targetEmail, password);
       const newUid = userCredential.user.uid;
-      
+
       await deleteApp(tempApp);
 
       if (type === 'merchant') {
@@ -3029,7 +3048,7 @@ function App() {
         if (merchant) {
           const docId = merchant.firestoreId || merchant.id;
           const docRef = doc(db, "merchants", docId);
-          await setDoc(docRef, { 
+          await setDoc(docRef, {
             id: merchant.id,
             storeName: merchant.storeName || merchant.name,
             category: merchant.category,
@@ -3047,7 +3066,7 @@ function App() {
         if (rider) {
           const docId = rider.firestoreId || rider.id;
           const docRef = doc(db, "delivery_boys", docId);
-          await setDoc(docRef, { 
+          await setDoc(docRef, {
             id: rider.id,
             name: rider.name,
             password: password,
@@ -3136,14 +3155,14 @@ function App() {
       } else if (searchMode === 'item') {
         matchQuery = p.name.toLowerCase() === queryLower;
       } else {
-        matchQuery = p.name.toLowerCase().includes(queryLower) || 
-                     p.store.toLowerCase().includes(queryLower);
+        matchQuery = p.name.toLowerCase().includes(queryLower) ||
+          p.store.toLowerCase().includes(queryLower);
       }
     }
     const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchVeg = vegFilter === 'All' || 
-                     (vegFilter === 'Veg' && p.isVeg !== false) || 
-                     (vegFilter === 'NonVeg' && p.isVeg === false);
+    const matchVeg = vegFilter === 'All' ||
+      (vegFilter === 'Veg' && p.isVeg !== false) ||
+      (vegFilter === 'NonVeg' && p.isVeg === false);
     return matchQuery && matchCat && matchVeg;
   });
 
@@ -3155,9 +3174,9 @@ function App() {
     const isUidMatch = user && o.userId && o.userId === user.uid;
     const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
     const isUserOrder = isEmailMatch || isUidMatch || isPhoneMatch;
-    const isActive = o.status && 
-      o.status.toUpperCase() !== 'COMPLETED' && 
-      o.status.toUpperCase() !== 'DELIVERED' && 
+    const isActive = o.status &&
+      o.status.toUpperCase() !== 'COMPLETED' &&
+      o.status.toUpperCase() !== 'DELIVERED' &&
       !o.status.toUpperCase().startsWith('CANCEL');
     return isUserOrder && isActive;
   });
@@ -3168,7 +3187,7 @@ function App() {
   // UPI payment success confirmation & WhatsApp redirection
   const handleConfirmUpiPayment = async (isDrawer) => {
     if (!pendingPaymentOrder) return;
-    
+
     try {
       // Save order to Firestore Database
       await addDoc(collection(db, "orders"), pendingPaymentOrder);
@@ -3199,18 +3218,18 @@ function App() {
       setAppliedDiscount(0);
       setCurrentOrderTracking(pendingPaymentOrder.id);
       setIsTrackingDrawerOpen(true);
-      
+
       // WhatsApp message template construction
       const message = `Hello, I have placed order ${pendingPaymentOrder.id} for ₹${pendingPaymentOrder.totalAmount}. Here is my payment screenshot.`;
       const waUrl = `https://wa.me/918233816674?text=${encodeURIComponent(message)}`;
-      
+
       // Reset checkout states
       setCheckoutStep('cart');
       setPendingPaymentOrder(null);
       if (isDrawer) setIsCartDrawerOpen(false);
 
       showToast("Order placed! Redirecting to WhatsApp...", "success");
-      
+
       // Open WhatsApp
       window.open(waUrl, '_blank');
     } catch (error) {
@@ -3236,7 +3255,7 @@ function App() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
-            
+
             {/* Gateway Progress Notification */}
             <div className="payment-alert-box" style={{
               background: 'rgba(239, 68, 68, 0.04)',
@@ -3282,7 +3301,7 @@ function App() {
                 fontSize: '14px'
               }}>
                 <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
-                <button 
+                <button
                   onClick={() => {
                     navigator.clipboard.writeText('8233816674@upi');
                     showToast('UPI ID copied to clipboard!', 'success');
@@ -3308,7 +3327,7 @@ function App() {
               <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
                 Step 2: Pay instantly via any UPI App
               </span>
-              <a 
+              <a
                 href={upiUrl}
                 className="neon-btn"
                 style={{
@@ -3336,7 +3355,7 @@ function App() {
               <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
                 Step 3: Send screenshot to WhatsApp
               </span>
-              <button 
+              <button
                 onClick={() => handleConfirmUpiPayment(isDrawer)}
                 className="neon-btn"
                 style={{
@@ -3360,7 +3379,7 @@ function App() {
             <div className="divider" style={{ margin: '8px 0' }}></div>
 
             {/* Cancel Payment */}
-            <button 
+            <button
               onClick={() => {
                 setCheckoutStep('cart');
                 setPendingPaymentOrder(null);
@@ -3385,7 +3404,7 @@ function App() {
     const storeName = cart[0]?.store || '';
     const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
     const customerCoords = parseCoords(customerAddress);
-    
+
     let dist = null;
     let isOutOfRange = false;
     if (cart[0] && cartShop && customerCoords) {
@@ -3408,7 +3427,7 @@ function App() {
             </button>
           )}
         </div>
-        
+
         {cart.length === 0 ? (
           <div className="empty-cart-message">
             <AlertCircle size={36} className="text-muted" />
@@ -3450,7 +3469,7 @@ function App() {
                 <div className="cart-item-detail">
                   <h4>{item.name}</h4>
                   <span className="cart-item-sub">
-                    {formatINR(item.price)} each 
+                    {formatINR(item.price)} each
                     {item.originalPrice > item.price && (
                       <span style={{ textDecoration: 'line-through', fontSize: '10px', marginLeft: '4px', color: 'var(--color-text-muted)' }}>
                         {formatINR(item.originalPrice)}
@@ -3468,16 +3487,16 @@ function App() {
                 </button>
               </div>
             ))}
-            
+
             <div className="divider"></div>
 
             {/* Coupons and Promos */}
             <div className="coupon-box">
-              <input 
-                type="text" 
-                placeholder="Coupon (e.g. WELCOME100)" 
-                value={couponCode} 
-                onChange={(e) => setCouponCode(e.target.value)} 
+              <input
+                type="text"
+                placeholder="Coupon (e.g. WELCOME100)"
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
                 className="custom-input coupon-input"
               />
               <button className="neon-btn coupon-btn" onClick={handleApplyCoupon}>
@@ -3509,31 +3528,31 @@ function App() {
             {/* Pricing summary */}
             {(() => {
               const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-              
+
               let distanceText = '';
               let fee = 33; // Default fallback (standard 2km base)
-              
+
               if (dist !== null) {
-                distanceText = isDistanceLoading 
-                  ? ' (Calculating route...)' 
+                distanceText = isDistanceLoading
+                  ? ' (Calculating route...)'
                   : ` (${dist.toFixed(2)} km)`;
                 const rates = calculateDeliveryRates(dist);
                 fee = rates.customerCharge;
               }
-              
+
               const totalAmount = subtotal + fee - appliedDiscount;
               return (
                 <>
                   <div className="blinkit-bill-details">
                     <h3 className="bill-details-header">Bill details</h3>
-                    
+
                     <div className="bill-row">
                       <span className="bill-label">
                         <span className="bill-label-icon">📄</span> Items total
                       </span>
                       <span className="bill-value">{formatINR(subtotal)}</span>
                     </div>
-                    
+
                     <div className="bill-row">
                       <span className="bill-label">
                         <span className="bill-label-icon">🚴</span> Delivery charge {distanceText}
@@ -3545,7 +3564,7 @@ function App() {
                         {isOutOfRange ? 'N/A' : (fee === 0 ? 'FREE' : formatINR(fee))}
                       </span>
                     </div>
-                    
+
                     {appliedDiscount > 0 && (
                       <div className="bill-row discount-row">
                         <span className="bill-label">
@@ -3554,9 +3573,9 @@ function App() {
                         <span className="bill-value text-success">-{formatINR(appliedDiscount)}</span>
                       </div>
                     )}
-                    
+
                     <div className="bill-divider"></div>
-                    
+
                     <div className="bill-row grand-total-row">
                       <span className="bill-label">Grand total</span>
                       <span className="bill-value">{isOutOfRange ? 'N/A' : formatINR(totalAmount)}</span>
@@ -3578,18 +3597,18 @@ function App() {
             {/* Delivery Form Info */}
             <div className="delivery-info-form">
               <h3 className="sub-header-title">Delivery Coordinates</h3>
-              <input 
-                type="text" 
-                placeholder="Name" 
-                value={customerName} 
-                onChange={(e) => setCustomerName(e.target.value)} 
+              <input
+                type="text"
+                placeholder="Name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
                 className="custom-input"
               />
-              <input 
-                type="text" 
-                placeholder="Delivery Location Pin / Address" 
-                value={customerAddress} 
-                onChange={(e) => setCustomerAddress(e.target.value)} 
+              <input
+                type="text"
+                placeholder="Delivery Location Pin / Address"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
                 className="custom-input"
               />
               <button
@@ -3616,13 +3635,13 @@ function App() {
               </div>
 
               <div className="payment-select-grid">
-                <button 
+                <button
                   className={`pay-btn ${selectedPayment === 'ONLINE' ? 'active' : ''}`}
                   onClick={() => setSelectedPayment('ONLINE')}
                 >
                   <DollarSign size={16} /> Online Pay (Razorpay)
                 </button>
-                <button 
+                <button
                   className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
                   onClick={() => setSelectedPayment('COD')}
                 >
@@ -3632,8 +3651,8 @@ function App() {
             </div>
 
             {/* Checkout Button */}
-            <button 
-              className="neon-btn checkout-btn" 
+            <button
+              className="neon-btn checkout-btn"
               disabled={isOutOfRange || isDistanceLoading}
               onClick={() => {
                 if (isOutOfRange) {
@@ -3669,12 +3688,12 @@ function App() {
       const isRider = portalName === 'Delivery Rider';
       const showSignUpForm = (portalName === 'Merchant Dashboard' || portalName === 'Delivery Rider') ? isSignUp : false;
       const portalThemeClass = portalName === 'Admin Console' ? 'portal-theme-admin' :
-                               portalName === 'Delivery Rider' ? 'portal-theme-delivery' :
-                               'portal-theme-merchant';
+        portalName === 'Delivery Rider' ? 'portal-theme-delivery' :
+          'portal-theme-merchant';
 
       return (
         <div className={`portal-auth-scene ${portalThemeClass} fade-in`} style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
-          
+
           {isRider && riderAnnouncement && (
             <div className="rider-announcement-banner" style={{
               width: '100%',
@@ -3690,12 +3709,12 @@ function App() {
               boxShadow: '0 0 10px rgba(0, 255, 242, 0.05)',
               marginBottom: '10px'
             }}>
-              <span style={{ 
-                fontSize: '11px', 
-                fontWeight: '800', 
-                color: 'var(--color-primary)', 
-                background: 'rgba(0, 255, 242, 0.15)', 
-                padding: '3px 8px', 
+              <span style={{
+                fontSize: '11px',
+                fontWeight: '800',
+                color: 'var(--color-primary)',
+                background: 'rgba(0, 255, 242, 0.15)',
+                padding: '3px 8px',
                 borderRadius: '10px',
                 textTransform: 'uppercase',
                 letterSpacing: '0.5px',
@@ -3705,15 +3724,15 @@ function App() {
               }}>
                 📢 Notice
               </span>
-              <marquee 
-                behavior="scroll" 
-                direction="left" 
-                scrollamount="4" 
-                style={{ 
-                  fontSize: '12px', 
-                  color: '#00fff2', 
+              <marquee
+                behavior="scroll"
+                direction="left"
+                scrollamount="4"
+                style={{
+                  fontSize: '12px',
+                  color: '#00fff2',
                   textShadow: '0 0 4px rgba(0, 255, 242, 0.3)',
-                  fontWeight: '600', 
+                  fontWeight: '600',
                   margin: 0,
                   padding: 0
                 }}
@@ -3729,14 +3748,14 @@ function App() {
             <div className="orb orb-3"></div>
           </div>
           <div className="portal-floating-particles">
-            {[...Array(8)].map((_, i) => <div key={i} className={`particle particle-${i+1}`}></div>)}
+            {[...Array(8)].map((_, i) => <div key={i} className={`particle particle-${i + 1}`}></div>)}
           </div>
           <div className="portal-auth-card-dark">
             <div className="portal-card-glow-ring"></div>
             <div className="auth-icon-badge-dark">
               {portalName === 'Admin Console' ? <Shield size={36} className="auth-icon-svg" /> :
-               portalName === 'Delivery Rider' ? <Bike size={36} className="auth-icon-svg" /> :
-               <Store size={36} className="auth-icon-svg" />}
+                portalName === 'Delivery Rider' ? <Bike size={36} className="auth-icon-svg" /> :
+                  <Store size={36} className="auth-icon-svg" />}
             </div>
             <h2 className="auth-portal-title-dark">{portalName}</h2>
             <p className="auth-portal-subtitle-dark">Authentication Required to Access Staff Panel</p>
@@ -3747,14 +3766,14 @@ function App() {
                 <span>{authError}</span>
               </div>
             )}
-            
+
             {portalName === 'Merchant Dashboard' && showSignUpForm ? (
               <form onSubmit={handleMerchantOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Shop Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Bake House" 
+                  <input
+                    type="text"
+                    placeholder="e.g. Bake House"
                     value={onboardShopName}
                     onChange={(e) => setOnboardShopName(e.target.value)}
                     className="custom-input-premium"
@@ -3763,7 +3782,7 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Category</label>
-                  <select 
+                  <select
                     value={onboardShopCategory}
                     onChange={(e) => setOnboardShopCategory(e.target.value)}
                     className="custom-input-premium"
@@ -3777,9 +3796,9 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Phone Number</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. 9251054064" 
+                  <input
+                    type="text"
+                    placeholder="e.g. 9251054064"
                     value={onboardShopPhone}
                     onChange={(e) => setOnboardShopPhone(e.target.value)}
                     className="custom-input-premium"
@@ -3788,9 +3807,9 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Merchant Login Email</label>
-                  <input 
-                    type="email" 
-                    placeholder="e.g. owner@gmail.com" 
+                  <input
+                    type="email"
+                    placeholder="e.g. owner@gmail.com"
                     value={onboardShopEmail}
                     onChange={(e) => setOnboardShopEmail(e.target.value)}
                     className="custom-input-premium"
@@ -3799,9 +3818,9 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Shop Address</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. C-Scheme, Jaipur" 
+                  <input
+                    type="text"
+                    placeholder="e.g. C-Scheme, Jaipur"
                     value={onboardShopAddress}
                     onChange={(e) => setOnboardShopAddress(e.target.value)}
                     className="custom-input-premium"
@@ -3816,9 +3835,9 @@ function App() {
               <form onSubmit={handleRiderOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Rider Name</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. JohnDoe" 
+                  <input
+                    type="text"
+                    placeholder="e.g. JohnDoe"
                     value={onboardRiderName}
                     onChange={(e) => setOnboardRiderName(e.target.value)}
                     className="custom-input-premium"
@@ -3827,9 +3846,9 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Email ID</label>
-                  <input 
-                    type="email" 
-                    placeholder="e.g. john@example.com" 
+                  <input
+                    type="email"
+                    placeholder="e.g. john@example.com"
                     value={onboardRiderEmail}
                     onChange={(e) => setOnboardRiderEmail(e.target.value)}
                     className="custom-input-premium"
@@ -3838,9 +3857,9 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Phone Number</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. 9251054064" 
+                  <input
+                    type="text"
+                    placeholder="e.g. 9251054064"
                     value={onboardRiderPhone}
                     onChange={(e) => setOnboardRiderPhone(e.target.value)}
                     className="custom-input-premium"
@@ -3849,9 +3868,9 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Vehicle Details</label>
-                  <input 
-                    type="text" 
-                    placeholder="e.g. Splendor (RJ-14-SG-2024)" 
+                  <input
+                    type="text"
+                    placeholder="e.g. Splendor (RJ-14-SG-2024)"
                     value={onboardRiderVehicle}
                     onChange={(e) => setOnboardRiderVehicle(e.target.value)}
                     className="custom-input-premium"
@@ -3868,9 +3887,9 @@ function App() {
                   <label className="form-label-premium">
                     Email Address
                   </label>
-                  <input 
-                    type="email" 
-                    placeholder="Enter email address" 
+                  <input
+                    type="email"
+                    placeholder="Enter email address"
                     value={authEmail}
                     onChange={(e) => setAuthEmail(e.target.value)}
                     className="custom-input-premium"
@@ -3880,9 +3899,9 @@ function App() {
 
                 <div className="form-group-premium">
                   <label className="form-label-premium">Password</label>
-                  <input 
-                    type="password" 
-                    placeholder="••••••••" 
+                  <input
+                    type="password"
+                    placeholder="••••••••"
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
                     className="custom-input-premium"
@@ -3891,16 +3910,16 @@ function App() {
                 </div>
 
                 <div style={{ textAlign: 'center', marginTop: '4px', marginBottom: '8px' }}>
-                  <button 
-                    type="button" 
-                    className="toggle-btn-link-premium" 
-                    style={{ fontSize: '11px', opacity: 0.8 }} 
+                  <button
+                    type="button"
+                    className="toggle-btn-link-premium"
+                    style={{ fontSize: '11px', opacity: 0.8 }}
                     onClick={handleForgotPassword}
                   >
                     Forgot Password?
                   </button>
                 </div>
-                
+
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
                   Sign In to Panel
                 </button>
@@ -3910,8 +3929,8 @@ function App() {
             {portalName === 'Admin Console' && (
               <>
                 <div className="divider"></div>
-                <button 
-                  className="google-auth-btn-premium" 
+                <button
+                  className="google-auth-btn-premium"
                   onClick={() => {
                     setAuthError('');
                     signInWithPopup(auth, googleProvider)
@@ -3963,7 +3982,7 @@ function App() {
     }
     if (portalName === 'Delivery Rider' && userRole !== 'admin') {
       const currentRider = deliveryPartners.find(d => d.id === user.uid || d.email === user.email);
-      
+
       if (!currentRider) {
         return (
           <div className="portal-auth-scene portal-theme-delivery fade-in">
@@ -4002,8 +4021,8 @@ function App() {
               <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
                 Please message the Administrator to authorize your account:
               </p>
-              <button 
-                className="neon-btn" 
+              <button
+                className="neon-btn"
                 onClick={() => {
                   const adminPhone = '919251054064';
                   const message = `Hello Admin, I have registered as a rider (${currentRider.name}). Please verify my account on the PixiGo console.`;
@@ -4053,49 +4072,49 @@ function App() {
           {/* Admin Console Navigation in Header */}
           {activeTab === 'admin' && (
             <nav className="header-nav">
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'sales' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('sales'); setAdminSearchQuery(''); }}
               >
                 <Activity size={16} style={{ marginRight: '6px' }} />
                 Sales Dashboard
               </button>
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'orders' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('orders'); setAdminSearchQuery(''); }}
               >
                 <ShoppingCart size={16} style={{ marginRight: '6px' }} />
                 Total Orders ({stats.totalOrders})
               </button>
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'shops' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('shops'); setAdminSearchQuery(''); }}
               >
                 <Store size={16} style={{ marginRight: '6px' }} />
                 Active Shops ({stats.activeMerchants})
               </button>
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'riders' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('riders'); setAdminSearchQuery(''); }}
               >
                 <Bike size={16} style={{ marginRight: '6px' }} />
                 Active Riders ({stats.activeRiders})
               </button>
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'items' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('items'); setAdminSearchQuery(''); }}
               >
                 <Package size={16} style={{ marginRight: '6px' }} />
                 All Items ({products.length})
               </button>
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'users' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('users'); setAdminSearchQuery(''); }}
               >
                 <Users size={16} style={{ marginRight: '6px' }} />
                 All Users ({compiledAllUsers.length})
               </button>
-              <button 
+              <button
                 className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('settings'); setAdminSearchQuery(''); }}
               >
@@ -4108,7 +4127,7 @@ function App() {
           {/* Tab Controls (Desktop only) */}
           {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
             <nav className="header-nav desktop-only-nav">
-              <button 
+              <button
                 className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
                 onClick={() => handleTabChange('customer')}
               >
@@ -4117,21 +4136,21 @@ function App() {
               </button>
               {activeTab !== 'customer' && (
                 <>
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'admin' ? 'active font-neon' : ''}`}
                     onClick={() => handleTabChange('admin')}
                   >
                     <Shield size={18} />
                     Admin Console
                   </button>
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'delivery' ? 'active' : ''}`}
                     onClick={() => handleTabChange('delivery')}
                   >
                     <Bike size={18} />
                     Delivery Rider
                   </button>
-                  <button 
+                  <button
                     className={`nav-link ${activeTab === 'merchant' ? 'active' : ''}`}
                     onClick={() => handleTabChange('merchant')}
                   >
@@ -4146,12 +4165,12 @@ function App() {
           {/* Header Actions (Auth, Cart & Mobile Menu) */}
           <div className="header-actions">
             {activeTab === 'customer' && activeCustomerOrders.length > 0 && (
-              <button 
-                className="cart-header-icon-btn active-tracking-btn pulse-glow" 
+              <button
+                className="cart-header-icon-btn active-tracking-btn pulse-glow"
                 onClick={() => {
                   setCurrentOrderTracking(activeCustomerOrders[0].id);
                   setIsTrackingDrawerOpen(true);
-                }} 
+                }}
                 title="Track Active Order"
                 style={{ border: '1px solid var(--color-primary-glow-strong)', color: 'var(--color-primary)' }}
               >
@@ -4205,64 +4224,24 @@ function App() {
 
       {/* Main Portals Container */}
       <main className="portal-content">
-        
-        {/* ==================== CUSTOMER VIEW ==================== */}
+
         {activeTab === 'customer' && (
           <div className="customer-portal-layout fade-in">
-            
-            {/* Customer Promotional Marquee (Black & Gold Theme) */}
-            {customerAnnouncement && (
-              <div className="customer-announcement-banner" style={{
-                margin: '10px auto 16px auto',
-                padding: '6px 12px',
-                background: 'linear-gradient(90deg, #090703 0%, #151006 50%, #090703 100%)',
-                border: '1px solid rgba(255, 215, 0, 0.2)',
-                borderRadius: '20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                overflow: 'hidden',
-                boxShadow: '0 0 10px rgba(255, 215, 0, 0.05)',
-                width: '100%',
-                maxWidth: '1200px'
-              }}>
-                <span style={{ 
-                  fontSize: '9px', 
-                  fontWeight: '900', 
-                  color: '#000000', 
-                  background: 'linear-gradient(90deg, #ffd700, #daa520)', 
-                  padding: '2px 8px', 
-                  borderRadius: '10px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
-                  flexShrink: 0
-                }}>
-                  ⭐ OFFERS
-                </span>
-                <marquee 
-                  behavior="scroll" 
-                  direction="left" 
-                  scrollamount="4" 
-                  style={{ 
-                    fontSize: '12px', 
-                    color: '#ffd700', 
-                    textShadow: '0 0 4px rgba(255, 215, 0, 0.2)',
-                    fontWeight: '600', 
-                    margin: 0,
-                    padding: 0,
-                    flexGrow: 1,
-                    minWidth: 0
-                  }}
-                >
-                  {customerAnnouncement}
-                </marquee>
-              </div>
-            )}
+
+            {/* Custom PIXIgo Brand Banner */}
+            <div className="custom-brand-banner-wrap" style={{ margin: '16px auto 10px auto', width: '100%', boxSizing: 'border-box' }}>
+              <img 
+                src="/pixigo_banner.png" 
+                alt="PIXIgo Delivery Banner" 
+                style={{ 
+                  width: '100%', 
+                  height: 'auto', 
+                  borderRadius: '20px', 
+                  display: 'block', 
+                  boxShadow: '0 8px 24px rgba(31, 78, 61, 0.08)' 
+                }} 
+              />
+            </div>
 
             <div className="customer-grid">
               {/* Left Categories Sidebar (Desktop only) */}
@@ -4289,439 +4268,495 @@ function App() {
 
               {/* Storefront Layout */}
               <div className="catalog-section">
-              {/* Category selector */}
-              <div className="cat-selector-scroll">
-                {categories.map(cat => (
-                  <button 
-                    key={cat} 
-                    className={`cat-tab ${selectedCategory === cat ? 'active' : ''}`}
-                    onClick={() => setSelectedCategory(cat)}
+                {/* Premium Category Cards Grid */}
+                <div className="custom-category-section">
+                  <h3 className="custom-category-title">Explore Categories</h3>
+                  <div className="custom-category-grid">
+                    {categories.map(cat => {
+                      const emoji = getCategoryEmoji(cat);
+                      const bgClass = getCategoryBgClass(cat);
+                      return (
+                        <div
+                          key={cat}
+                          className={`custom-category-card ${selectedCategory === cat ? 'active' : ''}`}
+                          onClick={() => setSelectedCategory(cat)}
+                        >
+                          <div className={`custom-category-icon-wrap ${bgClass}`}>
+                            {emoji}
+                          </div>
+                          <span className="custom-category-name">{cat}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Dynamic Deal of the Day Banner */}
+                {dealOfTheDay && dealOfTheDay.active && (
+                  <div className="deal-of-the-day-banner glass-panel fade-in border-glow" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '20px',
+                    margin: '20px 0',
+                    padding: '20px',
+                    borderRadius: '16px',
+                    background: 'linear-gradient(135deg, #090d16 0%, #151b2d 100%)',
+                    border: '1px solid rgba(0, 255, 242, 0.25)',
+                    backdropFilter: 'blur(12px)',
+                    boxShadow: '0 8px 32px 0 rgba(0, 255, 242, 0.15)'
+                  }}>
+                    {dealOfTheDay.image && (
+                      <div className="deal-banner-image-wrap" style={{ flexShrink: 0, width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                        <img src={dealOfTheDay.image} alt="Deal of the Day" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${dealOfTheDay.horizontalOffset || '50'}% ${dealOfTheDay.verticalOffset || '50'}%`, transform: `scale(${dealOfTheDay.zoom || '1'})`, transformOrigin: 'center center', transition: 'transform 0.15s ease, object-position 0.15s ease' }} />
+                      </div>
+                    )}
+                    <div className="deal-banner-content" style={{ flex: 1, textAlign: 'left' }}>
+                      <span className="deal-banner-tag" style={{
+                        background: 'linear-gradient(90deg, #ff007f, #00fff2)',
+                        WebkitBackgroundClip: 'text',
+                        WebkitTextFillColor: 'transparent',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1.5px',
+                        display: 'inline-block',
+                        marginBottom: '6px'
+                      }}>
+                        🔥 Deal of the Day
+                      </span>
+                      <h3 className="deal-banner-text" style={{ fontSize: '18px', fontWeight: '700', color: '#fff', margin: '0 0 10px 0', lineHeight: '1.4' }}>
+                        {dealOfTheDay.text}
+                      </h3>
+                      <button className="neon-btn small-btn" style={{ fontSize: '12px', padding: '6px 16px' }} onClick={() => {
+                        const catalog = document.querySelector('.products-grid');
+                        if (catalog) catalog.scrollIntoView({ behavior: 'smooth' });
+                      }}>
+                        Claim Deal Now
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Search Bar */}
+                <div className="search-container border-glow">
+                  <div className="search-mode-select-wrap">
+                    <select
+                      value={searchMode}
+                      onChange={(e) => {
+                        setSearchMode(e.target.value);
+                        setSearchQuery('');
+                      }}
+                      className="search-mode-select"
+                    >
+                      <option value="item">By Product</option>
+                      <option value="shop">By Shop</option>
+                    </select>
+                  </div>
+                  <div className="search-input-divider"></div>
+                  <div className="search-input-wrap" style={{ flex: 1 }}>
+                    <Search size={18} className="search-bar-icon" />
+                    {searchMode === 'item' ? (
+                      <select
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="search-input custom-select-dropdown"
+                        style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', cursor: 'pointer' }}
+                      >
+                        <option value="" style={{ background: '#121212', color: '#888' }}>-- Select Product --</option>
+                        {getUniqueProductNames().map(name => (
+                          <option key={name} value={name} style={{ background: '#121212', color: '#fff' }}>{name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="search-input custom-select-dropdown"
+                        style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', cursor: 'pointer' }}
+                      >
+                        <option value="" style={{ background: '#121212', color: '#888' }}>-- Select Shop --</option>
+                        {getUniqueStoreNames().map(store => (
+                          <option key={store} value={store} style={{ background: '#121212', color: '#fff' }}>{store}</option>
+                        ))}
+                      </select>
+                    )}
+                    {searchQuery && (
+                      <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Veg/Non-Veg Filter Chips Row */}
+                <div className="filter-chips-row">
+                  <button
+                    className={`filter-chip ${vegFilter === 'All' ? 'active' : ''}`}
+                    onClick={() => setVegFilter('All')}
                   >
-                    {cat}
+                    All Items
                   </button>
-                ))}
-              </div>
-
-              {/* Dynamic Deal of the Day Banner */}
-              {dealOfTheDay && dealOfTheDay.active && (
-                <div className="deal-of-the-day-banner glass-panel fade-in border-glow" style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '20px',
-                  margin: '20px 0',
-                  padding: '20px',
-                  borderRadius: '16px',
-                  background: 'linear-gradient(135deg, #090d16 0%, #151b2d 100%)',
-                  border: '1px solid rgba(0, 255, 242, 0.25)',
-                  backdropFilter: 'blur(12px)',
-                  boxShadow: '0 8px 32px 0 rgba(0, 255, 242, 0.15)'
-                }}>
-                  {dealOfTheDay.image && (
-                    <div className="deal-banner-image-wrap" style={{ flexShrink: 0, width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-                      <img src={dealOfTheDay.image} alt="Deal of the Day" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: `${dealOfTheDay.horizontalOffset || '50'}% ${dealOfTheDay.verticalOffset || '50'}%`, transform: `scale(${dealOfTheDay.zoom || '1'})`, transformOrigin: 'center center', transition: 'transform 0.15s ease, object-position 0.15s ease' }} />
-                    </div>
-                  )}
-                  <div className="deal-banner-content" style={{ flex: 1, textAlign: 'left' }}>
-                    <span className="deal-banner-tag" style={{
-                      background: 'linear-gradient(90deg, #ff007f, #00fff2)',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor: 'transparent',
-                      fontSize: '12px',
-                      fontWeight: '800',
-                      textTransform: 'uppercase',
-                      letterSpacing: '1.5px',
-                      display: 'inline-block',
-                      marginBottom: '6px'
-                    }}>
-                      🔥 Deal of the Day
-                    </span>
-                    <h3 className="deal-banner-text" style={{ fontSize: '18px', fontWeight: '700', color: '#fff', margin: '0 0 10px 0', lineHeight: '1.4' }}>
-                      {dealOfTheDay.text}
-                    </h3>
-                    <button className="neon-btn small-btn" style={{ fontSize: '12px', padding: '6px 16px' }} onClick={() => {
-                      const catalog = document.querySelector('.products-grid');
-                      if (catalog) catalog.scrollIntoView({ behavior: 'smooth' });
-                    }}>
-                      Claim Deal Now
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Search Bar */}
-              <div className="search-container border-glow">
-                <div className="search-mode-select-wrap">
-                  <select 
-                    value={searchMode} 
-                    onChange={(e) => {
-                      setSearchMode(e.target.value);
-                      setSearchQuery('');
-                    }}
-                    className="search-mode-select"
+                  <button
+                    className={`filter-chip veg-chip ${vegFilter === 'Veg' ? 'active' : ''}`}
+                    onClick={() => setVegFilter('Veg')}
                   >
-                    <option value="item">By Product</option>
-                    <option value="shop">By Shop</option>
-                  </select>
+                    <span className="veg-dot-box green"><span className="veg-dot-circle"></span></span> Veg Only
+                  </button>
+                  <button
+                    className={`filter-chip nonveg-chip ${vegFilter === 'NonVeg' ? 'active' : ''}`}
+                    onClick={() => setVegFilter('NonVeg')}
+                  >
+                    <span className="veg-dot-box red"><span className="veg-dot-triangle"></span></span> Non-Veg Only
+                  </button>
                 </div>
-                <div className="search-input-divider"></div>
-                <div className="search-input-wrap" style={{ flex: 1 }}>
-                  <Search size={18} className="search-bar-icon" />
-                  {searchMode === 'item' ? (
-                    <select
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="search-input custom-select-dropdown"
-                      style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', cursor: 'pointer' }}
-                    >
-                      <option value="" style={{ background: '#121212', color: '#888' }}>-- Select Product --</option>
-                      {getUniqueProductNames().map(name => (
-                        <option key={name} value={name} style={{ background: '#121212', color: '#fff' }}>{name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <select
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="search-input custom-select-dropdown"
-                      style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', cursor: 'pointer' }}
-                    >
-                      <option value="" style={{ background: '#121212', color: '#888' }}>-- Select Shop --</option>
-                      {getUniqueStoreNames().map(store => (
-                        <option key={store} value={store} style={{ background: '#121212', color: '#fff' }}>{store}</option>
-                      ))}
-                    </select>
-                  )}
-                  {searchQuery && (
-                    <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
-                      <X size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
 
-              {/* Veg/Non-Veg Filter Chips Row */}
-              <div className="filter-chips-row">
-                <button 
-                  className={`filter-chip ${vegFilter === 'All' ? 'active' : ''}`}
-                  onClick={() => setVegFilter('All')}
-                >
-                  All Items
-                </button>
-                <button 
-                  className={`filter-chip veg-chip ${vegFilter === 'Veg' ? 'active' : ''}`}
-                  onClick={() => setVegFilter('Veg')}
-                >
-                  <span className="veg-dot-box green"><span className="veg-dot-circle"></span></span> Veg Only
-                </button>
-                <button 
-                  className={`filter-chip nonveg-chip ${vegFilter === 'NonVeg' ? 'active' : ''}`}
-                  onClick={() => setVegFilter('NonVeg')}
-                >
-                  <span className="veg-dot-box red"><span className="veg-dot-triangle"></span></span> Non-Veg Only
-                </button>
-              </div>
+                {/* Product Grid */}
+                <div className="products-grid">
+                  {filteredProducts.map(p => {
+                    const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+                    const statusInfo = getShopOpenStatus(pShop);
+                    const isClosed = !statusInfo.isOpen;
 
-              {/* Product Grid */}
-              <div className="products-grid">
-                {filteredProducts.map(p => {
-                  const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-                  const statusInfo = getShopOpenStatus(pShop);
-                  const isClosed = !statusInfo.isOpen;
-
-                  const customerCoords = parseCoords(customerAddress);
-                  let shopDistance = null;
-                  let isOutOfRange = false;
-                  if (pShop && pShop.lat && pShop.lng && customerCoords) {
-                    shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
-                    isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
-                  }
-
-                  return (
-                    <div key={p.id} className={`product-card glass-panel`} style={{ position: 'relative' }}>
-                      <div className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} style={{ position: 'relative' }}>
-                        {p.offerText && (
-                          <span className="prod-img-badge">{p.offerText}</span>
-                        )}
-                        {p.image && p.image.startsWith('http') ? (
-                          <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
-                            e.target.style.display = 'none';
-                          }} />
-                        ) : (
-                          <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
-                        )}
-                      </div>
-                      <div className="prod-meta" style={{ opacity: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                          <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
-                          <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
-                            <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
-                          </span>
-                        </div>
-                        {p.specs && (
-                          <div className="prod-specs-text">{p.specs}</div>
-                        )}
-                        <span className="prod-store">
-                          {p.store}
-                          {shopDistance !== null && (
-                            <span style={{ color: 'var(--color-neon-cyan)', fontSize: '11px', marginLeft: '6px' }}>
-                              ({shopDistance.toFixed(1)} km)
-                            </span>
-                          )}
-                        </span>
-                        <p className="prod-category">{p.category}</p>
-                        
-                        {(p.originalPrice > p.price || p.offerText) && (
-                          <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
-                              {p.offerText || `SAVE ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%`}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="prod-buy">
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                            <span className="prod-price" style={{ color: p.originalPrice > p.price ? 'var(--color-success)' : 'inherit' }}>
-                              {formatINR(p.price)}
-                            </span>
-                            {p.originalPrice > p.price && (
-                              <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
-                                {formatINR(p.originalPrice)}
-                              </span>
-                            )}
-                          </div>
-                          {(() => {
-                            const cartItem = cart.find(item => item.id === p.id);
-                            if (cartItem) {
-                              return (
-                                <div className="prod-qty-selector">
-                                  <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
-                                  <span className="qty-val">{cartItem.quantity}</span>
-                                  <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
-                                </div>
-                              );
-                            }
-                            return (
-                              <button 
-                                className="add-to-cart-btn" 
-                                onClick={() => {
-                                  if (isClosed) {
-                                    showToast(`We do not deliver at your location. Store is closed.`, 'warning');
-                                    return;
-                                  }
-                                  if (isOutOfRange) {
-                                    showToast(`We do not deliver at your location.`, 'warning');
-                                    return;
-                                  }
-                                  handleAddToCart(p);
-                                }}
-                                style={{
-                                  background: 'var(--color-primary)',
-                                  color: '#000',
-                                  border: 'none',
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                ADD
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div> {/* Closes .catalog-section */}
-
-            {/* Shopping Cart, Checkout & Live Status Sidebar (Right Side - Desktop only) */}
-            <div className="checkout-sidebar desktop-only">
-              {/* Live Order Status Sidebar Widget - Only active/live orders */}
-              {activeCustomerOrders.length > 0 && (
-                <div className="tracking-sidebar-card glass-panel mb-6 border-glow">
-                  <div className="panel-header-sidebar">
-                    <h3 className="section-title-sidebar"><Compass size={18} /> Live Tracking</h3>
-                  </div>
-
-                  {(() => {
-                    const trackedOrder = activeCustomerOrders.find(o => o.id === currentOrderTracking) || activeCustomerOrders[0];
-                    if (!trackedOrder) return null;
+                    const customerCoords = parseCoords(customerAddress);
+                    let shopDistance = null;
+                    let isOutOfRange = false;
+                    if (pShop && pShop.lat && pShop.lng && customerCoords) {
+                      shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
+                      isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
+                    }
 
                     return (
-                      <div className="tracked-order-detail-sidebar fade-in">
-                        {/* Mini ETA banner */}
-                        <div className="eta-banner-sidebar">
-                          <span className="eta-countdown-sidebar">
-                            {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
-                             trackedOrder.status?.startsWith('CANCELLED') ? 'Order Cancelled' :
-                             trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
-                             trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
-                             'Awaiting Confirmation'}
-                          </span>
+                      <div key={p.id} className={`product-card glass-panel`} style={{ position: 'relative' }}>
+                        <div className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} style={{ position: 'relative' }}>
+                          {p.offerText && (
+                            <span className="prod-img-badge">{p.offerText}</span>
+                          )}
+                          {p.image && p.image.startsWith('http') ? (
+                            <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
+                              e.target.style.display = 'none';
+                            }} />
+                          ) : (
+                            <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
+                          )}
                         </div>
-
-                        {/* Mini Map */}
-                        <div className="leaflet-mock-map-sidebar border-glow">
-                          <LeafletMap 
-                            riderCoords={trackedOrder.id === trackingOrderIdForHook ? liveRiderCoords : null}
-                            merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
-                            customerCoords={parseCoords(trackedOrder.customerLocation)}
-                            customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
-                            merchantName={trackedOrder.items[0]?.store || 'Merchant'}
-                          />
-                        </div>
-
-                        {/* Sidebar Details Grid */}
-                        <div className="sidebar-details-grid">
-                          <div className="sidebar-detail-row">
-                            <span>Order:</span>
-                            <strong>{trackedOrder.id}</strong>
-                          </div>
-                          <div className="sidebar-detail-row">
-                            <span>Status:</span>
-                            <span className={`badge ${
-                              trackedOrder.status === 'COMPLETED' ? 'badge-success' : 
-                              trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' : 
-                              'badge-warning'
-                            }`}>
-                              {trackedOrder.status}
+                        <div className="prod-meta" style={{ opacity: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                            <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
+                            <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
+                              <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
                             </span>
                           </div>
-                          <div className="sidebar-detail-row">
-                            <span>Payment:</span>
-                            <span className="badge badge-info">{trackedOrder.paymentMethod}</span>
+                          {p.specs && (
+                            <div className="prod-specs-text">{p.specs}</div>
+                          )}
+                          <span className="prod-store">
+                            {p.store}
+                            {shopDistance !== null && (
+                              <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginLeft: '6px' }}>
+                                ({shopDistance.toFixed(1)} km)
+                              </span>
+                            )}
+                          </span>
+
+                          {/* Rating Component */}
+                          <div className="product-card-rating">
+                            {(() => {
+                              const { rating, reviews } = getProductRating(p.id);
+                              const rounded = Math.min(5, Math.max(0, Math.round(parseFloat(rating))));
+                              return (
+                                <>
+                                  {'★'.repeat(rounded)}
+                                  {'☆'.repeat(5 - rounded)}
+                                  <span>{rating} ({reviews}+)</span>
+                                </>
+                              );
+                            })()}
+                          </div>
+
+                          <p className="prod-category" style={{ marginTop: '6px' }}>{p.category}</p>
+
+                          {(p.originalPrice > p.price || p.offerText) && (
+                            <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
+                                {p.offerText || `SAVE ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%`}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="prod-buy">
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                              <span className="prod-price" style={{ color: p.originalPrice > p.price ? 'var(--color-success)' : 'inherit' }}>
+                                {formatINR(p.price)}
+                              </span>
+                              {p.originalPrice > p.price && (
+                                <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
+                                  {formatINR(p.originalPrice)}
+                                </span>
+                              )}
+                            </div>
+                            {(() => {
+                              const cartItem = cart.find(item => item.id === p.id);
+                              if (cartItem) {
+                                return (
+                                  <div className="prod-qty-selector">
+                                    <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
+                                    <span className="qty-val">{cartItem.quantity}</span>
+                                    <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <button
+                                  className="circular-add-btn"
+                                  onClick={() => {
+                                    if (isClosed) {
+                                      showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                                      return;
+                                    }
+                                    if (isOutOfRange) {
+                                      showToast(`We do not deliver at your location.`, 'warning');
+                                      return;
+                                    }
+                                    handleAddToCart(p);
+                                  }}
+                                >
+                                  +
+                                </button>
+                              );
+                            })()}
                           </div>
                         </div>
-
-                        {/* Scan & Pay on Delivery UPI QR code for COD orders */}
-                        {trackedOrder.paymentMethod === 'COD' && 
-                         !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) && 
-                         !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
-                          <div className="cod-qr-card border-glow" style={{
-                            background: 'rgba(218, 165, 32, 0.04)',
-                            border: '1px dashed rgba(218, 165, 32, 0.3)',
-                            borderRadius: '12px',
-                            padding: '16px',
-                            textAlign: 'center',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '12px',
-                            marginTop: '8px',
-                            marginBottom: '8px'
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                              💵 Scan & Pay on Delivery
-                            </div>
-                            <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
-                              Scan the QR code using any UPI app (GPay, Paytm, PhonePe) to pay the rider digitally on delivery.
-                            </p>
-                            <div style={{
-                              background: '#ffffff',
-                              padding: '8px',
-                              borderRadius: '8px',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              border: '1px solid var(--color-border)'
-                            }}>
-                              <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                                  `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
-                                )}`} 
-                                alt="UPI Payment QR Code"
-                                style={{ width: '130px', height: '130px', display: 'block' }}
-                              />
-                            </div>
-                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
-                              Amount: {formatINR(trackedOrder.totalAmount)}
-                            </div>
-                            <div style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              width: '100%',
-                              background: 'rgba(218, 165, 32, 0.08)',
-                              border: '1px solid rgba(218, 165, 32, 0.25)',
-                              borderRadius: '24px',
-                              padding: '6px 14px',
-                              fontSize: '12px'
-                            }}>
-                              <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
-                              <button 
-                                onClick={() => {
-                                  navigator.clipboard.writeText('8233816674@upi');
-                                  showToast('UPI ID copied to clipboard!', 'success');
-                                }}
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: '#ffd700',
-                                  fontWeight: 'bold',
-                                  fontSize: '10px',
-                                  cursor: 'pointer',
-                                  textTransform: 'uppercase'
-                                }}
-                              >
-                                Copy
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Rider Information Panel */}
-                        {trackedOrder.deliveryPartnerId ? (
-                          <div className="rider-card-sidebar border-glow">
-                            <div className="rider-avatar-sidebar">🛵</div>
-                            <div className="rider-desc-sidebar">
-                              <h4>{trackedOrder.deliveryPartnerName}</h4>
-                              <p>Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}</p>
-                            </div>
-                            <div className="otp-badge-sidebar">
-                              <span>OTP: <strong>{trackedOrder.otp}</strong></span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="rider-pending-sidebar">
-                            <RefreshCw size={14} className="spin" />
-                            <span>Assigning courier...</span>
-                          </div>
-                        )}
                       </div>
                     );
-                  })()}
+                  })}
                 </div>
-              )}
+              </div> {/* Closes .catalog-section */}
 
-              {/* Main Cart & Checkout Form */}
-              {renderCartContent(false)}
-            </div>
-          </div> {/* Closes .customer-grid */}
+              {/* Shopping Cart, Checkout & Live Status Sidebar (Right Side - Desktop only) */}
+              <div className="checkout-sidebar desktop-only">
+                {/* Live Order Status Sidebar Widget - Only active/live orders */}
+                {activeCustomerOrders.length > 0 && (
+                  <div className="tracking-sidebar-card glass-panel mb-6 border-glow">
+                    <div className="panel-header-sidebar">
+                      <h3 className="section-title-sidebar"><Compass size={18} /> Live Tracking</h3>
+                    </div>
 
-          {/* ChittorTech Branding Footer */}
-          <div className="chittortech-brand-footer">
-            <div className="brand-badge-pill">
-              <div className="brand-badge-logo-container">
-                <div className="brand-logo-white-box">
-                  <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" className="brand-logo-img-src" />
+                    {(() => {
+                      const trackedOrder = activeCustomerOrders.find(o => o.id === currentOrderTracking) || activeCustomerOrders[0];
+                      if (!trackedOrder) return null;
+
+                      return (
+                        <div className="tracked-order-detail-sidebar fade-in">
+                          {/* Mini ETA banner */}
+                          <div className="eta-banner-sidebar">
+                            <span className="eta-countdown-sidebar">
+                              {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' :
+                                trackedOrder.status?.startsWith('CANCELLED') ? 'Order Cancelled' :
+                                  trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
+                                    trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
+                                      'Awaiting Confirmation'}
+                            </span>
+                          </div>
+
+                          {/* Mini Map */}
+                          <div className="leaflet-mock-map-sidebar border-glow">
+                            <LeafletMap
+                              riderCoords={trackedOrder.id === trackingOrderIdForHook ? liveRiderCoords : null}
+                              merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
+                              customerCoords={parseCoords(trackedOrder.customerLocation)}
+                              customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
+                              merchantName={trackedOrder.items[0]?.store || 'Merchant'}
+                            />
+                          </div>
+
+                          {/* Sidebar Details Grid */}
+                          <div className="sidebar-details-grid">
+                            <div className="sidebar-detail-row">
+                              <span>Order:</span>
+                              <strong>{trackedOrder.id}</strong>
+                            </div>
+                            <div className="sidebar-detail-row">
+                              <span>Status:</span>
+                              <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' :
+                                  trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                                    'badge-warning'
+                                }`}>
+                                {trackedOrder.status}
+                              </span>
+                            </div>
+                            <div className="sidebar-detail-row">
+                              <span>Payment:</span>
+                              <span className="badge badge-info">{trackedOrder.paymentMethod}</span>
+                            </div>
+                          </div>
+
+                          {/* Scan & Pay on Delivery UPI QR code for COD orders */}
+                          {trackedOrder.paymentMethod === 'COD' &&
+                            !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) &&
+                            !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
+                              <div className="cod-qr-card border-glow" style={{
+                                background: 'rgba(218, 165, 32, 0.04)',
+                                border: '1px dashed rgba(218, 165, 32, 0.3)',
+                                borderRadius: '12px',
+                                padding: '16px',
+                                textAlign: 'center',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                gap: '12px',
+                                marginTop: '8px',
+                                marginBottom: '8px'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                                  💵 Scan & Pay on Delivery
+                                </div>
+                                <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
+                                  Scan the QR code using any UPI app (GPay, Paytm, PhonePe) to pay the rider digitally on delivery.
+                                </p>
+                                <div style={{
+                                  background: '#ffffff',
+                                  padding: '8px',
+                                  borderRadius: '8px',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  border: '1px solid var(--color-border)'
+                                }}>
+                                  <img
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                                      `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
+                                    )}`}
+                                    alt="UPI Payment QR Code"
+                                    style={{ width: '130px', height: '130px', display: 'block' }}
+                                  />
+                                </div>
+                                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
+                                  Amount: {formatINR(trackedOrder.totalAmount)}
+                                </div>
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  width: '100%',
+                                  background: 'rgba(218, 165, 32, 0.08)',
+                                  border: '1px solid rgba(218, 165, 32, 0.25)',
+                                  borderRadius: '24px',
+                                  padding: '6px 14px',
+                                  fontSize: '12px'
+                                }}>
+                                  <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText('8233816674@upi');
+                                      showToast('UPI ID copied to clipboard!', 'success');
+                                    }}
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: '#ffd700',
+                                      fontWeight: 'bold',
+                                      fontSize: '10px',
+                                      cursor: 'pointer',
+                                      textTransform: 'uppercase'
+                                    }}
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                          {/* Rider Information Panel */}
+                          {trackedOrder.deliveryPartnerId ? (
+                            <div className="rider-card-sidebar border-glow">
+                              <div className="rider-avatar-sidebar">🛵</div>
+                              <div className="rider-desc-sidebar">
+                                <h4>{trackedOrder.deliveryPartnerName}</h4>
+                                <p>Vehicle: {deliveryPartners.find(d => d.id === trackedOrder.deliveryPartnerId)?.vehicle.split(' (')[0] || '🛵'}</p>
+                              </div>
+                              <div className="otp-badge-sidebar">
+                                <span>OTP: <strong>{trackedOrder.otp}</strong></span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rider-pending-sidebar">
+                              <RefreshCw size={14} className="spin" />
+                              <span>Assigning courier...</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {/* Main Cart & Checkout Form */}
+                {renderCartContent(false)}
+              </div>
+            </div> {/* Closes .customer-grid */}
+
+            {/* Wavy Forest Green Footer */}
+            <div className="wavy-footer-container">
+              <div className="footer-wave-top">
+                <svg data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 120" preserveAspectRatio="none">
+                  <path d="M985.66,92.83C906.67,72,823.78,31,743.84,14.19c-82.26-17.34-168.06-16.33-250.45.39-57.84,11.73-114,31.07-172,41.86A600.21,600.21,0,0,1,0,27.35V120H1200V95.8C1130.5,107.49,1051.13,109.83,985.66,92.83Z" className="shape-fill"></path>
+                </svg>
+              </div>
+
+              <div className="footer-columns">
+                <div className="footer-col">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                    <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" style={{ height: '36px', background: '#fff', padding: '4px', borderRadius: '6px' }} />
+                    <span style={{ fontSize: '20px', fontWeight: 'bold', fontFamily: 'var(--font-heading)' }}>ChittorTech</span>
+                  </div>
+                  <p>
+                    Empowering local merchants and delivery partners in Chittorgarh with cutting-edge hyper-local delivery solutions.
+                  </p>
+                  <div style={{ marginTop: '20px' }}>
+                    <div style={{ display: 'flex', gap: '6px', margin: '4px 0', fontSize: '12px', color: '#81C784' }}>
+                      ✔ iStart Rajasthan Recognized
+                    </div>
+                    <div style={{ display: 'flex', gap: '6px', margin: '4px 0', fontSize: '12px', color: '#81C784' }}>
+                      ✔ Registered MSME | Startup India
+                    </div>
+                  </div>
                 </div>
-                <div className="brand-badge-text">
-                  <span className="brand-badge-sub">A PRODUCT OF</span>
-                  <span className="brand-badge-main">ChittorTech</span>
+
+                <div className="footer-col">
+                  <h3>Quick Links</h3>
+                  <ul>
+                    <li><a href="#catalog" onClick={(e) => { e.preventDefault(); setSelectedCategory('All'); }}>Storefront Catalog</a></li>
+                    <li><a href="#faq" onClick={(e) => { e.preventDefault(); alert("FAQ Section coming soon!"); }}>Frequently Asked Questions</a></li>
+                    <li><a href="#about" onClick={(e) => { e.preventDefault(); setIsAboutDeveloperOpen(true); }}>About Developer</a></li>
+                    <li><a href="#contact" onClick={(e) => { e.preventDefault(); setIsContactOpen(true); }}>Contact Support</a></li>
+                  </ul>
+                </div>
+
+                <div className="footer-col">
+                  <h3>Contact Support</h3>
+                  <p style={{ marginBottom: '10px' }}>
+                    Have questions or need help with your orders? Feel free to reach out to our local team.
+                  </p>
+                  <p style={{ fontWeight: 'bold', color: 'var(--color-accent-yellow)' }}>
+                    📞 +91 92510 54064
+                  </p>
+                  <p style={{ fontSize: '12px', marginTop: '6px' }}>
+                    📍 Collectorate Road, Chittorgarh, Rajasthan - 312001
+                  </p>
+                </div>
+              </div>
+
+              <div className="footer-bottom">
+                <span>© {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by ChittorTech.</span>
+                <div className="footer-socials">
+                  <span className="social-badge" title="WhatsApp" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>💬</span>
+                  <span className="social-badge" title="Phone" onClick={() => window.open('tel:+919251054064', '_blank')}>📞</span>
                 </div>
               </div>
             </div>
-            <div className="brand-credentials-list">
-              <div className="cred-item">
-                <span className="cred-bullet">•</span> Recognized by iStart Rajasthan
-              </div>
-              <div className="cred-item">
-                <span className="cred-bullet">•</span> Registered MSME | Startup India
-              </div>
-            </div>
-          </div>
 
-        </div> /* Closes .customer-portal-layout */
-      )}
+          </div> /* Closes .customer-portal-layout */
+        )}
 
         {/* ==================== ADMIN PORTAL ==================== */}
         {activeTab === 'admin' && renderPortalGuard('Admin Console', (
@@ -4745,9 +4780,9 @@ function App() {
                     )}
                     <form onSubmit={handleUnlockSales} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div style={{ position: 'relative', width: '100%' }}>
-                        <input 
-                          type={showSalesPin ? "text" : "password"} 
-                          placeholder="Enter Admin PIN" 
+                        <input
+                          type={showSalesPin ? "text" : "password"}
+                          placeholder="Enter Admin PIN"
                           value={salesPinInput}
                           onChange={(e) => setSalesPinInput(e.target.value)}
                           style={{ width: '100%', background: 'rgba(15, 23, 42, 0.05)', border: '1px solid var(--color-border)', borderRadius: '8px', padding: '10px 40px 10px 14px', color: 'var(--color-text-main)', fontSize: '14px', textAlign: 'center', outline: 'none' }}
@@ -4779,7 +4814,7 @@ function App() {
                         <span className="analytics-badge-pill analytics-badge-success" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <Activity size={14} /> Real-Time Sync Active
                         </span>
-                        <button 
+                        <button
                           onClick={() => {
                             setIsSalesUnlocked(false);
                             sessionStorage.removeItem('pixigo_sales_unlocked');
@@ -4970,9 +5005,9 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
                       <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
-                      <input 
-                        type="text" 
-                        placeholder="Search orders..." 
+                      <input
+                        type="text"
+                        placeholder="Search orders..."
                         value={adminSearchQuery}
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
                         style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
@@ -5014,7 +5049,7 @@ function App() {
                         filteredOrders.map(o => {
                           const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
                           return (
-                            <tr 
+                            <tr
                               key={o.id}
                               onClick={() => { setSelectedOrderDetails(o); setIsOrderModalOpen(true); }}
                               className="clickable-row"
@@ -5025,12 +5060,11 @@ function App() {
                                   <span className={`badge ${routing === 'Option 1 (Shop-Direct)' ? 'badge-primary' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
                                     {routing}
                                   </span>
-                                  <span className={`badge ${
-                                    o.status === 'ACCEPTED' ? 'badge-success' :
-                                    o.status === 'ASSIGNED' ? 'badge-primary' :
-                                    o.status?.startsWith('CANCELLED') ? 'badge-danger' :
-                                    'badge-warning'
-                                  }`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
+                                  <span className={`badge ${o.status === 'ACCEPTED' ? 'badge-success' :
+                                      o.status === 'ASSIGNED' ? 'badge-primary' :
+                                        o.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                                          'badge-warning'
+                                    }`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
                                     {(() => {
                                       const statusUpper = o.status?.toUpperCase() || 'PLACED';
                                       if (statusUpper === 'PLACED') return 'ORDER PLACED';
@@ -5057,26 +5091,26 @@ function App() {
                                 </span>
                               </td>
                               <td>
-                                 {o.status === 'CANCELLED_BY_STORE' ? (
-                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
-                                     Rejected by Store
-                                   </span>
-                                 ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' ? (
-                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
-                                     Cancelled by Admin
-                                   </span>
-                                 ) : o.status === 'CANCELLED_BY_RIDER' ? (
-                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
-                                     Rejected by Rider
-                                   </span>
-                                 ) : o.deliveryPartnerName ? (
+                                {o.status === 'CANCELLED_BY_STORE' ? (
+                                  <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                    Rejected by Store
+                                  </span>
+                                ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' ? (
+                                  <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                    Cancelled by Admin
+                                  </span>
+                                ) : o.status === 'CANCELLED_BY_RIDER' ? (
+                                  <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
+                                    Rejected by Rider
+                                  </span>
+                                ) : o.deliveryPartnerName ? (
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <div className="badge badge-primary">{o.deliveryPartnerName}</div>
                                     {(() => {
                                       const assignedRider = deliveryPartners.find(d => d.id === o.deliveryPartnerId);
                                       const rPhone = assignedRider?.phone || '919251054064';
                                       return (
-                                        <a 
+                                        <a
                                           href={`https://wa.me/${rPhone}?text=${encodeURIComponent(`Hi ${o.deliveryPartnerName}, you have been assigned Order ${o.id} from ${o.items[0]?.store || 'Store'} on PixiGo. Please open your Rider Console to start delivery: http://localhost:5173/delivery`)}`}
                                           target="_blank"
                                           rel="noopener noreferrer"
@@ -5095,7 +5129,7 @@ function App() {
                                     Awaiting Confirmation
                                   </span>
                                 ) : (
-                                  <select 
+                                  <select
                                     className="rider-select"
                                     onChange={(e) => handleAdminAssignRider(o.id, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
@@ -5114,7 +5148,7 @@ function App() {
                                   reroutingOrderId === o.id ? (
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '6px', border: '1px solid var(--color-border)', borderRadius: '6px', background: 'rgba(255,255,255,0.02)', minWidth: '150px' }} onClick={(e) => e.stopPropagation()}>
                                       <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--color-text-main)', textAlign: 'left' }}>Re-route Settings:</div>
-                                      
+
                                       {/* Store Dropdown */}
                                       <select
                                         value={rerouteSelectedShop}
@@ -5144,15 +5178,15 @@ function App() {
                                       </select>
 
                                       <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-                                        <button 
-                                          className="neon-btn small-btn" 
+                                        <button
+                                          className="neon-btn small-btn"
                                           onClick={(e) => { e.stopPropagation(); handleAdminSubmitReroute(o.id); }}
                                           style={{ flex: 1, padding: '4px 8px', fontSize: '11px', background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                                         >
                                           Confirm
                                         </button>
-                                        <button 
-                                          className="neon-btn small-btn" 
+                                        <button
+                                          className="neon-btn small-btn"
                                           onClick={(e) => { e.stopPropagation(); setReroutingOrderId(null); }}
                                           style={{ flex: 1, padding: '4px 8px', fontSize: '11px', background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
                                         >
@@ -5161,8 +5195,8 @@ function App() {
                                       </div>
                                     </div>
                                   ) : (
-                                    <button 
-                                      className="neon-btn small-btn" 
+                                    <button
+                                      className="neon-btn small-btn"
                                       onClick={(e) => { e.stopPropagation(); handleAdminRerouteOrder(o.id); }}
                                       style={{ background: 'var(--color-primary)', borderColor: 'var(--color-primary)' }}
                                     >
@@ -5180,7 +5214,7 @@ function App() {
                                     Awaiting Merchant...
                                   </span>
                                 )}
-                                <a 
+                                <a
                                   href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
                                   target="_blank"
                                   rel="noopener noreferrer"
@@ -5202,8 +5236,8 @@ function App() {
 
               {/* Past Orders Toggle Section */}
               <div style={{ marginTop: '20px', textAlign: 'left' }}>
-                <button 
-                  className="neon-btn" 
+                <button
+                  className="neon-btn"
                   onClick={() => setShowPastOrders(!showPastOrders)}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                 >
@@ -5286,9 +5320,9 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
                       <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
-                      <input 
-                        type="text" 
-                        placeholder="Search items..." 
+                      <input
+                        type="text"
+                        placeholder="Search items..."
                         value={adminSearchQuery}
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
                         style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
@@ -5299,9 +5333,9 @@ function App() {
                         </button>
                       )}
                     </div>
-                    <button 
-                      className="neon-btn" 
-                      onClick={() => setIsAdminAddFormOpen(!isAdminAddFormOpen)} 
+                    <button
+                      className="neon-btn"
+                      onClick={() => setIsAdminAddFormOpen(!isAdminAddFormOpen)}
                       style={{ background: 'rgba(0, 255, 242, 0.1)', borderColor: 'var(--color-primary)', color: 'var(--color-primary)' }}
                     >
                       {isAdminAddFormOpen ? '✖ Close Form' : '➕ Add Product'}
@@ -5319,68 +5353,68 @@ function App() {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '20px' }}>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Product Name</label>
-                        <input 
-                          type="text" 
-                          value={adminNewProductName} 
-                          onChange={(e) => setAdminNewProductName(e.target.value)} 
-                          className="custom-input" 
+                        <input
+                          type="text"
+                          value={adminNewProductName}
+                          onChange={(e) => setAdminNewProductName(e.target.value)}
+                          className="custom-input"
                           placeholder="e.g. Chocolate Truffle Cake"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Price (₹)</label>
-                        <input 
-                          type="number" 
-                          value={adminNewProductPrice} 
-                          onChange={(e) => setAdminNewProductPrice(e.target.value)} 
-                          className="custom-input" 
+                        <input
+                          type="number"
+                          value={adminNewProductPrice}
+                          onChange={(e) => setAdminNewProductPrice(e.target.value)}
+                          className="custom-input"
                           placeholder="e.g. 350"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Original Price (₹)</label>
-                        <input 
-                          type="number" 
-                          value={adminNewProductOrigPrice} 
-                          onChange={(e) => setAdminNewProductOrigPrice(e.target.value)} 
-                          className="custom-input" 
+                        <input
+                          type="number"
+                          value={adminNewProductOrigPrice}
+                          onChange={(e) => setAdminNewProductOrigPrice(e.target.value)}
+                          className="custom-input"
                           placeholder="e.g. 400"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Offer Title</label>
-                        <input 
-                          type="text" 
-                          value={adminNewProductOffer} 
-                          onChange={(e) => setAdminNewProductOffer(e.target.value)} 
-                          className="custom-input" 
+                        <input
+                          type="text"
+                          value={adminNewProductOffer}
+                          onChange={(e) => setAdminNewProductOffer(e.target.value)}
+                          className="custom-input"
                           placeholder="e.g. 15% OFF"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Image URL / Emoji</label>
-                        <input 
-                          type="text" 
-                          value={adminNewProductImage} 
-                          onChange={(e) => setAdminNewProductImage(e.target.value)} 
-                          className="custom-input" 
+                        <input
+                          type="text"
+                          value={adminNewProductImage}
+                          onChange={(e) => setAdminNewProductImage(e.target.value)}
+                          className="custom-input"
                           placeholder="https://... or 🍰"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Specs / Unit (e.g. 500g, 1 pack)</label>
-                        <input 
-                          type="text" 
-                          value={adminNewProductSpecs} 
-                          onChange={(e) => setAdminNewProductSpecs(e.target.value)} 
-                          className="custom-input" 
+                        <input
+                          type="text"
+                          value={adminNewProductSpecs}
+                          onChange={(e) => setAdminNewProductSpecs(e.target.value)}
+                          className="custom-input"
                           placeholder="e.g. 500 ml, 1 pack"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Dietary Type</label>
-                        <select 
-                          value={adminNewProductIsVeg ? 'veg' : 'nonveg'} 
+                        <select
+                          value={adminNewProductIsVeg ? 'veg' : 'nonveg'}
                           onChange={(e) => setAdminNewProductIsVeg(e.target.value === 'veg')}
                           className="rider-select"
                           style={{ height: '38px' }}
@@ -5391,8 +5425,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Product Category</label>
-                        <select 
-                          value={adminNewProductCategory} 
+                        <select
+                          value={adminNewProductCategory}
                           onChange={(e) => setAdminNewProductCategory(e.target.value)}
                           className="rider-select"
                           style={{ height: '38px' }}
@@ -5403,7 +5437,7 @@ function App() {
                           <option value="custom">[+ Custom Category]</option>
                         </select>
                         {adminNewProductCategory === 'custom' && (
-                          <input 
+                          <input
                             type="text"
                             value={adminCustomCategory}
                             onChange={(e) => setAdminCustomCategory(e.target.value)}
@@ -5415,8 +5449,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Representing Shop</label>
-                        <select 
-                          value={adminNewProductStore} 
+                        <select
+                          value={adminNewProductStore}
                           onChange={(e) => setAdminNewProductStore(e.target.value)}
                           className="rider-select"
                           style={{ height: '38px' }}
@@ -5428,7 +5462,7 @@ function App() {
                           <option value="custom">[+ Custom Shop]</option>
                         </select>
                         {adminNewProductStore === 'custom' && (
-                          <input 
+                          <input
                             type="text"
                             value={adminCustomStore}
                             onChange={(e) => setAdminCustomStore(e.target.value)}
@@ -5440,9 +5474,9 @@ function App() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-                      <button 
-                        className="neon-btn" 
-                        style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid var(--color-border)' }} 
+                      <button
+                        className="neon-btn"
+                        style={{ background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid var(--color-border)' }}
                         onClick={() => setIsAdminAddFormOpen(false)}
                       >
                         Cancel
@@ -5453,7 +5487,7 @@ function App() {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="table-responsive">
                   <table className="order-log-table">
                     <thead>
@@ -5495,7 +5529,7 @@ function App() {
                                 <span className="badge badge-info">{p.category}</span>
                               </td>
                               <td>
-                                <input 
+                                <input
                                   type="text"
                                   id={`image-${p.id}`}
                                   defaultValue={p.image || ''}
@@ -5505,7 +5539,7 @@ function App() {
                                 />
                               </td>
                               <td>
-                                <input 
+                                <input
                                   type="number"
                                   id={`price-${p.id}`}
                                   defaultValue={p.price}
@@ -5514,7 +5548,7 @@ function App() {
                                 />
                               </td>
                               <td>
-                                <input 
+                                <input
                                   type="number"
                                   id={`orig-price-${p.id}`}
                                   defaultValue={p.originalPrice || 0}
@@ -5524,7 +5558,7 @@ function App() {
                                 />
                               </td>
                               <td>
-                                <input 
+                                <input
                                   type="text"
                                   id={`offer-${p.id}`}
                                   defaultValue={p.offerText || ''}
@@ -5534,7 +5568,7 @@ function App() {
                                 />
                               </td>
                               <td>
-                                <input 
+                                <input
                                   type="text"
                                   id={`specs-${p.id}`}
                                   defaultValue={p.specs || ''}
@@ -5550,7 +5584,7 @@ function App() {
                               </td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px' }}>
-                                  <button 
+                                  <button
                                     className="neon-btn small-btn"
                                     onClick={() => {
                                       const priceInput = document.getElementById(`price-${p.id}`);
@@ -5559,9 +5593,9 @@ function App() {
                                       const imageInput = document.getElementById(`image-${p.id}`);
                                       const specsInput = document.getElementById(`specs-${p.id}`);
                                       handleAdminUpdateProductCatalog(
-                                        p.id, 
-                                        priceInput.value, 
-                                        origPriceInput.value, 
+                                        p.id,
+                                        priceInput.value,
+                                        origPriceInput.value,
                                         offerInput.value,
                                         imageInput.value,
                                         specsInput.value
@@ -5571,7 +5605,7 @@ function App() {
                                   >
                                     Save
                                   </button>
-                                  <button 
+                                  <button
                                     className="neon-btn small-btn"
                                     onClick={() => {
                                       if (confirm(`Are you sure you want to delete ${p.name}?`)) {
@@ -5603,9 +5637,9 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                         <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
                           <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
-                          <input 
-                            type="text" 
-                            placeholder="Search shops..." 
+                          <input
+                            type="text"
+                            placeholder="Search shops..."
                             value={adminSearchQuery}
                             onChange={(e) => setAdminSearchQuery(e.target.value)}
                             style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
@@ -5639,25 +5673,25 @@ function App() {
                             </tr>
                           ) : (
                             filteredShops.map(s => (
-                            <tr 
-                              key={s.id} 
-                              onClick={() => handleOpenShopDetails(s)}
-                              className="clickable-row"
-                            >
-                              <td><strong>{s.id}</strong></td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <span>
-                                    {s.name}
-                                    {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                                  </span>
-                                  <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                    View Details →
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          )))}
+                              <tr
+                                key={s.id}
+                                onClick={() => handleOpenShopDetails(s)}
+                                className="clickable-row"
+                              >
+                                <td><strong>{s.id}</strong></td>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span>
+                                      {s.name}
+                                      {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                    </span>
+                                    <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                      View Details →
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )))}
                         </tbody>
                       </table>
                     </div>
@@ -5669,8 +5703,8 @@ function App() {
                     <form onSubmit={handleAdminCreateShop} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Shop Name</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="e.g. Fresh Mart"
                           value={newShopName}
                           onChange={(e) => setNewShopName(e.target.value)}
@@ -5681,7 +5715,7 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Category</label>
-                        <select 
+                        <select
                           value={newShopCategory}
                           onChange={(e) => setNewShopCategory(e.target.value)}
                           className="custom-input"
@@ -5695,8 +5729,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Phone Number</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="e.g. 9876543210"
                           value={newShopPhone}
                           onChange={(e) => setNewShopPhone(e.target.value)}
@@ -5707,8 +5741,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Shop Address</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="e.g. Vaishali Nagar, Jaipur"
                           value={newShopAddress}
                           onChange={(e) => setNewShopAddress(e.target.value)}
@@ -5719,8 +5753,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Merchant Login Email</label>
-                        <input 
-                          type="email" 
+                        <input
+                          type="email"
                           placeholder="e.g. owner@gmail.com"
                           value={newShopEmail}
                           onChange={(e) => setNewShopEmail(e.target.value)}
@@ -5741,8 +5775,8 @@ function App() {
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h2 style={{ margin: 0, fontSize: '18px' }}>Merchant Verification Applications ({shops.filter(s => s.docs === 'Pending').length})</h2>
-                    <button 
-                      className="neon-btn small-btn" 
+                    <button
+                      className="neon-btn small-btn"
                       onClick={() => setIsMerchantApprovalsOpen(!isMerchantApprovalsOpen)}
                       style={{ fontSize: '12px', padding: '6px 12px' }}
                     >
@@ -5788,8 +5822,8 @@ function App() {
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h2 style={{ margin: 0, fontSize: '18px' }}>Pending Product Catalog Requests ({products.filter(p => p.approved === false).length})</h2>
-                    <button 
-                      className="neon-btn small-btn" 
+                    <button
+                      className="neon-btn small-btn"
                       onClick={() => setIsProductApprovalsOpen(!isProductApprovalsOpen)}
                       style={{ fontSize: '12px', padding: '6px 12px' }}
                     >
@@ -5813,15 +5847,15 @@ function App() {
                               <button className="approve-btn" onClick={() => handleAdminApproveProduct(p.firestoreId)} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', fontSize: '12px' }}>
                                 <Check size={14} /> Approve
                               </button>
-                              <button 
-                                className="neon-btn small-btn" 
+                              <button
+                                className="neon-btn small-btn"
                                 onClick={() => {
                                   setEditingProduct(p);
                                   setEditProductName(p.name);
                                   setEditProductPrice(p.price);
                                   setEditProductCategory(p.category);
                                   setIsEditProductModalOpen(true);
-                                }} 
+                                }}
                                 style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', fontSize: '12px', background: 'rgba(0, 255, 242, 0.1)', border: '1px solid var(--color-neon-cyan)' }}
                               >
                                 Edit & Approve
@@ -5848,9 +5882,9 @@ function App() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                         <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
                           <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
-                          <input 
-                            type="text" 
-                            placeholder="Search riders..." 
+                          <input
+                            type="text"
+                            placeholder="Search riders..."
                             value={adminSearchQuery}
                             onChange={(e) => setAdminSearchQuery(e.target.value)}
                             style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
@@ -5884,25 +5918,25 @@ function App() {
                             </tr>
                           ) : (
                             filteredRiders.map(d => (
-                            <tr 
-                              key={d.id}
-                              onClick={() => handleStartEditRider(d)}
-                              className="clickable-row"
-                            >
-                              <td><strong>{d.id}</strong></td>
-                              <td>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <span>
-                                    {d.name}
-                                    {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                                  </span>
-                                  <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                    View Details →
-                                  </span>
-                                </div>
-                              </td>
-                            </tr>
-                          )))}
+                              <tr
+                                key={d.id}
+                                onClick={() => handleStartEditRider(d)}
+                                className="clickable-row"
+                              >
+                                <td><strong>{d.id}</strong></td>
+                                <td>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span>
+                                      {d.name}
+                                      {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                    </span>
+                                    <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                      View Details →
+                                    </span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )))}
                         </tbody>
                       </table>
                     </div>
@@ -5913,8 +5947,8 @@ function App() {
                     <form onSubmit={handleAdminCreateRider} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Rider Name (Username)</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="e.g. JohnDoe"
                           value={newRiderName}
                           onChange={(e) => setNewRiderName(e.target.value)}
@@ -5925,8 +5959,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Email ID</label>
-                        <input 
-                          type="email" 
+                        <input
+                          type="email"
                           placeholder="e.g. john@example.com"
                           value={newRiderEmail}
                           onChange={(e) => setNewRiderEmail(e.target.value)}
@@ -5937,8 +5971,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Password</label>
-                        <input 
-                          type="password" 
+                        <input
+                          type="password"
                           placeholder="••••••••"
                           value={newRiderPassword}
                           onChange={(e) => setNewRiderPassword(e.target.value)}
@@ -5949,8 +5983,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Phone Number</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="e.g. 9876543210"
                           value={newRiderPhone}
                           onChange={(e) => setNewRiderPhone(e.target.value)}
@@ -5961,8 +5995,8 @@ function App() {
                       </div>
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Vehicle Details</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           placeholder="e.g. Splendor (RJ-14-SG-2024)"
                           value={newRiderVehicle}
                           onChange={(e) => setNewRiderVehicle(e.target.value)}
@@ -5982,8 +6016,8 @@ function App() {
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                     <h2 style={{ margin: 0, fontSize: '18px' }}>Delivery Boy Onboarding Verification ({deliveryPartners.filter(d => !d.verified).length})</h2>
-                    <button 
-                      className="neon-btn small-btn" 
+                    <button
+                      className="neon-btn small-btn"
                       onClick={() => setIsRiderApprovalsOpen(!isRiderApprovalsOpen)}
                       style={{ fontSize: '12px', padding: '6px 12px' }}
                     >
@@ -6029,11 +6063,11 @@ function App() {
               <div className="admin-settings-layout">
                 {/* Left Column (Configurations) */}
                 <div className="settings-col-left">
-                  
+
                   {/* Panel 1: Global Configurations */}
                   <div className={`settings-accordion-section ${activeSettingsAccordion === 'global' ? 'active' : ''}`}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="settings-accordion-header"
                       onClick={() => {
                         if (window.innerWidth < 768) {
@@ -6047,51 +6081,51 @@ function App() {
                       </h2>
                       <ChevronDown size={20} className="accordion-chevron" />
                     </button>
-                    
+
                     <div className="settings-accordion-content">
                       <div className="form-group" style={{ marginBottom: '12px' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Merchant Commission Percentage (%)</label>
-                        <input 
-                          type="number" 
-                          value={commissionPercent} 
-                          onChange={(e) => setCommissionPercent(parseFloat(e.target.value))} 
+                        <input
+                          type="number"
+                          value={commissionPercent}
+                          onChange={(e) => setCommissionPercent(parseFloat(e.target.value))}
                           className="custom-input"
                           style={{ width: '100%' }}
                         />
                       </div>
                       <div className="form-group" style={{ marginBottom: '12px' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Base Delivery Charge (₹)</label>
-                        <input 
-                          type="number" 
-                          value={baseDeliveryCharge} 
-                          onChange={(e) => setBaseDeliveryCharge(parseFloat(e.target.value))} 
+                        <input
+                          type="number"
+                          value={baseDeliveryCharge}
+                          onChange={(e) => setBaseDeliveryCharge(parseFloat(e.target.value))}
                           className="custom-input"
                           style={{ width: '100%' }}
                         />
                       </div>
                       <div className="form-group" style={{ marginBottom: '12px' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Per-Km Distance Fare (₹/km)</label>
-                        <input 
-                          type="number" 
-                          value={perKmCharge} 
-                          onChange={(e) => setPerKmCharge(parseFloat(e.target.value))} 
+                        <input
+                          type="number"
+                          value={perKmCharge}
+                          onChange={(e) => setPerKmCharge(parseFloat(e.target.value))}
                           className="custom-input"
                           style={{ width: '100%' }}
                         />
                       </div>
                       <div className="form-group" style={{ marginBottom: '16px' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Gateway Bank Account</label>
-                        <input 
-                          type="text" 
-                          value={bankAccount} 
-                          onChange={(e) => setBankAccount(e.target.value)} 
+                        <input
+                          type="text"
+                          value={bankAccount}
+                          onChange={(e) => setBankAccount(e.target.value)}
                           className="custom-input"
                           style={{ width: '100%' }}
                         />
                       </div>
 
                       <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid var(--color-border)' }}></div>
-                      
+
                       <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Modify Storefront Categories</h4>
                       <div className="cat-admin-list">
                         {categories.slice(1).map(c => (
@@ -6103,8 +6137,8 @@ function App() {
 
                   {/* Panel 2: Deal of the Day Configuration */}
                   <div className={`settings-accordion-section ${activeSettingsAccordion === 'deal' ? 'active' : ''}`}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="settings-accordion-header"
                       onClick={() => {
                         if (window.innerWidth < 768) {
@@ -6118,14 +6152,14 @@ function App() {
                       </h2>
                       <ChevronDown size={20} className="accordion-chevron" />
                     </button>
-                    
+
                     <div className="settings-accordion-content">
                       <div className="form-group" style={{ marginBottom: '12px' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Deal Promo Text</label>
-                        <input 
-                          type="text" 
-                          value={dealTextEdit} 
-                          onChange={(e) => setDealTextEdit(e.target.value)} 
+                        <input
+                          type="text"
+                          value={dealTextEdit}
+                          onChange={(e) => setDealTextEdit(e.target.value)}
                           className="custom-input"
                           placeholder="e.g. Belgian Chocolate Waffle - Sweet Treat Cafe - Flat 20% Off!"
                           style={{ width: '100%' }}
@@ -6133,10 +6167,10 @@ function App() {
                       </div>
                       <div className="form-group" style={{ marginBottom: '12px' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Deal Image URL</label>
-                        <input 
-                          type="text" 
-                          value={dealImageEdit} 
-                          onChange={(e) => setDealImageEdit(e.target.value)} 
+                        <input
+                          type="text"
+                          value={dealImageEdit}
+                          onChange={(e) => setDealImageEdit(e.target.value)}
                           className="custom-input"
                           placeholder="Enter image URL"
                           style={{ width: '100%' }}
@@ -6147,13 +6181,13 @@ function App() {
                           Image Zoom/Scale: {dealZoomEdit}x (1x Original, 3x Max Zoom)
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input 
-                            type="range" 
-                            min="1" 
-                            max="3" 
-                            step="0.1" 
-                            value={dealZoomEdit} 
-                            onChange={(e) => setDealZoomEdit(e.target.value)} 
+                          <input
+                            type="range"
+                            min="1"
+                            max="3"
+                            step="0.1"
+                            value={dealZoomEdit}
+                            onChange={(e) => setDealZoomEdit(e.target.value)}
                             style={{ flex: 1, cursor: 'pointer' }}
                           />
                           <span style={{ fontSize: '12px', color: 'var(--color-text-main)', width: '35px', textAlign: 'right' }}>{dealZoomEdit}x</span>
@@ -6164,12 +6198,12 @@ function App() {
                           Image Horizontal Alignment (X Offset): {dealHorizontalOffsetEdit}% (0% Left, 50% Center, 100% Right)
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={dealHorizontalOffsetEdit} 
-                            onChange={(e) => setDealHorizontalOffsetEdit(e.target.value)} 
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={dealHorizontalOffsetEdit}
+                            onChange={(e) => setDealHorizontalOffsetEdit(e.target.value)}
                             style={{ flex: 1, cursor: 'pointer' }}
                           />
                           <span style={{ fontSize: '12px', color: 'var(--color-text-main)', width: '35px', textAlign: 'right' }}>{dealHorizontalOffsetEdit}%</span>
@@ -6180,23 +6214,23 @@ function App() {
                           Image Vertical Alignment (Y Offset): {dealVerticalOffsetEdit}% (0% Top, 50% Center, 100% Bottom)
                         </label>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            value={dealVerticalOffsetEdit} 
-                            onChange={(e) => setDealVerticalOffsetEdit(e.target.value)} 
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={dealVerticalOffsetEdit}
+                            onChange={(e) => setDealVerticalOffsetEdit(e.target.value)}
                             style={{ flex: 1, cursor: 'pointer' }}
                           />
                           <span style={{ fontSize: '12px', color: 'var(--color-text-main)', width: '35px', textAlign: 'right' }}>{dealVerticalOffsetEdit}%</span>
                         </div>
                       </div>
                       <div className="form-group" style={{ marginBottom: '12px', flexDirection: 'row', alignItems: 'center', gap: '8px', display: 'flex' }}>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           id="deal-active-chk"
-                          checked={dealActiveEdit} 
-                          onChange={(e) => setDealActiveEdit(e.target.checked)} 
+                          checked={dealActiveEdit}
+                          onChange={(e) => setDealActiveEdit(e.target.checked)}
                           style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                         />
                         <label htmlFor="deal-active-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>Make Deal of the Day Active</label>
@@ -6210,8 +6244,8 @@ function App() {
 
                   {/* Panel 2b: System Announcements Configuration */}
                   <div className={`settings-accordion-section ${activeSettingsAccordion === 'announcement' ? 'active' : ''}`} style={{ marginTop: '20px' }}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="settings-accordion-header"
                       onClick={() => {
                         setActiveSettingsAccordion(activeSettingsAccordion === 'announcement' ? '' : 'announcement');
@@ -6223,7 +6257,7 @@ function App() {
                       </h2>
                       <ChevronDown size={20} className="accordion-chevron" />
                     </button>
-                    
+
                     <div className="settings-accordion-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       {/* Customer Banner Settings */}
                       <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '20px' }}>
@@ -6232,9 +6266,9 @@ function App() {
                         </h3>
                         <div className="form-group" style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
-                          <textarea 
-                            value={customerAnnouncementEdit} 
-                            onChange={(e) => setCustomerAnnouncementEdit(e.target.value)} 
+                          <textarea
+                            value={customerAnnouncementEdit}
+                            onChange={(e) => setCustomerAnnouncementEdit(e.target.value)}
                             className="custom-input"
                             placeholder="e.g. 🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500!"
                             rows={2}
@@ -6253,9 +6287,9 @@ function App() {
                         </h3>
                         <div className="form-group" style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
-                          <textarea 
-                            value={riderAnnouncementEdit} 
-                            onChange={(e) => setRiderAnnouncementEdit(e.target.value)} 
+                          <textarea
+                            value={riderAnnouncementEdit}
+                            onChange={(e) => setRiderAnnouncementEdit(e.target.value)}
                             className="custom-input"
                             placeholder="e.g. 📢 Welcome to PIXIgo Rider Console! Please keep your GPS enabled and update delivery status with OTP on successful delivery."
                             rows={2}
@@ -6276,8 +6310,8 @@ function App() {
 
                   {/* Panel 3: Live Banner Preview */}
                   <div className={`settings-accordion-section ${activeSettingsAccordion === 'preview' ? 'active' : ''}`}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="settings-accordion-header"
                       onClick={() => {
                         if (window.innerWidth < 768) {
@@ -6291,10 +6325,10 @@ function App() {
                       </h2>
                       <ChevronDown size={20} className="accordion-chevron" />
                     </button>
-                    
+
                     <div className="settings-accordion-content">
                       <div className="preview-tabs-container" style={{ display: 'flex', gap: '8px', marginBottom: '16px', background: 'rgba(15, 23, 42, 0.03)', padding: '4px', borderRadius: '8px', border: '1px solid var(--color-border)' }}>
-                        <button 
+                        <button
                           type="button"
                           className={`preview-tab-btn ${activePreviewTab === 'desktop' ? 'active' : ''}`}
                           onClick={() => setActivePreviewTab('desktop')}
@@ -6302,7 +6336,7 @@ function App() {
                         >
                           🖥️ Desktop View
                         </button>
-                        <button 
+                        <button
                           type="button"
                           className={`preview-tab-btn ${activePreviewTab === 'mobile' ? 'active' : ''}`}
                           onClick={() => setActivePreviewTab('mobile')}
@@ -6391,8 +6425,8 @@ function App() {
 
                   {/* Panel 4: Image Upload Guide */}
                   <div className={`settings-accordion-section ${activeSettingsAccordion === 'guide' ? 'active' : ''}`}>
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       className="settings-accordion-header"
                       onClick={() => {
                         if (window.innerWidth < 768) {
@@ -6406,7 +6440,7 @@ function App() {
                       </h2>
                       <ChevronDown size={20} className="accordion-chevron" />
                     </button>
-                    
+
                     <div className="settings-accordion-content">
                       <div className="guide-methods-grid">
                         <div style={{ border: '1px solid var(--color-border)', padding: '16px', borderRadius: '12px', background: 'rgba(15, 23, 42, 0.02)' }}>
@@ -6443,9 +6477,9 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                     <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '260px' }}>
                       <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
-                      <input 
-                        type="text" 
-                        placeholder="Search users..." 
+                      <input
+                        type="text"
+                        placeholder="Search users..."
                         value={adminSearchQuery}
                         onChange={(e) => setAdminSearchQuery(e.target.value)}
                         style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
@@ -6481,17 +6515,17 @@ function App() {
                         </tr>
                       ) : (
                         filteredUsers.map(u => {
-                          const roleBadgeClass = 
-                            u.role === 'admin' ? 'badge-danger' : 
-                            u.role === 'merchant' ? 'badge-warning' : 
-                            u.role === 'rider' ? 'badge-primary' : 
-                            'badge-success';
-                          
-                          const roleLabel = 
-                            u.role === 'admin' ? 'Admin' : 
-                            u.role === 'merchant' ? 'Merchant' : 
-                            u.role === 'rider' ? 'Delivery Partner' : 
-                            'Customer';
+                          const roleBadgeClass =
+                            u.role === 'admin' ? 'badge-danger' :
+                              u.role === 'merchant' ? 'badge-warning' :
+                                u.role === 'rider' ? 'badge-primary' :
+                                  'badge-success';
+
+                          const roleLabel =
+                            u.role === 'admin' ? 'Admin' :
+                              u.role === 'merchant' ? 'Merchant' :
+                                u.role === 'rider' ? 'Delivery Partner' :
+                                  'Customer';
 
                           return (
                             <tr key={u.id}>
@@ -6514,18 +6548,18 @@ function App() {
             )}
           </div>
         ))
-      }
+        }
 
         {/* ==================== DELIVERY RIDER PORTAL ==================== */}
         {activeTab === 'delivery' && renderPortalGuard('Delivery Rider', (() => {
           const currentRider = deliveryPartners.find(d => d.id === user?.uid);
-          
+
           const isAadhaarUploaded = currentRider?.aadhaarUploaded || false;
           const isDlUploaded = currentRider?.dlUploaded || false;
           const isRcUploaded = currentRider?.rcUploaded || false;
           const isPanUploaded = currentRider?.panUploaded || false;
           const isAllUploaded = isAadhaarUploaded && isDlUploaded && isRcUploaded && isPanUploaded;
-          
+
           const activeJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED'));
           const completedJobs = orders.filter(o => {
             if (o.deliveryPartnerId !== user?.uid || o.status !== 'COMPLETED') return false;
@@ -6537,11 +6571,11 @@ function App() {
               return false;
             }
           });
-          
+
           return (
             <div className="delivery-portal-wrap fade-in">
               <div className="delivery-layout glass-panel">
-                
+
                 {/* Rider Portal Announcement Marquee Banner */}
                 {riderAnnouncement && (
                   <div className="rider-announcement-banner" style={{
@@ -6556,12 +6590,12 @@ function App() {
                     overflow: 'hidden',
                     boxShadow: '0 0 10px rgba(0, 255, 242, 0.05)'
                   }}>
-                    <span style={{ 
-                      fontSize: '12px', 
-                      fontWeight: '800', 
-                      color: 'var(--color-primary)', 
-                      background: 'rgba(0, 255, 242, 0.15)', 
-                      padding: '4px 10px', 
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      color: 'var(--color-primary)',
+                      background: 'rgba(0, 255, 242, 0.15)',
+                      padding: '4px 10px',
                       borderRadius: '12px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.5px',
@@ -6571,15 +6605,15 @@ function App() {
                     }}>
                       📢 Notice
                     </span>
-                    <marquee 
-                      behavior="scroll" 
-                      direction="left" 
-                      scrollamount="4" 
-                      style={{ 
-                        fontSize: '13px', 
-                        color: '#00fff2', 
+                    <marquee
+                      behavior="scroll"
+                      direction="left"
+                      scrollamount="4"
+                      style={{
+                        fontSize: '13px',
+                        color: '#00fff2',
                         textShadow: '0 0 4px rgba(0, 255, 242, 0.3)',
-                        fontWeight: '600', 
+                        fontWeight: '600',
                         margin: 0,
                         padding: 0
                       }}
@@ -6654,10 +6688,10 @@ function App() {
                           <div className="job-meta-box" style={{ textAlign: 'left' }}>
                             <h4>🏠 Customer Delivery</h4>
                             <p><strong>Address:</strong> {o.customerLocation}</p>
-                            <a 
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="maps-link-btn"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
                             >
@@ -6668,8 +6702,8 @@ function App() {
                         </div>
 
                         <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
-                          <button 
-                            className="neon-btn" 
+                          <button
+                            className="neon-btn"
                             style={{ width: '100%', background: 'var(--color-primary)', color: '#000000', fontWeight: 'bold' }}
                             onClick={() => handleRiderAcceptJob(o.id)}
                           >
@@ -6719,10 +6753,10 @@ function App() {
                             <h4>🏠 Customer Delivery</h4>
                             <p><strong>Name:</strong> {o.customerName}</p>
                             <p><strong>Address:</strong> {o.customerLocation}</p>
-                            <a 
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               className="maps-link-btn"
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
                             >
@@ -6738,16 +6772,16 @@ function App() {
 
                         <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
                           {riderTrackingOrderId === o.id ? (
-                            <button 
-                              className="neon-btn" 
+                            <button
+                              className="neon-btn"
                               style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
                               onClick={handleStopRiderTracking}
                             >
                               🔴 Stop Live GPS Tracking
                             </button>
                           ) : (
-                            <button 
-                              className="neon-btn" 
+                            <button
+                              className="neon-btn"
                               style={{ flexGrow: 1 }}
                               onClick={() => handleStartRiderTracking(o.id)}
                             >
@@ -6757,23 +6791,23 @@ function App() {
                         </div>
 
                         <div className="job-otp-form" style={{ marginTop: '20px' }}>
-                          <input 
-                            type="text" 
-                            placeholder="Enter Customer Delivery OTP" 
+                          <input
+                            type="text"
+                            placeholder="Enter Customer Delivery OTP"
                             value={riderInputOTP}
                             onChange={(e) => setRiderInputOTP(e.target.value)}
                             className="custom-input"
                           />
                           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                            <button 
-                              className="neon-btn" 
+                            <button
+                              className="neon-btn"
                               onClick={() => handleRiderCompleteDelivery(o.id)}
                               style={{ flexGrow: 2 }}
                             >
                               Complete Delivery & Collect Cash
                             </button>
-                            <button 
-                              className="neon-btn" 
+                            <button
+                              className="neon-btn"
                               onClick={() => setActiveQrModalOrder(o)}
                               style={{ flexGrow: 1, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                               title="Show QR Code"
@@ -6833,10 +6867,10 @@ function App() {
                     You can call us on this number for 24/7 help: <strong><a href="tel:+919251054064" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>+91 9251054064</a></strong>
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', width: '100%' }}>
-                    <a 
-                      href="https://wa.me/919251054064" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
+                    <a
+                      href="https://wa.me/919251054064"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="contact-method-card border-glow"
                       style={{ margin: 0 }}
                     >
@@ -6850,8 +6884,8 @@ function App() {
                       <ArrowRight size={16} className="contact-arrow" />
                     </a>
 
-                    <a 
-                      href="mailto:pixigodelivery@gmail.com" 
+                    <a
+                      href="mailto:pixigodelivery@gmail.com"
                       className="contact-method-card border-glow"
                       style={{ margin: 0 }}
                     >
@@ -6876,9 +6910,9 @@ function App() {
         {activeTab === 'merchant' && renderPortalGuard('Merchant Dashboard', (() => {
           const merchantOrders = orders.filter(o => {
             const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
-            return (o.merchantName === currentMerchantShopName || 
-                    (o.items && o.items.some(i => i.store === currentMerchantShopName))) &&
-                   routing === 'Option 1 (Shop-Direct)';
+            return (o.merchantName === currentMerchantShopName ||
+              (o.items && o.items.some(i => i.store === currentMerchantShopName))) &&
+              routing === 'Option 1 (Shop-Direct)';
           });
 
           const todaysMerchantOrders = merchantOrders.filter(o => {
@@ -6891,18 +6925,18 @@ function App() {
             }
           });
 
-          const ongoingMerchantOrders = merchantOrders.filter(o => 
+          const ongoingMerchantOrders = merchantOrders.filter(o =>
             ['ACCEPTED', 'ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY'].includes(o.status)
           );
 
-          const pendingMerchantOrders = merchantOrders.filter(o => 
+          const pendingMerchantOrders = merchantOrders.filter(o =>
             ['PLACED', 'PENDING'].includes(o.status)
           );
 
           return (
             <div className="merchant-portal-wrap fade-in">
               <div className="merchant-layout glass-panel">
-                
+
                 {/* Associated Shop Welcome */}
                 <div style={{ textAlign: 'left', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
                   <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
@@ -6943,12 +6977,12 @@ function App() {
                             Order Acceptance Status: <strong>{matchedShop.isAcceptingOrders !== false ? 'OPEN' : 'CLOSED'}</strong>
                           </h4>
                           <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                            {matchedShop.isAcceptingOrders !== false 
-                              ? `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).` 
+                            {matchedShop.isAcceptingOrders !== false
+                              ? `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
                               : 'Your shop is currently closed. Customers cannot place new orders.'}
                           </p>
                         </div>
-                        <button 
+                        <button
                           className="neon-btn"
                           onClick={() => handleToggleAcceptingOrders(matchedShop, matchedShop.isAcceptingOrders !== false)}
                           style={{
@@ -7016,15 +7050,15 @@ function App() {
                           <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                             <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{formatINR(o.totalAmount)}</div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                              <button 
-                                className="neon-btn small-btn" 
+                              <button
+                                className="neon-btn small-btn"
                                 onClick={() => handleMerchantAcceptOrder(o.id)}
                                 style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)' }}
                               >
                                 Approve
                               </button>
-                              <button 
-                                className="neon-btn small-btn" 
+                              <button
+                                className="neon-btn small-btn"
                                 onClick={() => handleMerchantRejectOrder(o.id)}
                                 style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)' }}
                               >
@@ -7112,28 +7146,28 @@ function App() {
                     <h2 style={{ textAlign: 'left' }}>Add Product to Catalog</h2>
                     <div className="form-group">
                       <label>Product Name</label>
-                      <input 
-                        type="text" 
-                        value={newProductName} 
-                        onChange={(e) => setNewProductName(e.target.value)} 
-                        className="custom-input" 
+                      <input
+                        type="text"
+                        value={newProductName}
+                        onChange={(e) => setNewProductName(e.target.value)}
+                        className="custom-input"
                         placeholder="e.g. Vanilla Butter Cake"
                       />
                     </div>
                     <div className="form-group">
                       <label>Price (₹)</label>
-                      <input 
-                        type="number" 
-                        value={newProductPrice} 
-                        onChange={(e) => setNewProductPrice(e.target.value)} 
-                        className="custom-input" 
+                      <input
+                        type="number"
+                        value={newProductPrice}
+                        onChange={(e) => setNewProductPrice(e.target.value)}
+                        className="custom-input"
                         placeholder="e.g. 350"
                       />
                     </div>
                     <div className="form-group">
                       <label>Product Category</label>
-                      <select 
-                        value={newProductCategory} 
+                      <select
+                        value={newProductCategory}
                         onChange={(e) => setNewProductCategory(e.target.value)}
                         className="rider-select"
                       >
@@ -7144,8 +7178,8 @@ function App() {
                     </div>
                     <div className="form-group">
                       <label>Dietary Type</label>
-                      <select 
-                        value={newProductIsVeg ? 'veg' : 'nonveg'} 
+                      <select
+                        value={newProductIsVeg ? 'veg' : 'nonveg'}
                         onChange={(e) => setNewProductIsVeg(e.target.value === 'veg')}
                         className="rider-select"
                       >
@@ -7155,8 +7189,8 @@ function App() {
                     </div>
                     <div className="form-group">
                       <label>Representing Shop</label>
-                      <select 
-                        value={merchantShopSelect} 
+                      <select
+                        value={merchantShopSelect}
                         onChange={(e) => setMerchantShopSelect(e.target.value)}
                         className="rider-select"
                       >
@@ -7218,10 +7252,10 @@ function App() {
                     You can call us on this number for 24/7 help: <strong><a href="tel:+919251054064" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>+91 9251054064</a></strong>
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px', width: '100%' }}>
-                    <a 
-                      href="https://wa.me/919251054064" 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
+                    <a
+                      href="https://wa.me/919251054064"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="contact-method-card border-glow"
                       style={{ margin: 0 }}
                     >
@@ -7235,8 +7269,8 @@ function App() {
                       <ArrowRight size={16} className="contact-arrow" />
                     </a>
 
-                    <a 
-                      href="mailto:pixigodelivery@gmail.com" 
+                    <a
+                      href="mailto:pixigodelivery@gmail.com"
                       className="contact-method-card border-glow"
                       style={{ margin: 0 }}
                     >
@@ -7290,97 +7324,97 @@ function App() {
               <button className="modal-close-btn-dark" onClick={() => { setIsAuthModalOpen(false); setAuthError(''); }}>
                 <X size={20} />
               </button>
-            
+
               <div className="auth-icon-badge-dark">
                 <User size={36} className="auth-icon-svg" />
               </div>
-            
+
               <div className="auth-modal-header" style={{ textAlign: 'center', marginBottom: '8px' }}>
                 <h2 className="auth-portal-title-dark">{isSignUp ? 'Create Account' : 'Welcome Back'}</h2>
                 <p className="auth-portal-subtitle-dark">Access your PixiGo Delivery dashboard</p>
               </div>
 
-            {authError && (
-              <div className={`auth-error-banner fade-in ${authError.toLowerCase().includes('sent') ? 'auth-info-banner' : ''}`}>
-                {authError.toLowerCase().includes('sent') ? <Check size={16} /> : <AlertCircle size={16} />}
-                <span>{authError}</span>
-              </div>
-            )}
-            
-            <form onSubmit={handleAuthAction} className="auth-form-premium">
-              <div className="form-group-premium">
-                <label className="form-label-premium">Email Address</label>
-                <input 
-                  type="email" 
-                  placeholder="Enter your email" 
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Password</label>
-                <input 
-                  type="password" 
-                  placeholder="••••••••" 
-                  value={authPassword}
-                  onChange={(e) => setAuthPassword(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
-
-              {!isSignUp && (
-                <div style={{ textAlign: 'right', marginTop: '-8px' }}>
-                  <button 
-                    type="button" 
-                    className="toggle-btn-link-premium" 
-                    style={{ fontSize: '11px', opacity: 0.8 }} 
-                    onClick={handleForgotPassword}
-                  >
-                    Forgot Password?
-                  </button>
+              {authError && (
+                <div className={`auth-error-banner fade-in ${authError.toLowerCase().includes('sent') ? 'auth-info-banner' : ''}`}>
+                  {authError.toLowerCase().includes('sent') ? <Check size={16} /> : <AlertCircle size={16} />}
+                  <span>{authError}</span>
                 </div>
               )}
-              
-              <button type="submit" className="neon-btn auth-submit-btn-premium">
-                {isSignUp ? 'Create PixiGo Account' : 'Sign In'}
+
+              <form onSubmit={handleAuthAction} className="auth-form-premium">
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Email Address</label>
+                  <input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={authEmail}
+                    onChange={(e) => setAuthEmail(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={authPassword}
+                    onChange={(e) => setAuthPassword(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                  />
+                </div>
+
+                {!isSignUp && (
+                  <div style={{ textAlign: 'right', marginTop: '-8px' }}>
+                    <button
+                      type="button"
+                      className="toggle-btn-link-premium"
+                      style={{ fontSize: '11px', opacity: 0.8 }}
+                      onClick={handleForgotPassword}
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
+                )}
+
+                <button type="submit" className="neon-btn auth-submit-btn-premium">
+                  {isSignUp ? 'Create PixiGo Account' : 'Sign In'}
+                </button>
+              </form>
+
+              <div className="divider"></div>
+
+              <button
+                className="google-auth-btn-premium"
+                onClick={() => {
+                  setAuthError('');
+                  signInWithPopup(auth, googleProvider)
+                    .then((result) => {
+                      showToast(`Welcome back, ${result.user.displayName || result.user.email}!`);
+                      setIsAuthModalOpen(false);
+                    })
+                    .catch((error) => {
+                      setAuthError(getFriendlyAuthError(error.message));
+                    });
+                }}
+              >
+                <span className="google-icon-premium">G</span> Sign In with Google
               </button>
-            </form>
 
-            <div className="divider"></div>
+              <p className="auth-toggle-text-premium">
+                {isSignUp ? 'Already registered?' : 'Need a new account?'} {' '}
+                <button className="toggle-btn-link-premium" onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }}>
+                  {isSignUp ? 'Sign In Instead' : 'Sign Up Now'}
+                </button>
+              </p>
 
-            <button 
-              className="google-auth-btn-premium" 
-              onClick={() => {
-                setAuthError('');
-                signInWithPopup(auth, googleProvider)
-                  .then((result) => {
-                    showToast(`Welcome back, ${result.user.displayName || result.user.email}!`);
-                    setIsAuthModalOpen(false);
-                  })
-                  .catch((error) => {
-                    setAuthError(getFriendlyAuthError(error.message));
-                  });
-              }}
-            >
-              <span className="google-icon-premium">G</span> Sign In with Google
-            </button>
-
-            <p className="auth-toggle-text-premium">
-              {isSignUp ? 'Already registered?' : 'Need a new account?'} {' '}
-              <button className="toggle-btn-link-premium" onClick={() => { setIsSignUp(!isSignUp); setAuthError(''); }}>
-                {isSignUp ? 'Sign In Instead' : 'Sign Up Now'}
-              </button>
-            </p>
-
-            <div className="chittortech-branding-footer-dark">
-              <span className="branding-text-muted-dark">Powered and maintained by</span>
-              <div className="chittortech-logo-premium">
-                <img src="/chittortech_logo.png" alt="Chittortech Logo" className="chittortech-logo-img" />
+              <div className="chittortech-branding-footer-dark">
+                <span className="branding-text-muted-dark">Powered and maintained by</span>
+                <div className="chittortech-logo-premium">
+                  <img src="/chittortech_logo.png" alt="Chittortech Logo" className="chittortech-logo-img" />
+                </div>
               </div>
-            </div>
             </div>
           </div>
         </div>
@@ -7393,7 +7427,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => setIsProfileOpen(false)}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section">
               <div className="profile-avatar-glow">
                 <User size={40} style={{ color: 'var(--color-primary)' }} />
@@ -7401,33 +7435,33 @@ function App() {
               <h3 className="section-title-premium">Edit Profile Settings</h3>
               <p className="profile-sub">{customerEmail}</p>
             </div>
-            
+
             <form onSubmit={handleSaveProfile} className="profile-form-premium">
               <div className="form-group-premium">
                 <label className="form-label-premium">Full Name</label>
-                <input 
-                  type="text" 
-                  value={customerName} 
-                  onChange={(e) => setCustomerName(e.target.value)} 
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
                   className="custom-input-premium"
                   required
                 />
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">Phone Number</label>
-                <input 
-                  type="text" 
-                  value={customerPhone} 
-                  onChange={(e) => setCustomerPhone(e.target.value)} 
+                <input
+                  type="text"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
                   className="custom-input-premium"
                   required
                 />
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">Delivery Address Coordinates</label>
-                <textarea 
-                  value={customerAddress} 
-                  onChange={(e) => setCustomerAddress(e.target.value)} 
+                <textarea
+                  value={customerAddress}
+                  onChange={(e) => setCustomerAddress(e.target.value)}
                   className="custom-input-premium address-textarea-premium"
                   rows="3"
                   required
@@ -7468,7 +7502,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => setIsPastOrdersOpen(false)}>
               <X size={20} />
             </button>
-            
+
             <div className="modal-header-premium">
               <h3 className="section-title-premium" style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}><FileText size={22} className="text-neon" /> Past Orders History</h3>
               <p className="profile-sub">Review your completed deliveries</p>
@@ -7532,7 +7566,7 @@ function App() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="divider"></div>
 
             {/* Profile Summary in Menu */}
@@ -7545,23 +7579,23 @@ function App() {
                 <p>{user ? user.email : 'Log in to place orders'}</p>
               </div>
             </div>
-            
+
             <div className="divider"></div>
- 
+
             {/* Primary Customer Actions */}
             <div className="mobile-menu-links">
               <h3 className="menu-group-title">Menu Options</h3>
-              
-              <button 
-                className="mobile-menu-link" 
+
+              <button
+                className="mobile-menu-link"
                 onClick={() => { setIsProfileOpen(true); setIsMobileMenuOpen(false); }}
               >
                 <User size={18} className="text-neon" />
                 <span>My Profile</span>
               </button>
 
-              <button 
-                className="mobile-menu-link" 
+              <button
+                className="mobile-menu-link"
                 onClick={() => {
                   const customerOrders = orders.filter(o => {
                     const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
@@ -7585,19 +7619,19 @@ function App() {
                 <span>My Orders</span>
               </button>
 
-              <button 
-                className="mobile-menu-link" 
-                onClick={() => { 
-                  setIsPastOrdersOpen(true); 
-                  setIsMobileMenuOpen(false); 
+              <button
+                className="mobile-menu-link"
+                onClick={() => {
+                  setIsPastOrdersOpen(true);
+                  setIsMobileMenuOpen(false);
                 }}
               >
                 <FileText size={18} className="text-neon" />
                 <span>My Past Orders</span>
               </button>
 
-              <button 
-                className="mobile-menu-link" 
+              <button
+                className="mobile-menu-link"
                 onClick={() => { setIsCartDrawerOpen(true); setIsMobileMenuOpen(false); }}
               >
                 <ShoppingCart size={18} className="text-neon" />
@@ -7609,16 +7643,16 @@ function App() {
                 )}
               </button>
 
-              <button 
-                className="mobile-menu-link" 
+              <button
+                className="mobile-menu-link"
                 onClick={() => { setIsContactOpen(true); setIsMobileMenuOpen(false); }}
               >
                 <Phone size={18} className="text-neon" />
                 <span>Contact Us</span>
               </button>
 
-              <button 
-                className="mobile-menu-link" 
+              <button
+                className="mobile-menu-link"
                 onClick={() => { setIsAboutDeveloperOpen(true); setIsMobileMenuOpen(false); }}
               >
                 <Code size={18} className="text-neon" />
@@ -7631,16 +7665,16 @@ function App() {
             {/* Actions (Logout / Log In) */}
             <div className="mobile-menu-actions">
               {user ? (
-                <button 
-                  className="mobile-menu-action-btn logout-action-btn" 
+                <button
+                  className="mobile-menu-action-btn logout-action-btn"
                   onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
                 >
                   <ArrowRight size={18} />
                   <span>Logout</span>
                 </button>
               ) : (
-                <button 
-                  className="neon-btn mobile-menu-login-btn" 
+                <button
+                  className="neon-btn mobile-menu-login-btn"
                   onClick={() => { setIsSignUp(false); setIsAuthModalOpen(true); setIsMobileMenuOpen(false); }}
                 >
                   Sign In
@@ -7661,7 +7695,7 @@ function App() {
                 <X size={20} />
               </button>
             </div>
-            
+
             {(() => {
               const trackedOrder = orders.find(o => o.id === currentOrderTracking);
               if (!trackedOrder) return <p className="text-muted">Order not found.</p>;
@@ -7679,13 +7713,13 @@ function App() {
                   {/* ETA banner */}
                   <div className="eta-banner-sidebar">
                     <span className="eta-countdown-sidebar" style={{ color: trackedOrder.status?.startsWith('CANCELLED') ? 'var(--color-danger)' : 'inherit' }}>
-                      {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' : 
-                       trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
-                       trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
-                       trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
-                       trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
-                       trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
-                       'Awaiting Confirmation'}
+                      {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' :
+                        trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
+                          trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
+                            trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
+                              trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
+                                trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
+                                  'Awaiting Confirmation'}
                     </span>
                   </div>
 
@@ -7702,7 +7736,7 @@ function App() {
                           <p>We've received your order.</p>
                         </div>
                       </div>
-                      
+
                       <div className="timeline-line-connector">
                         <div className={`timeline-line-progress ${getStatusStepIndex(trackedOrder.status) >= 2 ? 'full' : ''}`}></div>
                       </div>
@@ -7730,8 +7764,8 @@ function App() {
                         <div className="timeline-content">
                           <h4>Courier Dispatched</h4>
                           <p>
-                            {getStatusStepIndex(trackedOrder.status) >= 3 
-                              ? `Rider ${trackedOrder.deliveryPartnerName || 'Partner'} claimed your run!` 
+                            {getStatusStepIndex(trackedOrder.status) >= 3
+                              ? `Rider ${trackedOrder.deliveryPartnerName || 'Partner'} claimed your run!`
                               : "Waiting to assign courier..."}
                           </p>
                         </div>
@@ -7756,7 +7790,7 @@ function App() {
 
                   {/* Map */}
                   <div className="leaflet-mock-map-sidebar border-glow">
-                    <LeafletMap 
+                    <LeafletMap
                       riderCoords={trackedOrder.id === trackingOrderIdForHook ? liveRiderCoords : null}
                       merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
                       customerCoords={parseCoords(trackedOrder.customerLocation)}
@@ -7773,11 +7807,10 @@ function App() {
                     </div>
                     <div className="sidebar-detail-row">
                       <span>Status:</span>
-                      <span className={`badge ${
-                        trackedOrder.status === 'COMPLETED' ? 'badge-success' : 
-                        trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' : 
-                        'badge-warning'
-                      }`}>
+                      <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' :
+                          trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                            'badge-warning'
+                        }`}>
                         {trackedOrder.status}
                       </span>
                     </div>
@@ -7796,79 +7829,79 @@ function App() {
                   </div>
 
                   {/* Scan & Pay on Delivery UPI QR code for COD orders */}
-                  {trackedOrder.paymentMethod === 'COD' && 
-                   !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) && 
-                   !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
-                    <div className="cod-qr-card border-glow" style={{
-                      background: 'rgba(218, 165, 32, 0.04)',
-                      border: '1px dashed rgba(218, 165, 32, 0.3)',
-                      borderRadius: '12px',
-                      padding: '16px',
-                      textAlign: 'center',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '12px',
-                      marginTop: '8px'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                        💵 Scan & Pay on Delivery
-                      </div>
-                      <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
-                        Scan the QR code using any UPI app (GPay, Paytm, PhonePe) to pay the rider digitally on delivery.
-                      </p>
-                      <div style={{
-                        background: '#ffffff',
-                        padding: '8px',
-                        borderRadius: '8px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '1px solid var(--color-border)'
-                      }}>
-                        <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                            `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
-                          )}`} 
-                          alt="UPI Payment QR Code"
-                          style={{ width: '130px', height: '130px', display: 'block' }}
-                        />
-                      </div>
-                      <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
-                        Amount: {formatINR(trackedOrder.totalAmount)}
-                      </div>
-                      <div style={{
+                  {trackedOrder.paymentMethod === 'COD' &&
+                    !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) &&
+                    !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
+                      <div className="cod-qr-card border-glow" style={{
+                        background: 'rgba(218, 165, 32, 0.04)',
+                        border: '1px dashed rgba(218, 165, 32, 0.3)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        textAlign: 'center',
                         display: 'flex',
+                        flexDirection: 'column',
                         alignItems: 'center',
-                        justifyContent: 'space-between',
-                        width: '100%',
-                        background: 'rgba(218, 165, 32, 0.08)',
-                        border: '1px solid rgba(218, 165, 32, 0.25)',
-                        borderRadius: '24px',
-                        padding: '6px 14px',
-                        fontSize: '12px'
+                        gap: '12px',
+                        marginTop: '8px'
                       }}>
-                        <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
-                        <button 
-                          onClick={() => {
-                            navigator.clipboard.writeText('8233816674@upi');
-                            showToast('UPI ID copied to clipboard!', 'success');
-                          }}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#ffd700',
-                            fontWeight: 'bold',
-                            fontSize: '10px',
-                            cursor: 'pointer',
-                            textTransform: 'uppercase'
-                          }}
-                        >
-                          Copy
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                          💵 Scan & Pay on Delivery
+                        </div>
+                        <p style={{ margin: 0, fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>
+                          Scan the QR code using any UPI app (GPay, Paytm, PhonePe) to pay the rider digitally on delivery.
+                        </p>
+                        <div style={{
+                          background: '#ffffff',
+                          padding: '8px',
+                          borderRadius: '8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '1px solid var(--color-border)'
+                        }}>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
+                              `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
+                            )}`}
+                            alt="UPI Payment QR Code"
+                            style={{ width: '130px', height: '130px', display: 'block' }}
+                          />
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
+                          Amount: {formatINR(trackedOrder.totalAmount)}
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          width: '100%',
+                          background: 'rgba(218, 165, 32, 0.08)',
+                          border: '1px solid rgba(218, 165, 32, 0.25)',
+                          borderRadius: '24px',
+                          padding: '6px 14px',
+                          fontSize: '12px'
+                        }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText('8233816674@upi');
+                              showToast('UPI ID copied to clipboard!', 'success');
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#ffd700',
+                              fontWeight: 'bold',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            Copy
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {/* Rider Information Panel */}
                   {trackedOrder.deliveryPartnerId ? (() => {
@@ -7890,9 +7923,9 @@ function App() {
                         {riderPhone && (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--color-border)', paddingTop: '8px', marginTop: '4px' }}>
                             <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontWeight: '500' }}>📞 {riderPhone}</span>
-                            <a 
-                              href={`tel:${riderPhone}`} 
-                              className="neon-btn" 
+                            <a
+                              href={`tel:${riderPhone}`}
+                              className="neon-btn"
                               style={{ padding: '6px 12px', fontSize: '11px', textDecoration: 'none', background: 'var(--color-primary)', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#000000', fontWeight: 'bold', boxShadow: 'none' }}
                             >
                               <Phone size={11} /> Call Rider
@@ -7921,7 +7954,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => setIsContactOpen(false)}>
               <X size={20} />
             </button>
-            
+
             <div className="contact-modal-header">
               <div className="contact-icon-glow">
                 <MessageCircle size={36} style={{ color: 'var(--color-primary)' }} />
@@ -7929,12 +7962,12 @@ function App() {
               <h3 className="section-title-premium">Contact Support Desk</h3>
               <p className="profile-sub">We are active 24/7 to assist you</p>
             </div>
-            
+
             <div className="contact-methods-grid">
-              <a 
-                href="https://wa.me/919251054064" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href="https://wa.me/919251054064"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="contact-method-card border-glow"
               >
                 <div className="contact-method-icon whatsapp-color">
@@ -7947,8 +7980,8 @@ function App() {
                 <ArrowRight size={16} className="contact-arrow" />
               </a>
 
-              <a 
-                href="mailto:pixigodelivery@gmail.com" 
+              <a
+                href="mailto:pixigodelivery@gmail.com"
                 className="contact-method-card border-glow"
               >
                 <div className="contact-method-icon email-color">
@@ -7961,14 +7994,14 @@ function App() {
                 <ArrowRight size={16} className="contact-arrow" />
               </a>
 
-              <a 
-                href="https://instagram.com/pixigo_" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href="https://instagram.com/pixigo_"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="contact-method-card border-glow"
               >
                 <div className="contact-method-icon instagram-color">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-instagram"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-instagram"><rect width="20" height="20" x="2" y="2" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" x2="17.51" y1="6.5" y2="6.5" /></svg>
                 </div>
                 <div className="contact-method-details">
                   <h4>Instagram</h4>
@@ -7977,14 +8010,14 @@ function App() {
                 <ArrowRight size={16} className="contact-arrow" />
               </a>
 
-              <a 
-                href="https://facebook.com/pixigo" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href="https://facebook.com/pixigo"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="contact-method-card border-glow"
               >
                 <div className="contact-method-icon facebook-color">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-facebook"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-facebook"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>
                 </div>
                 <div className="contact-method-details">
                   <h4>Facebook</h4>
@@ -8004,7 +8037,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => setIsAboutDeveloperOpen(false)}>
               <X size={20} />
             </button>
-            
+
             <div className="developer-modal-header">
               <div className="developer-logo-wrap">
                 <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" className="developer-logo-img" />
@@ -8013,18 +8046,18 @@ function App() {
               <p className="developer-subtitle" style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted)', fontWeight: '500' }}>
                 Premium IT Solutions & Web Agency
               </p>
-              
+
               <div className="developer-badges" style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '12px' }}>
                 <span className="badge badge-success">MSME Registered</span>
                 <span className="badge badge-primary">iStart Startup</span>
               </div>
             </div>
-            
+
             <div className="developer-content" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <p className="developer-desc" style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--color-text-muted)', textAlign: 'center', margin: 0 }}>
                 ChittorTech is an iStart Rajasthan recognized startup and registered MSME company specializing in high-performance custom software, responsive web apps, and digital growth systems.
               </p>
-              
+
               <div className="developer-services-section">
                 <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '6px' }}>
                   Our Technical Specialties
@@ -8063,10 +8096,10 @@ function App() {
             </div>
 
             <div className="developer-footer" style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
-              <a 
-                href="https://chittortech.online" 
-                target="_blank" 
-                rel="noopener noreferrer" 
+              <a
+                href="https://chittortech.online"
+                target="_blank"
+                rel="noopener noreferrer"
                 className="neon-btn developer-cta-btn"
                 style={{ width: '100%', textDecoration: 'none', padding: '12px' }}
               >
@@ -8085,7 +8118,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => { setIsEditRiderModalOpen(false); setEditingRider(null); }}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section">
               <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
                 <Bike size={40} style={{ color: 'var(--color-primary)' }} />
@@ -8093,33 +8126,33 @@ function App() {
               <h3 className="section-title-premium">Edit Rider Credentials</h3>
               <p className="profile-sub">ID: {editingRider.id}</p>
             </div>
-            
+
             <form onSubmit={handleSaveRiderEdit} className="profile-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div className="form-group-premium">
                 <label className="form-label-premium">Rider Name (Username)</label>
-                <input 
-                  type="text" 
-                  value={editRiderName} 
-                  onChange={(e) => setEditRiderName(e.target.value)} 
+                <input
+                  type="text"
+                  value={editRiderName}
+                  onChange={(e) => setEditRiderName(e.target.value)}
                   className="custom-input-premium"
                   required
                 />
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">Email ID</label>
-                <input 
-                  type="email" 
-                  value={editRiderEmail} 
-                  onChange={(e) => setEditRiderEmail(e.target.value)} 
+                <input
+                  type="email"
+                  value={editRiderEmail}
+                  onChange={(e) => setEditRiderEmail(e.target.value)}
                   className="custom-input-premium"
                   required
                 />
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">Old Password</label>
-                <input 
-                  type="text" 
-                  value={editingRider.password} 
+                <input
+                  type="text"
+                  value={editingRider.password}
                   className="custom-input-premium"
                   disabled
                   readOnly
@@ -8128,10 +8161,10 @@ function App() {
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">New Password</label>
-                <input 
-                  type="text" 
-                  value={editRiderPassword} 
-                  onChange={(e) => setEditRiderPassword(e.target.value)} 
+                <input
+                  type="text"
+                  value={editRiderPassword}
+                  onChange={(e) => setEditRiderPassword(e.target.value)}
                   className="custom-input-premium"
                   required
                   placeholder="Enter new password"
@@ -8139,34 +8172,34 @@ function App() {
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">Phone Number</label>
-                <input 
-                  type="text" 
-                  value={editRiderPhone} 
-                  onChange={(e) => setEditRiderPhone(e.target.value)} 
+                <input
+                  type="text"
+                  value={editRiderPhone}
+                  onChange={(e) => setEditRiderPhone(e.target.value)}
                   className="custom-input-premium"
                   required
                 />
               </div>
               <div className="form-group-premium">
                 <label className="form-label-premium">Vehicle Details</label>
-                <input 
-                  type="text" 
-                  value={editRiderVehicle} 
-                  onChange={(e) => setEditRiderVehicle(e.target.value)} 
+                <input
+                  type="text"
+                  value={editRiderVehicle}
+                  onChange={(e) => setEditRiderVehicle(e.target.value)}
                   className="custom-input-premium"
                   required
                 />
               </div>
 
               <div className="divider" style={{ margin: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'left' }}>
                 <span style={{ color: 'var(--color-primary)', fontSize: '13px', fontWeight: 'bold' }}>🔐 Firebase Auth Credentials</span>
                 <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Register this rider's login account in Firebase Auth.</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                  <button 
-                    type="button" 
-                    className="neon-btn small-btn" 
+                  <button
+                    type="button"
+                    className="neon-btn small-btn"
                     onClick={() => handleCreateAuthAccount('rider', editRiderEmail || editingRider.name, editRiderPassword || editingRider.password, editingRider.id)}
                     style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', alignSelf: 'flex-start' }}
                   >
@@ -8197,14 +8230,14 @@ function App() {
               <h3 className="section-title-premium" style={{ fontSize: '20px', fontWeight: 'bold' }}>Edit & Approve Product</h3>
               <p className="profile-sub" style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Shop: <strong>{editingProduct.store}</strong></p>
             </div>
-            
+
             <form onSubmit={handleAdminEditAndApproveProduct} className="profile-edit-form" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                 <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Product Name</label>
-                <input 
-                  type="text" 
-                  value={editProductName} 
-                  onChange={(e) => setEditProductName(e.target.value)} 
+                <input
+                  type="text"
+                  value={editProductName}
+                  onChange={(e) => setEditProductName(e.target.value)}
                   className="custom-input-premium"
                   required
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
@@ -8212,11 +8245,11 @@ function App() {
               </div>
               <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                 <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Price (₹)</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   step="0.01"
-                  value={editProductPrice} 
-                  onChange={(e) => setEditProductPrice(e.target.value)} 
+                  value={editProductPrice}
+                  onChange={(e) => setEditProductPrice(e.target.value)}
                   className="custom-input-premium"
                   required
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
@@ -8224,9 +8257,9 @@ function App() {
               </div>
               <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                 <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Category</label>
-                <select 
-                  value={editProductCategory} 
-                  onChange={(e) => setEditProductCategory(e.target.value)} 
+                <select
+                  value={editProductCategory}
+                  onChange={(e) => setEditProductCategory(e.target.value)}
                   className="custom-input-premium"
                   required
                   style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
@@ -8251,7 +8284,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
               <div className="profile-avatar-glow" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
                 <Store size={40} style={{ color: 'rgba(245, 158, 11, 1)' }} />
@@ -8259,13 +8292,13 @@ function App() {
               <h3 className="section-title-premium">{selectedShopDetails.name}</h3>
               <p className="profile-sub" style={{ marginTop: '4px' }}>Shop ID: <strong>{selectedShopDetails.id}</strong></p>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Category:</span>
                 <strong>{selectedShopDetails.category}</strong>
               </div>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Phone:</span>
                 <strong>{selectedShopDetails.phone || '9251054064'}</strong>
@@ -8275,10 +8308,10 @@ function App() {
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Address:</span>
                 <span>{selectedShopDetails.address || 'Vaishali Market, Jaipur (RJ)'}</span>
               </div>
-              
+
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>GPS Location:</span>
-                <input 
+                <input
                   type="number"
                   step="0.000001"
                   placeholder="Lat (e.g. 24.8887)"
@@ -8287,7 +8320,7 @@ function App() {
                   className="custom-input-premium"
                   style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%' }}
                 />
-                <input 
+                <input
                   type="number"
                   step="0.000001"
                   placeholder="Lng (e.g. 74.6269)"
@@ -8301,7 +8334,7 @@ function App() {
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
                 <span></span>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button 
+                  <button
                     type="button"
                     className="neon-btn small-btn"
                     onClick={() => {
@@ -8382,27 +8415,27 @@ function App() {
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px', display: 'block', marginBottom: '8px' }}>Onboarding Documents Provided:</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={shopDocAadhaar} 
+                    <input
+                      type="checkbox"
+                      checked={shopDocAadhaar}
                       onChange={(e) => setShopDocAadhaar(e.target.checked)}
                       style={{ cursor: 'pointer' }}
                     />
                     Aadhaar Card
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={shopDocPan} 
+                    <input
+                      type="checkbox"
+                      checked={shopDocPan}
                       onChange={(e) => setShopDocPan(e.target.checked)}
                       style={{ cursor: 'pointer' }}
                     />
                     PAN Card
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer' }}>
-                    <input 
-                      type="checkbox" 
-                      checked={shopDocFssai} 
+                    <input
+                      type="checkbox"
+                      checked={shopDocFssai}
                       onChange={(e) => setShopDocFssai(e.target.checked)}
                       style={{ cursor: 'pointer' }}
                     />
@@ -8420,32 +8453,32 @@ function App() {
             </div>
 
             <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
               <span style={{ color: 'var(--color-primary)', fontSize: '14px', fontWeight: 'bold', display: 'block' }}>🔐 Create Merchant Login Account</span>
               <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Create a Firebase Auth login account for this shop.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
                 <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Email:</span>
-                <input 
-                  type="email" 
-                  placeholder="e.g. owner@gmail.com" 
+                <input
+                  type="email"
+                  placeholder="e.g. owner@gmail.com"
                   value={tempAuthEmail}
                   onChange={(e) => setTempAuthEmail(e.target.value)}
                   className="custom-input-premium"
                   style={{ width: '100%', padding: '8px', borderRadius: '6px', fontSize: '13px' }}
                 />
                 <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Password:</span>
-                <input 
-                  type="password" 
-                  placeholder="Enter login password" 
+                <input
+                  type="password"
+                  placeholder="Enter login password"
                   value={tempAuthPassword}
                   onChange={(e) => setTempAuthPassword(e.target.value)}
                   className="custom-input-premium"
                   style={{ width: '100%', padding: '8px', borderRadius: '6px', fontSize: '13px' }}
                 />
-                <button 
-                  type="button" 
-                  className="neon-btn small-btn" 
+                <button
+                  type="button"
+                  className="neon-btn small-btn"
                   onClick={() => handleCreateAuthAccount('merchant', tempAuthEmail, tempAuthPassword, selectedShopDetails.id)}
                   style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', display: 'inline-flex', alignSelf: 'flex-start', marginTop: '4px' }}
                 >
@@ -8455,16 +8488,16 @@ function App() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
-              <button 
-                className="neon-btn" 
+              <button
+                className="neon-btn"
                 onClick={handleAdminSaveShopDocs}
                 style={{ width: '100%', padding: '10px', fontWeight: 'bold' }}
               >
                 Save Documents
               </button>
               <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                <button 
-                  className="secondary-btn" 
+                <button
+                  className="secondary-btn"
                   onClick={() => {
                     const sPhone = selectedShopDetails.phone || '9251054064';
                     window.open(`https://wa.me/${sPhone}?text=Hi%20${selectedShopDetails.name},%20we%20have%20reviewed%20your%20PixiGo%20merchant%20account.%20Please%20verify%20details.`, '_blank');
@@ -8473,8 +8506,8 @@ function App() {
                 >
                   Contact Merchant
                 </button>
-                <button 
-                  className="secondary-btn" 
+                <button
+                  className="secondary-btn"
                   onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}
                   style={{ width: '80px', padding: '10px' }}
                 >
@@ -8493,7 +8526,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => { setIsOrderModalOpen(false); setSelectedOrderDetails(null); }}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
               <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
                 <ShoppingCart size={40} style={{ color: 'var(--color-primary)' }} />
@@ -8501,20 +8534,19 @@ function App() {
               <h3 className="section-title-premium">Order Details</h3>
               <p className="profile-sub" style={{ marginTop: '4px' }}>Order ID: <strong>{selectedOrderDetails.id}</strong></p>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '60vh', overflowY: 'auto', paddingRight: '6px' }}>
-              
+
               {/* Order Status & Progress */}
               <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Current Status:</span>
-                  <span className={`badge ${
-                    selectedOrderDetails.status === 'COMPLETED' ? 'badge-success' :
-                    selectedOrderDetails.status === 'ACCEPTED' ? 'badge-success' :
-                    selectedOrderDetails.status === 'ASSIGNED' ? 'badge-primary' :
-                    selectedOrderDetails.status?.startsWith('CANCELLED') ? 'badge-danger' :
-                    'badge-warning'
-                  }`}>
+                  <span className={`badge ${selectedOrderDetails.status === 'COMPLETED' ? 'badge-success' :
+                      selectedOrderDetails.status === 'ACCEPTED' ? 'badge-success' :
+                        selectedOrderDetails.status === 'ASSIGNED' ? 'badge-primary' :
+                          selectedOrderDetails.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                            'badge-warning'
+                    }`}>
                     {(() => {
                       const statusUpper = selectedOrderDetails.status?.toUpperCase() || 'PLACED';
                       if (statusUpper === 'PLACED') return 'ORDER PLACED';
@@ -8531,7 +8563,7 @@ function App() {
                   {['PLACED', 'ACCEPTED', 'ASSIGNED', 'COMPLETED'].map((step, idx, arr) => {
                     const statusIdx = arr.indexOf(selectedOrderDetails.status || 'PLACED');
                     const isActive = statusIdx >= idx && !selectedOrderDetails.status?.startsWith('CANCELLED');
-                    
+
                     let displayName = 'Order Placed';
                     if (step === 'ACCEPTED') displayName = 'Accepted by Merchant';
                     else if (step === 'ASSIGNED') displayName = 'Assigned';
@@ -8540,15 +8572,15 @@ function App() {
                     return (
                       <React.Fragment key={step}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', flex: 1 }}>
-                          <div style={{ 
-                            width: '12px', 
-                            height: '12px', 
-                            borderRadius: '50%', 
+                          <div style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '50%',
                             background: isActive ? 'var(--color-primary)' : 'var(--color-border)',
                             boxShadow: isActive ? '0 0 6px var(--color-primary)' : 'none',
                             zIndex: 2
                           }}></div>
-                          
+
                           {/* Absolute container for labels to keep dot/line alignment clean */}
                           <div style={{
                             position: 'absolute',
@@ -8562,19 +8594,19 @@ function App() {
                             textAlign: 'center',
                             pointerEvents: 'none'
                           }}>
-                            <span style={{ 
-                              fontSize: '9px', 
-                              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)', 
+                            <span style={{
+                              fontSize: '9px',
+                              color: isActive ? 'var(--color-primary)' : 'var(--color-text-muted)',
                               fontWeight: '600',
                               lineHeight: '1.2'
                             }}>
                               {displayName}
                             </span>
                             {step === 'ASSIGNED' && selectedOrderDetails.deliveryPartnerName && (
-                              <span style={{ 
-                                fontSize: '8px', 
-                                color: 'var(--color-text-muted)', 
-                                marginTop: '2px', 
+                              <span style={{
+                                fontSize: '8px',
+                                color: 'var(--color-text-muted)',
+                                marginTop: '2px',
                                 fontWeight: 'normal',
                                 maxWidth: '100px',
                                 overflow: 'hidden',
@@ -8587,10 +8619,10 @@ function App() {
                           </div>
                         </div>
                         {idx < arr.length - 1 && (
-                          <div style={{ 
-                            flexGrow: 1, 
-                            height: '2px', 
-                            background: (statusIdx > idx && !selectedOrderDetails.status?.startsWith('CANCELLED')) ? 'var(--color-primary)' : 'var(--color-border)', 
+                          <div style={{
+                            flexGrow: 1,
+                            height: '2px',
+                            background: (statusIdx > idx && !selectedOrderDetails.status?.startsWith('CANCELLED')) ? 'var(--color-primary)' : 'var(--color-border)',
                             zIndex: 1
                           }}></div>
                         )}
@@ -8721,19 +8753,19 @@ function App() {
             </div>
 
             <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
-            
+
             <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
               {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN'].includes(selectedOrderDetails.status?.toUpperCase()) && (
-                <button 
-                  className="neon-btn" 
+                <button
+                  className="neon-btn"
                   onClick={() => handleAdminCancelOrder(selectedOrderDetails.id)}
                   style={{ flex: 1, padding: '12px', fontWeight: 'bold', background: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: '#fff' }}
                 >
                   Cancel Order
                 </button>
               )}
-              <button 
-                className="neon-btn" 
+              <button
+                className="neon-btn"
                 onClick={() => { setIsOrderModalOpen(false); setSelectedOrderDetails(null); }}
                 style={{ flex: 1, padding: '12px', fontWeight: 'bold' }}
               >
@@ -8758,12 +8790,12 @@ function App() {
               <p style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
                 Please show this QR code to the customer for payment scan or confirmation.
               </p>
-              
+
               <div style={{ background: '#fff', padding: '16px', borderRadius: '12px', display: 'inline-block', boxShadow: '0 8px 24px rgba(0,0,0,0.3)', marginBottom: '16px' }}>
-                <img 
-                  src="/pixigo_payment_qr.png" 
-                  alt="Payment QR Code" 
-                  style={{ width: '240px', height: '240px', display: 'block', margin: '0 auto', borderRadius: '8px' }} 
+                <img
+                  src="/pixigo_payment_qr.png"
+                  alt="Payment QR Code"
+                  style={{ width: '240px', height: '240px', display: 'block', margin: '0 auto', borderRadius: '8px' }}
                 />
               </div>
 
@@ -8771,10 +8803,10 @@ function App() {
                 <div>Total to Collect: <strong style={{ color: 'var(--color-success)', fontSize: '16px' }}>{formatINR(activeQrModalOrder.totalAmount)}</strong></div>
                 <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>Method: {activeQrModalOrder.paymentMethod}</div>
               </div>
-              
-              <button 
-                className="neon-btn" 
-                onClick={() => setActiveQrModalOrder(null)} 
+
+              <button
+                className="neon-btn"
+                onClick={() => setActiveQrModalOrder(null)}
                 style={{ width: '100%', marginTop: '16px', fontWeight: 'bold' }}
               >
                 Close QR Code
@@ -8791,7 +8823,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => setSelectedAnalyticsMerchant(null)}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
               <div className="profile-avatar-glow" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
                 <Store size={40} style={{ color: 'var(--color-warning)' }} />
@@ -8799,7 +8831,7 @@ function App() {
               <h3 className="section-title-premium">{selectedAnalyticsMerchant.name} Order Log</h3>
               <p className="profile-sub" style={{ marginTop: '4px' }}>Category: <strong>{selectedAnalyticsMerchant.category}</strong> | Contact: <strong>{selectedAnalyticsMerchant.phone}</strong></p>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
               <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
                 <table className="analytics-table">
@@ -8853,11 +8885,10 @@ function App() {
                             </strong>
                           </td>
                           <td>
-                            <span className={`analytics-badge-pill ${
-                              o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
-                              'analytics-badge-info'
-                            }`}>
+                            <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                                o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                                  'analytics-badge-info'
+                              }`}>
                               {o.status}
                             </span>
                           </td>
@@ -8868,10 +8899,10 @@ function App() {
                 </table>
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
-              <button 
-                className="neon-btn" 
+              <button
+                className="neon-btn"
                 onClick={() => setSelectedAnalyticsMerchant(null)}
                 style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
               >
@@ -8889,7 +8920,7 @@ function App() {
             <button className="modal-close-btn" onClick={() => setSelectedAnalyticsRider(null)}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
               <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
                 <Bike size={40} style={{ color: 'var(--color-primary)' }} />
@@ -8897,7 +8928,7 @@ function App() {
               <h3 className="section-title-premium">{selectedAnalyticsRider.name} Delivery Run Log</h3>
               <p className="profile-sub" style={{ marginTop: '4px' }}>Vehicle: <strong>{selectedAnalyticsRider.vehicle}</strong> | Contact: <strong>{selectedAnalyticsRider.phone}</strong></p>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
               <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
                 <table className="analytics-table">
@@ -8940,11 +8971,10 @@ function App() {
                             </strong>
                           </td>
                           <td>
-                            <span className={`analytics-badge-pill ${
-                              o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
-                              'analytics-badge-info'
-                            }`}>
+                            <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                                o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                                  'analytics-badge-info'
+                              }`}>
                               {o.status}
                             </span>
                           </td>
@@ -8955,10 +8985,10 @@ function App() {
                 </table>
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
-              <button 
-                className="neon-btn" 
+              <button
+                className="neon-btn"
                 onClick={() => setSelectedAnalyticsRider(null)}
                 style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
               >
@@ -8976,19 +9006,19 @@ function App() {
             <button className="modal-close-btn" onClick={() => setSelectedAnalyticsSalesGroup(null)}>
               <X size={20} />
             </button>
-            
+
             <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
               <div className="profile-avatar-glow" style={{ background: 'rgba(139, 92, 246, 0.1)' }}>
                 <DollarSign size={40} style={{ color: 'var(--color-primary)' }} />
               </div>
               <h3 className="section-title-premium">
-                {selectedAnalyticsSalesGroup === 'today' ? "Today's Gross Sales Log" : 
-                 selectedAnalyticsSalesGroup === 'all-time' ? "All-Time Gross Sales Log" : 
-                 "Cancelled Orders Log"}
+                {selectedAnalyticsSalesGroup === 'today' ? "Today's Gross Sales Log" :
+                  selectedAnalyticsSalesGroup === 'all-time' ? "All-Time Gross Sales Log" :
+                    "Cancelled Orders Log"}
               </h3>
               <p className="profile-sub" style={{ marginTop: '4px' }}>Detailed list of transaction records</p>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
               <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
                 <table className="analytics-table">
@@ -9043,11 +9073,10 @@ function App() {
                             </strong>
                           </td>
                           <td>
-                            <span className={`analytics-badge-pill ${
-                              o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
-                              'analytics-badge-info'
-                            }`}>
+                            <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                                o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                                  'analytics-badge-info'
+                              }`}>
                               {o.status}
                             </span>
                           </td>
@@ -9058,10 +9087,10 @@ function App() {
                 </table>
               </div>
             </div>
-            
+
             <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
-              <button 
-                className="neon-btn" 
+              <button
+                className="neon-btn"
                 onClick={() => setSelectedAnalyticsSalesGroup(null)}
                 style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
               >
