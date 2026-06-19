@@ -314,7 +314,7 @@ function App() {
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('pixigo_customerName') || 'Raj Malhotra');
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
   const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
-  const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || 'Vaishali Nagar, Jaipur (RJ)');
+  const [customerAddress, setCustomerAddress] = useState('');
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('ONLINE');
@@ -607,7 +607,6 @@ function App() {
     localStorage.setItem('pixigo_customerName', customerName);
     localStorage.setItem('pixigo_customerPhone', customerPhone);
     localStorage.setItem('pixigo_customerEmail', customerEmail);
-    localStorage.setItem('pixigo_customerAddress', customerAddress);
 
     // Save profile to Firestore /customers Collection (fallback to guest ID for unauthenticated testers)
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
@@ -722,6 +721,11 @@ function App() {
 
   // --- SIDE EFFECTS (useEffect) ---
 
+  // Automatically trigger auto-detect location on load
+  useEffect(() => {
+    handleAutoDetectLocation(setCustomerAddress);
+  }, []);
+
   // Fetch actual road distance dynamically when customer coordinates or cart items change
   useEffect(() => {
     let active = true;
@@ -813,7 +817,7 @@ function App() {
         let localName = localStorage.getItem('pixigo_customerName') || nameVal;
         let localPhone = localStorage.getItem('pixigo_customerPhone') || '';
         let localEmail = currentUser.email; // ALWAYS use the authenticated email as primary source of truth
-        let localAddress = localStorage.getItem('pixigo_customerAddress') || '';
+        let localAddress = '';
 
         try {
           const timestamp = new Date().toISOString();
@@ -837,7 +841,6 @@ function App() {
               localStorage.setItem('pixigo_customerName', localName);
               localStorage.setItem('pixigo_customerPhone', localPhone);
               localStorage.setItem('pixigo_customerEmail', localEmail);
-              localStorage.setItem('pixigo_customerAddress', localAddress);
             } else {
               // Document doesn't exist yet, auto-create
               await setDoc(customerDocRef, {
@@ -850,7 +853,6 @@ function App() {
               localStorage.setItem('pixigo_customerName', localName);
               localStorage.setItem('pixigo_customerPhone', localPhone);
               localStorage.setItem('pixigo_customerEmail', localEmail);
-              localStorage.setItem('pixigo_customerAddress', localAddress);
             }
           }
 
@@ -949,11 +951,10 @@ function App() {
         localStorage.removeItem('pixigo_customerName');
         localStorage.removeItem('pixigo_customerPhone');
         localStorage.removeItem('pixigo_customerEmail');
-        localStorage.removeItem('pixigo_customerAddress');
         setCustomerName('Raj Malhotra');
         setCustomerPhone('9251054064');
         setCustomerEmail('pixigodelivery@gmail.com');
-        setCustomerAddress('Vaishali Nagar, Jaipur (RJ)');
+        setCustomerAddress('');
       }
     });
     return () => unsubscribe();
@@ -1609,11 +1610,10 @@ function App() {
     localStorage.removeItem('pixigo_customerName');
     localStorage.removeItem('pixigo_customerPhone');
     localStorage.removeItem('pixigo_customerEmail');
-    localStorage.removeItem('pixigo_customerAddress');
     setCustomerName('Raj Malhotra');
     setCustomerPhone('9251054064');
     setCustomerEmail('pixigodelivery@gmail.com');
-    setCustomerAddress('Vaishali Nagar, Jaipur (RJ)');
+    setCustomerAddress('');
     setUser(null);
     setUserRole(null);
     signOut(auth)
