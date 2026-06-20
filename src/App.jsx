@@ -316,6 +316,7 @@ function App() {
   const [isEditRiderModalOpen, setIsEditRiderModalOpen] = useState(false);
   const [selectedShopDetails, setSelectedShopDetails] = useState(null);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [selectedVariantProduct, setSelectedVariantProduct] = useState(null);
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [shops, setShops] = useState(INITIAL_SHOPS);
   const [deliveryPartners, setDeliveryPartners] = useState(INITIAL_DELIVERY_PARTNERS);
@@ -441,8 +442,18 @@ function App() {
   const [activePreviewTab, setActivePreviewTab] = useState('desktop'); // 'desktop' | 'mobile'
   const [riderAnnouncement, setRiderAnnouncement] = useState('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
   const [riderAnnouncementEdit, setRiderAnnouncementEdit] = useState('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
-  const [customerAnnouncement, setCustomerAnnouncement] = useState('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
-  const [customerAnnouncementEdit, setCustomerAnnouncementEdit] = useState('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+  const [riderAnnouncementColor, setRiderAnnouncementColor] = useState('#00fff2');
+  const [riderAnnouncementColorEdit, setRiderAnnouncementColorEdit] = useState('#00fff2');
+
+  const [customerAnnouncement, setCustomerAnnouncement] = useState("🎉 For attractive offers, please see our coupon options to grab today's special discounts! | Quickest delivery in town!");
+  const [customerAnnouncementEdit, setCustomerAnnouncementEdit] = useState("🎉 For attractive offers, please see our coupon options to grab today's special discounts! | Quickest delivery in town!");
+  const [customerAnnouncementColor, setCustomerAnnouncementColor] = useState('#ffd700');
+  const [customerAnnouncementColorEdit, setCustomerAnnouncementColorEdit] = useState('#ffd700');
+
+  const [merchantAnnouncement, setMerchantAnnouncement] = useState('Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently.');
+  const [merchantAnnouncementEdit, setMerchantAnnouncementEdit] = useState('Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently.');
+  const [merchantAnnouncementColor, setMerchantAnnouncementColor] = useState('#ff007f');
+  const [merchantAnnouncementColorEdit, setMerchantAnnouncementColorEdit] = useState('#ff007f');
   const [tempAuthPassword, setTempAuthPassword] = useState('');
   const [tempAuthEmail, setTempAuthEmail] = useState('');
 
@@ -464,6 +475,51 @@ function App() {
   const [shopDocLng, setShopDocLng] = useState('');
 
   // --- HELPER FUNCTIONS ---
+  const parseProductVariants = (product) => {
+    if (!product) return null;
+    if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+      return product.variants;
+    }
+    if (!product.specs || !product.specs.includes(':')) {
+      return null;
+    }
+    try {
+      const parts = product.specs.split(',');
+      const parsed = parts.map(part => {
+        const subparts = part.trim().split(':');
+        if (subparts.length < 2) return null;
+        const specsName = subparts[0].trim();
+        const price = parseFloat(subparts[1].trim());
+        const originalPrice = subparts[2] ? parseFloat(subparts[2].trim()) : price;
+        if (isNaN(price)) return null;
+        return {
+          specs: specsName,
+          price,
+          originalPrice
+        };
+      }).filter(Boolean);
+      return parsed.length > 0 ? parsed : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const getProductDisplayInfo = (p) => {
+    const variants = parseProductVariants(p);
+    if (variants && variants.length > 0) {
+      return {
+        price: variants[0].price,
+        originalPrice: variants[0].originalPrice,
+        specs: `${variants[0].specs} (${variants.length} Options)`
+      };
+    }
+    return {
+      price: p.price,
+      originalPrice: p.originalPrice || 0,
+      specs: p.specs || ''
+    };
+  };
+
   const getAnalytics = () => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -1157,9 +1213,13 @@ function App() {
         const data = docSnap.data();
         setRiderAnnouncement(data.text || 'Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
         setRiderAnnouncementEdit(data.text || 'Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+        setRiderAnnouncementColor(data.color || '#00fff2');
+        setRiderAnnouncementColorEdit(data.color || '#00fff2');
       } else {
         setRiderAnnouncement('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
         setRiderAnnouncementEdit('Welcome to PIXIgo Rider Portal! Drive safely and always verify order OTP before completing delivery.');
+        setRiderAnnouncementColor('#00fff2');
+        setRiderAnnouncementColorEdit('#00fff2');
       }
     }, (error) => {
       console.error("Firestore rider announcement subscription error:", error);
@@ -1173,14 +1233,40 @@ function App() {
     const unsubscribe = onSnapshot(announceDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setCustomerAnnouncement(data.text || '🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
-        setCustomerAnnouncementEdit(data.text || '🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+        setCustomerAnnouncement(data.text || "🎉 For attractive offers, please see our coupon options to grab today's special discounts! | Quickest delivery in town!");
+        setCustomerAnnouncementEdit(data.text || "🎉 For attractive offers, please see our coupon options to grab today's special discounts! | Quickest delivery in town!");
+        setCustomerAnnouncementColor(data.color || '#ffd700');
+        setCustomerAnnouncementColorEdit(data.color || '#ffd700');
       } else {
-        setCustomerAnnouncement('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
-        setCustomerAnnouncementEdit('🎉 Special Offer: Use code FIRST20 to get flat 20% discount on your first order! | Free delivery on orders above ₹500! | Quickest delivery in town!');
+        setCustomerAnnouncement("🎉 For attractive offers, please see our coupon options to grab today's special discounts! | Quickest delivery in town!");
+        setCustomerAnnouncementEdit("🎉 For attractive offers, please see our coupon options to grab today's special discounts! | Quickest delivery in town!");
+        setCustomerAnnouncementColor('#ffd700');
+        setCustomerAnnouncementColorEdit('#ffd700');
       }
     }, (error) => {
       console.error("Firestore customer announcement subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time Merchant Announcement from Firestore
+  useEffect(() => {
+    const announceDocRef = doc(db, "configs", "merchant_announcement");
+    const unsubscribe = onSnapshot(announceDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setMerchantAnnouncement(data.text || 'Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently.');
+        setMerchantAnnouncementEdit(data.text || 'Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently.');
+        setMerchantAnnouncementColor(data.color || '#ff007f');
+        setMerchantAnnouncementColorEdit(data.color || '#ff007f');
+      } else {
+        setMerchantAnnouncement('Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently.');
+        setMerchantAnnouncementEdit('Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently.');
+        setMerchantAnnouncementColor('#ff007f');
+        setMerchantAnnouncementColorEdit('#ff007f');
+      }
+    }, (error) => {
+      console.error("Firestore merchant announcement subscription error:", error);
     });
     return () => unsubscribe();
   }, []);
@@ -1762,6 +1848,15 @@ function App() {
     ...dynamicCategories
   ])];
 
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(255, 255, 255, ${alpha})`;
+    const cleanHex = hex.replace('#', '');
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
   const getCategoryEmoji = (category) => {
     const mapping = {
       'All': '🌟',
@@ -1928,21 +2023,28 @@ function App() {
 
   // Admin: Update product catalog details
   const handleAdminUpdateProductCatalog = async (productId, newPrice, newOriginalPrice, newOfferText, newImage, newSpecs) => {
-    const price = parseFloat(newPrice);
-    const originalPrice = parseFloat(newOriginalPrice) || 0;
+    const prod = products.find(p => p.id === productId);
+    if (!prod) return;
 
-    if (isNaN(price) || price < 0) {
+    const tempProd = { specs: newSpecs };
+    const parsedVariants = parseProductVariants(tempProd);
+    const hasVariants = parsedVariants && parsedVariants.length > 0;
+
+    let price = parseFloat(newPrice);
+    let originalPrice = parseFloat(newOriginalPrice) || 0;
+
+    if (hasVariants) {
+      price = parsedVariants[0].price;
+      originalPrice = parsedVariants[0].originalPrice;
+    } else if (isNaN(price) || price < 0) {
       alert("Please enter a valid price!");
       return;
     }
 
-    const prod = products.find(p => p.id === productId);
-    if (!prod) return;
-
     const updatedFields = {
       price: price,
       originalPrice: originalPrice,
-      offerText: newOfferText,
+      offerText: hasVariants ? '' : newOfferText,
       image: newImage || prod.image || '',
       specs: newSpecs || ''
     };
@@ -1972,13 +2074,26 @@ function App() {
   };
 
   const handleAdminAddProduct = async () => {
-    if (!adminNewProductName || !adminNewProductPrice) {
-      alert("Please enter product name and price!");
+    const parsedVariants = parseProductVariants({ specs: adminNewProductSpecs });
+    const hasVariants = parsedVariants && parsedVariants.length > 0;
+
+    if (!adminNewProductName) {
+      alert("Please enter product name!");
       return;
     }
-    const price = parseFloat(adminNewProductPrice);
-    const originalPrice = parseFloat(adminNewProductOrigPrice) || 0;
-    if (isNaN(price)) {
+
+    if (!hasVariants && !adminNewProductPrice) {
+      alert("Please enter product price!");
+      return;
+    }
+
+    let price = parseFloat(adminNewProductPrice);
+    let originalPrice = parseFloat(adminNewProductOrigPrice) || 0;
+
+    if (hasVariants) {
+      price = parsedVariants[0].price;
+      originalPrice = parsedVariants[0].originalPrice;
+    } else if (isNaN(price)) {
       return alert("Please enter a valid price!");
     }
 
@@ -1993,7 +2108,7 @@ function App() {
       name: adminNewProductName,
       price: price,
       originalPrice: originalPrice,
-      offerText: adminNewProductOffer,
+      offerText: hasVariants ? '' : adminNewProductOffer,
       category: finalCategory,
       store: finalStore,
       image: adminNewProductImage || '🍔',
@@ -2026,36 +2141,53 @@ function App() {
   };
 
   // Add Item to Cart
-
-  // Add Item to Cart
-  const handleAddToCart = (product) => {
+  const handleAddToCart = (product, selectedVariant = null) => {
     const hasDifferentStore = cart.some(item => item.store !== product.store);
     if (hasDifferentStore) {
       alert("Dear user, you have to order from another because we deliver a category product");
       return;
     }
-    const existing = cart.find(item => item.id === product.id);
-    if (existing) {
-      setCart(cart.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
-    } else {
-      setCart([...cart, { ...product, quantity: 1 }]);
+
+    const variants = parseProductVariants(product);
+    let variant = selectedVariant;
+    if (variants && !variant) {
+      setSelectedVariantProduct(product);
+      return;
     }
-    showToast(`${product.name} added to cart!`, 'success');
+
+    const cartItemId = variant ? `${product.id}_${variant.specs}` : product.id;
+    const existing = cart.find(item => item.cartItemId === cartItemId || item.id === cartItemId);
+
+    if (existing) {
+      setCart(cart.map(item => (item.cartItemId === cartItemId || item.id === cartItemId) ? { ...item, quantity: item.quantity + 1 } : item));
+    } else {
+      const cartItem = {
+        ...product,
+        cartItemId: cartItemId,
+        specs: variant ? variant.specs : product.specs,
+        price: variant ? variant.price : product.price,
+        originalPrice: variant ? variant.originalPrice : (product.originalPrice || 0),
+        quantity: 1
+      };
+      setCart([...cart, cartItem]);
+    }
+    showToast(`${product.name}${variant ? ` (${variant.specs})` : ''} added to cart!`, 'success');
   };
 
   // Update Cart Quantity
   const handleUpdateQty = (id, delta) => {
-    const item = cart.find(i => i.id === id);
+    const item = cart.find(i => (i.cartItemId === id || i.id === id));
+    if (!item) return;
     if (item.quantity + delta <= 0) {
-      setCart(cart.filter(i => i.id !== id));
+      setCart(cart.filter(i => !(i.cartItemId === id || i.id === id)));
     } else {
-      setCart(cart.map(i => i.id === id ? { ...i, quantity: i.quantity + delta } : i));
+      setCart(cart.map(i => (i.cartItemId === id || i.id === id) ? { ...i, quantity: i.quantity + delta } : i));
     }
   };
 
   // Remove Item from Cart
   const handleRemoveItem = (id) => {
-    setCart(cart.filter(i => i.id !== id));
+    setCart(cart.filter(i => !(i.cartItemId === id || i.id === id)));
   };
 
   // Apply Discount Coupon Code (Dynamic from Firestore with minCart, single-use, and type validation)
@@ -2149,6 +2281,11 @@ function App() {
     }
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+
+    if (cartSubtotal < 149) {
+      alert(`Minimum order value of ₹149 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`);
+      return;
+    }
 
     // Calculate dynamic distance and rates
     const customerCoords = parseCoords(customerAddress);
@@ -3170,7 +3307,7 @@ function App() {
   const handleExportCSV = () => {
     const headers = ['Order ID,Customer,Email,Location,Shop Name,Items,Total Amount,Payment,Status,OTP,Date\n'];
     const rows = orders.map(o => {
-      const itemsList = o.items.map(i => `${i.name} (${i.quantity})`).join(' | ');
+      const itemsList = o.items.map(i => `${i.name}${i.specs ? ` (${i.specs})` : ''} (${i.quantity})`).join(' | ');
       return `"${o.id}","${o.customerName}","${o.customerEmail}","${o.customerLocation}","${o.items[0]?.store || 'Store'}","${itemsList}",${o.totalAmount},"${o.paymentMethod}","${o.status}","${o.otp}","${o.createdAt}"\n`;
     });
 
@@ -3208,6 +3345,7 @@ function App() {
       const announceDocRef = doc(db, "configs", "rider_announcement");
       await setDoc(announceDocRef, {
         text: riderAnnouncementEdit,
+        color: riderAnnouncementColorEdit,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       showToast("Rider announcement updated successfully!");
@@ -3223,12 +3361,29 @@ function App() {
       const announceDocRef = doc(db, "configs", "customer_announcement");
       await setDoc(announceDocRef, {
         text: customerAnnouncementEdit,
+        color: customerAnnouncementColorEdit,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       showToast("Customer announcement updated successfully!");
       alert("Customer announcement saved to Firebase Firestore.");
     } catch (err) {
       console.error("Error saving customer announcement:", err);
+      alert(`Failed to save announcement: ${err.message}`);
+    }
+  };
+
+  const handleSaveMerchantAnnouncement = async () => {
+    try {
+      const announceDocRef = doc(db, "configs", "merchant_announcement");
+      await setDoc(announceDocRef, {
+        text: merchantAnnouncementEdit,
+        color: merchantAnnouncementColorEdit,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      showToast("Merchant announcement updated successfully!");
+      alert("Merchant announcement saved to Firebase Firestore.");
+    } catch (err) {
+      console.error("Error saving merchant announcement:", err);
       alert(`Failed to save announcement: ${err.message}`);
     }
   };
@@ -3622,6 +3777,9 @@ function App() {
     const cartShop = shops.find(s => s.name === storeName || s.storeName === storeName);
     const customerCoords = parseCoords(customerAddress);
 
+    const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+    const isUnderMinimumOrder = cart.length > 0 && cartSubtotal < 149;
+
     let dist = null;
     let isOutOfRange = false;
     if (cart[0] && cartShop && customerCoords) {
@@ -3673,7 +3831,7 @@ function App() {
               </div>
             </div>
             {cart.map(item => (
-              <div key={item.id} className="cart-row">
+              <div key={item.cartItemId || item.id} className="cart-row">
                 <div className="cart-item-img-wrap">
                   {item.image && item.image.startsWith('http') ? (
                     <img src={item.image} alt={item.name} className="cart-item-img" onError={(e) => {
@@ -3684,7 +3842,10 @@ function App() {
                   )}
                 </div>
                 <div className="cart-item-detail">
-                  <h4>{item.name}</h4>
+                  <h4 style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                    {item.name}
+                    {item.specs && <span style={{ fontSize: '10px', color: 'var(--color-primary)', background: 'rgba(0,255,242,0.1)', padding: '1px 6px', borderRadius: '4px' }}>{item.specs}</span>}
+                  </h4>
                   <span className="cart-item-sub">
                     {formatINR(item.price)} each
                     {item.originalPrice > item.price && (
@@ -3695,11 +3856,11 @@ function App() {
                   </span>
                 </div>
                 <div className="cart-item-qty">
-                  <button onClick={() => handleUpdateQty(item.id, -1)}>-</button>
+                  <button onClick={() => handleUpdateQty(item.cartItemId || item.id, -1)}>-</button>
                   <span>{item.quantity}</span>
-                  <button onClick={() => handleUpdateQty(item.id, 1)}>+</button>
+                  <button onClick={() => handleUpdateQty(item.cartItemId || item.id, 1)}>+</button>
                 </div>
-                <button className="cart-item-remove" onClick={() => handleRemoveItem(item.id)}>
+                <button className="cart-item-remove" onClick={() => handleRemoveItem(item.cartItemId || item.id)}>
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -3760,6 +3921,27 @@ function App() {
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
                 <span>
                   <strong>Delivery Range Exceeded:</strong> {storeName} is {dist.toFixed(2)} km away. We only deliver up to {MAX_DELIVERY_RADIUS_KM} km. Please select a closer address or clear cart to order from elsewhere.
+                </span>
+              </div>
+            )}
+
+            {isUnderMinimumOrder && (
+              <div className="cart-warning-banner" style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '12px',
+                padding: '10px 12px',
+                marginBottom: '14px',
+                color: '#f87171',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                textAlign: 'left'
+              }}>
+                <AlertCircle size={18} style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹149 is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
                 </span>
               </div>
             )}
@@ -3892,24 +4074,30 @@ function App() {
             {/* Checkout Button */}
             <button
               className="neon-btn checkout-btn"
-              disabled={isOutOfRange || isDistanceLoading}
+              disabled={isOutOfRange || isDistanceLoading || isUnderMinimumOrder}
               onClick={() => {
                 if (isOutOfRange) {
                   showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
+                  return;
+                }
+                if (isUnderMinimumOrder) {
+                  showToast(`⚠️ Minimum cart value of ₹149 is required to place an order.`);
                   return;
                 }
                 handlePlaceOrder();
                 if (isDrawer) setIsCartDrawerOpen(false);
               }}
               style={{
-                background: isOutOfRange ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
-                color: isOutOfRange ? 'var(--color-text-muted)' : '#000',
-                border: isOutOfRange ? '1px solid var(--color-border)' : 'none',
-                cursor: isOutOfRange ? 'not-allowed' : 'pointer'
+                background: (isOutOfRange || isUnderMinimumOrder) ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
+                color: (isOutOfRange || isUnderMinimumOrder) ? 'var(--color-text-muted)' : '#000',
+                border: (isOutOfRange || isUnderMinimumOrder) ? '1px solid var(--color-border)' : 'none',
+                cursor: (isOutOfRange || isUnderMinimumOrder) ? 'not-allowed' : 'pointer'
               }}
             >
               {isOutOfRange ? (
                 <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
+              ) : isUnderMinimumOrder ? (
+                <>Min. Order ₹149 Required (Current: ₹{cartSubtotal}) <X size={18} /></>
               ) : isDistanceLoading ? (
                 <>Calculating Route... <RefreshCw size={18} className="spin" /></>
               ) : (
@@ -3925,6 +4113,7 @@ function App() {
   const renderPortalGuard = (portalName, children) => {
     if (!user) {
       const isRider = portalName === 'Delivery Rider';
+      const isMerchant = portalName === 'Merchant Dashboard';
       const showSignUpForm = (portalName === 'Merchant Dashboard' || portalName === 'Delivery Rider') ? isSignUp : false;
       const portalThemeClass = portalName === 'Admin Console' ? 'portal-theme-admin' :
         portalName === 'Delivery Rider' ? 'portal-theme-delivery' :
@@ -3938,21 +4127,21 @@ function App() {
               width: '100%',
               maxWidth: '450px',
               padding: '8px 16px',
-              background: 'rgba(0, 255, 242, 0.05)',
-              border: '1px solid rgba(0, 255, 242, 0.15)',
+              background: hexToRgba(riderAnnouncementColor, 0.05),
+              border: `1px solid ${hexToRgba(riderAnnouncementColor, 0.15)}`,
               borderRadius: '24px',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
               overflow: 'hidden',
-              boxShadow: '0 0 10px rgba(0, 255, 242, 0.05)',
+              boxShadow: `0 0 10px ${hexToRgba(riderAnnouncementColor, 0.05)}`,
               marginBottom: '10px'
             }}>
               <span style={{
                 fontSize: '11px',
                 fontWeight: '800',
-                color: 'var(--color-primary)',
-                background: 'rgba(0, 255, 242, 0.15)',
+                color: riderAnnouncementColor,
+                background: hexToRgba(riderAnnouncementColor, 0.15),
                 padding: '3px 8px',
                 borderRadius: '10px',
                 textTransform: 'uppercase',
@@ -3969,14 +4158,62 @@ function App() {
                 scrollamount="4"
                 style={{
                   fontSize: '12px',
-                  color: '#00fff2',
-                  textShadow: '0 0 4px rgba(0, 255, 242, 0.3)',
+                  color: riderAnnouncementColor,
+                  textShadow: `0 0 4px ${hexToRgba(riderAnnouncementColor, 0.3)}`,
                   fontWeight: '600',
                   margin: 0,
                   padding: 0
                 }}
               >
                 {riderAnnouncement}
+              </marquee>
+            </div>
+          )}
+
+          {isMerchant && merchantAnnouncement && (
+            <div className="merchant-announcement-banner" style={{
+              width: '100%',
+              maxWidth: '450px',
+              padding: '8px 16px',
+              background: hexToRgba(merchantAnnouncementColor, 0.05),
+              border: `1px solid ${hexToRgba(merchantAnnouncementColor, 0.15)}`,
+              borderRadius: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              overflow: 'hidden',
+              boxShadow: `0 0 10px ${hexToRgba(merchantAnnouncementColor, 0.05)}`,
+              marginBottom: '10px'
+            }}>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: '800',
+                color: merchantAnnouncementColor,
+                background: hexToRgba(merchantAnnouncementColor, 0.15),
+                padding: '3px 8px',
+                borderRadius: '10px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center'
+              }}>
+                📢 Notice
+              </span>
+              <marquee
+                behavior="scroll"
+                direction="left"
+                scrollamount="4"
+                style={{
+                  fontSize: '12px',
+                  color: merchantAnnouncementColor,
+                  textShadow: `0 0 4px ${hexToRgba(merchantAnnouncementColor, 0.3)}`,
+                  fontWeight: '600',
+                  margin: 0,
+                  padding: 0
+                }}
+              >
+                {merchantAnnouncement}
               </marquee>
             </div>
           )}
@@ -4474,6 +4711,53 @@ function App() {
         {activeTab === 'customer' && (
           <div className="customer-portal-layout fade-in">
 
+            {/* Customer Storefront Announcement Marquee Banner */}
+            {customerAnnouncement && (
+              <div className="customer-announcement-banner" style={{
+                margin: '16px auto 10px auto',
+                padding: '8px 16px',
+                background: hexToRgba(customerAnnouncementColor, 0.05),
+                border: `1px solid ${hexToRgba(customerAnnouncementColor, 0.15)}`,
+                borderRadius: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                overflow: 'hidden',
+                boxShadow: `0 0 10px ${hexToRgba(customerAnnouncementColor, 0.05)}`
+              }}>
+                <span style={{
+                  fontSize: '12px',
+                  fontWeight: '800',
+                  color: customerAnnouncementColor,
+                  background: hexToRgba(customerAnnouncementColor, 0.15),
+                  padding: '4px 10px',
+                  borderRadius: '12px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  whiteSpace: 'nowrap',
+                  display: 'inline-flex',
+                  alignItems: 'center'
+                }}>
+                  📢 Notice
+                </span>
+                <marquee
+                  behavior="scroll"
+                  direction="left"
+                  scrollamount="4"
+                  style={{
+                    fontSize: '13px',
+                    color: customerAnnouncementColor,
+                    textShadow: `0 0 4px ${hexToRgba(customerAnnouncementColor, 0.3)}`,
+                    fontWeight: '600',
+                    margin: 0,
+                    padding: 0
+                  }}
+                >
+                  {customerAnnouncement}
+                </marquee>
+              </div>
+            )}
+
             {/* Custom PIXIgo Brand Banner */}
             <div className="custom-brand-banner-wrap" style={{ margin: '16px auto 10px auto', width: '100%', boxSizing: 'border-box' }}>
               <img 
@@ -4692,85 +4976,127 @@ function App() {
                               <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
                             </span>
                           </div>
-                          {p.specs && (
-                            <div className="prod-specs-text">{p.specs}</div>
-                          )}
-                          <span className="prod-store">
-                            {p.store}
-                            {shopDistance !== null && (
-                              <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginLeft: '6px' }}>
-                                ({shopDistance.toFixed(1)} km)
-                              </span>
-                            )}
-                          </span>
-
-                          {/* Rating Component */}
-                          <div className="product-card-rating">
-                            {(() => {
-                              const { rating, reviews } = getProductRating(p.id);
-                              const rounded = Math.min(5, Math.max(0, Math.round(parseFloat(rating))));
-                              return (
-                                <>
-                                  {'★'.repeat(rounded)}
-                                  {'☆'.repeat(5 - rounded)}
-                                  <span>{rating} ({reviews}+)</span>
-                                </>
-                              );
-                            })()}
-                          </div>
-
-                          <p className="prod-category" style={{ marginTop: '6px' }}>{p.category}</p>
-
-                          {(p.originalPrice > p.price || p.offerText) && (
-                            <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
-                                {p.offerText || `SAVE ${Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)}%`}
-                              </span>
-                            </div>
-                          )}
-
-                          <div className="prod-buy">
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                              <span className="prod-price" style={{ color: p.originalPrice > p.price ? 'var(--color-success)' : 'inherit' }}>
-                                {formatINR(p.price)}
-                              </span>
-                              {p.originalPrice > p.price && (
-                                <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
-                                  {formatINR(p.originalPrice)}
+                          {(() => {
+                            const displayInfo = getProductDisplayInfo(p);
+                            return (
+                              <>
+                                {displayInfo.specs && (
+                                  <div className="prod-specs-text">{displayInfo.specs}</div>
+                                )}
+                                <span className="prod-store">
+                                  {p.store}
+                                  {shopDistance !== null && (
+                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginLeft: '6px' }}>
+                                      ({shopDistance.toFixed(1)} km)
+                                    </span>
+                                  )}
                                 </span>
-                              )}
-                            </div>
-                            {(() => {
-                              const cartItem = cart.find(item => item.id === p.id);
-                              if (cartItem) {
-                                return (
-                                  <div className="prod-qty-selector">
-                                    <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
-                                    <span className="qty-val">{cartItem.quantity}</span>
-                                    <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
+
+                                {/* Rating Component */}
+                                <div className="product-card-rating">
+                                  {(() => {
+                                    const { rating, reviews } = getProductRating(p.id);
+                                    const rounded = Math.min(5, Math.max(0, Math.round(parseFloat(rating))));
+                                    return (
+                                      <>
+                                        {'★'.repeat(rounded)}
+                                        {'☆'.repeat(5 - rounded)}
+                                        <span>{rating} ({reviews}+)</span>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+
+                                <p className="prod-category" style={{ marginTop: '6px' }}>{p.category}</p>
+
+                                {(displayInfo.originalPrice > displayInfo.price || p.offerText) && (
+                                  <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
+                                      {p.offerText || `SAVE ${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}%`}
+                                    </span>
                                   </div>
-                                );
-                              }
-                              return (
-                                <button
-                                  className="circular-add-btn"
-                                  onClick={() => {
-                                    if (isClosed) {
-                                      showToast(`We do not deliver at your location. Store is closed.`, 'warning');
-                                      return;
+                                )}
+
+                                <div className="prod-buy">
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                                    <span className="prod-price" style={{ color: displayInfo.originalPrice > displayInfo.price ? 'var(--color-success)' : 'inherit' }}>
+                                      {formatINR(displayInfo.price)}
+                                    </span>
+                                    {displayInfo.originalPrice > displayInfo.price && (
+                                      <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
+                                        {formatINR(displayInfo.originalPrice)}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {(() => {
+                                    const variants = parseProductVariants(p);
+                                    if (variants && variants.length > 0) {
+                                      const variantsInCart = cart.filter(item => item.id === p.id);
+                                      const totalQty = variantsInCart.reduce((sum, item) => sum + item.quantity, 0);
+
+                                      if (totalQty > 0) {
+                                        return (
+                                          <button
+                                            className="neon-btn small-btn"
+                                            onClick={() => setSelectedVariantProduct(p)}
+                                            style={{
+                                              padding: '6px 12px',
+                                              fontSize: '11px',
+                                              background: 'rgba(0, 255, 242, 0.1)',
+                                              borderColor: 'var(--color-primary)',
+                                              borderRadius: '20px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '4px'
+                                            }}
+                                          >
+                                            In Cart: {totalQty} ⚙
+                                          </button>
+                                        );
+                                      }
+                                      return (
+                                        <button
+                                          className="circular-add-btn"
+                                          onClick={() => setSelectedVariantProduct(p)}
+                                        >
+                                          +
+                                        </button>
+                                      );
                                     }
-                                    if (isOutOfRange) {
-                                      showToast(`We do not deliver at your location.`, 'warning');
-                                      return;
+
+                                    const cartItem = cart.find(item => item.id === p.id);
+                                    if (cartItem) {
+                                      return (
+                                        <div className="prod-qty-selector">
+                                          <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
+                                          <span className="qty-val">{cartItem.quantity}</span>
+                                          <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
+                                        </div>
+                                      );
                                     }
-                                    handleAddToCart(p);
-                                  }}
-                                >
-                                  +
-                                </button>
-                              );
-                            })()}
-                          </div>
+                                    return (
+                                      <button
+                                        className="circular-add-btn"
+                                        onClick={() => {
+                                          if (isClosed) {
+                                            showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                                            return;
+                                          }
+                                          if (isOutOfRange) {
+                                            showToast(`We do not deliver at your location.`, 'warning');
+                                            return;
+                                          }
+                                          handleAddToCart(p);
+                                        }}
+                                      >
+                                        +
+                                      </button>
+                                    );
+                                  })()}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -5632,34 +5958,37 @@ function App() {
                           placeholder="e.g. Chocolate Truffle Cake"
                         />
                       </div>
-                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Price (₹)</label>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', opacity: adminNewProductSpecs.includes(':') ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Price (₹) {adminNewProductSpecs.includes(':') && <span style={{ color: 'var(--color-primary)', fontSize: '10px' }}>(Auto from specs)</span>}</label>
                         <input
                           type="number"
-                          value={adminNewProductPrice}
+                          value={adminNewProductSpecs.includes(':') ? '' : adminNewProductPrice}
                           onChange={(e) => setAdminNewProductPrice(e.target.value)}
                           className="custom-input"
-                          placeholder="e.g. 350"
+                          placeholder={adminNewProductSpecs.includes(':') ? "Not required" : "e.g. 350"}
+                          disabled={adminNewProductSpecs.includes(':')}
                         />
                       </div>
-                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Original Price (₹)</label>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', opacity: adminNewProductSpecs.includes(':') ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Original Price (₹) {adminNewProductSpecs.includes(':') && <span style={{ color: 'var(--color-primary)', fontSize: '10px' }}>(Auto from specs)</span>}</label>
                         <input
                           type="number"
-                          value={adminNewProductOrigPrice}
+                          value={adminNewProductSpecs.includes(':') ? '' : adminNewProductOrigPrice}
                           onChange={(e) => setAdminNewProductOrigPrice(e.target.value)}
                           className="custom-input"
-                          placeholder="e.g. 400"
+                          placeholder={adminNewProductSpecs.includes(':') ? "Not required" : "e.g. 400"}
+                          disabled={adminNewProductSpecs.includes(':')}
                         />
                       </div>
-                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Offer Title</label>
+                      <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left', opacity: adminNewProductSpecs.includes(':') ? 0.5 : 1, transition: 'opacity 0.2s' }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Offer Title {adminNewProductSpecs.includes(':') && <span style={{ color: 'var(--color-primary)', fontSize: '10px' }}>(Auto from specs)</span>}</label>
                         <input
                           type="text"
-                          value={adminNewProductOffer}
+                          value={adminNewProductSpecs.includes(':') ? '' : adminNewProductOffer}
                           onChange={(e) => setAdminNewProductOffer(e.target.value)}
                           className="custom-input"
-                          placeholder="e.g. 15% OFF"
+                          placeholder={adminNewProductSpecs.includes(':') ? "Not required" : "e.g. 15% OFF"}
+                          disabled={adminNewProductSpecs.includes(':')}
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
@@ -5673,13 +6002,20 @@ function App() {
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
-                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Specs / Unit (e.g. 500g, 1 pack)</label>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Specs / Unit (Add commas for multiple variants)</label>
+                        <span style={{ fontSize: '11px', color: 'var(--color-accent-vibrant)', display: 'block', fontWeight: '600', lineHeight: '1.4' }}>
+                          💡 Format: <strong>Size:Price</strong> (Original Price is optional)
+                          <br />
+                          Example (Single variant): <code>1 Litre: 60</code> or <code>1 Litre: 60: 64</code>
+                          <br />
+                          Example (Two variants): <code>1 Litre: 60, 2 Litre: 110</code>
+                        </span>
                         <input
                           type="text"
                           value={adminNewProductSpecs}
                           onChange={(e) => setAdminNewProductSpecs(e.target.value)}
                           className="custom-input"
-                          placeholder="e.g. 500 ml, 1 pack"
+                          placeholder="e.g. 1 Litre: 60, 2 Litre: 110"
                         />
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
@@ -5814,8 +6150,10 @@ function App() {
                                   type="number"
                                   id={`price-${p.id}`}
                                   defaultValue={p.price}
+                                  disabled={!!parseProductVariants(p)}
+                                  placeholder={parseProductVariants(p) ? "Multi" : ""}
                                   className="rider-select"
-                                  style={{ width: '80px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                  style={{ width: '80px', padding: '4px', background: 'rgba(255,255,255,0.05)', opacity: parseProductVariants(p) ? 0.5 : 1 }}
                                 />
                               </td>
                               <td>
@@ -5823,9 +6161,10 @@ function App() {
                                   type="number"
                                   id={`orig-price-${p.id}`}
                                   defaultValue={p.originalPrice || 0}
-                                  placeholder="0"
+                                  disabled={!!parseProductVariants(p)}
+                                  placeholder={parseProductVariants(p) ? "Multi" : "0"}
                                   className="rider-select"
-                                  style={{ width: '80px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                  style={{ width: '80px', padding: '4px', background: 'rgba(255,255,255,0.05)', opacity: parseProductVariants(p) ? 0.5 : 1 }}
                                 />
                               </td>
                               <td>
@@ -5833,9 +6172,10 @@ function App() {
                                   type="text"
                                   id={`offer-${p.id}`}
                                   defaultValue={p.offerText || ''}
-                                  placeholder="e.g. 20% Off"
+                                  disabled={!!parseProductVariants(p)}
+                                  placeholder={parseProductVariants(p) ? "Multi" : "e.g. 20% Off"}
                                   className="rider-select"
-                                  style={{ width: '150px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                  style={{ width: '150px', padding: '4px', background: 'rgba(255,255,255,0.05)', opacity: parseProductVariants(p) ? 0.5 : 1 }}
                                 />
                               </td>
                               <td>
@@ -5843,9 +6183,10 @@ function App() {
                                   type="text"
                                   id={`specs-${p.id}`}
                                   defaultValue={p.specs || ''}
-                                  placeholder="e.g. 500 ml"
+                                  placeholder="e.g. 200 G:57:60, 400 G:99"
+                                  title="Enter variants as size:price:origPrice separated by commas"
                                   className="rider-select"
-                                  style={{ width: '100px', padding: '4px', background: 'rgba(255,255,255,0.05)' }}
+                                  style={{ width: '180px', padding: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '11px' }}
                                 />
                               </td>
                               <td>
@@ -6532,8 +6873,8 @@ function App() {
                     <div className="settings-accordion-content" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                       {/* Customer Banner Settings */}
                       <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '20px' }}>
-                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#ffd700', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          ⭐ Customer Storefront Announcement (Black & Gold Theme)
+                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: customerAnnouncementColorEdit || '#ffd700', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          ⭐ Customer Storefront Announcement
                         </h3>
                         <div className="form-group" style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
@@ -6546,15 +6887,27 @@ function App() {
                             style={{ width: '100%', height: '60px', padding: '8px', resize: 'vertical' }}
                           />
                         </div>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Theme Color</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="color"
+                              value={customerAnnouncementColorEdit}
+                              onChange={(e) => setCustomerAnnouncementColorEdit(e.target.value)}
+                              style={{ width: '40px', height: '40px', border: '1px solid var(--color-border)', borderRadius: '4px', cursor: 'pointer', background: 'transparent', padding: '2px' }}
+                            />
+                            <span style={{ fontSize: '13px', color: 'var(--color-text-main)', fontFamily: 'monospace' }}>{customerAnnouncementColorEdit}</span>
+                          </div>
+                        </div>
                         <button className="neon-btn" onClick={handleSaveCustomerAnnouncement} style={{ alignSelf: 'flex-start', padding: '8px 20px', width: '100%' }}>
                           Save Customer Announcement Settings
                         </button>
                       </div>
 
                       {/* Rider Banner Settings */}
-                      <div>
-                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#00fff2', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          📢 Rider Portal Announcement (Neon Cyan Theme)
+                      <div style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '20px' }}>
+                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: riderAnnouncementColorEdit || '#00fff2', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          📢 Rider Portal Announcement
                         </h3>
                         <div className="form-group" style={{ marginBottom: '12px' }}>
                           <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
@@ -6567,8 +6920,53 @@ function App() {
                             style={{ width: '100%', height: '60px', padding: '8px', resize: 'vertical' }}
                           />
                         </div>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Theme Color</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="color"
+                              value={riderAnnouncementColorEdit}
+                              onChange={(e) => setRiderAnnouncementColorEdit(e.target.value)}
+                              style={{ width: '40px', height: '40px', border: '1px solid var(--color-border)', borderRadius: '4px', cursor: 'pointer', background: 'transparent', padding: '2px' }}
+                            />
+                            <span style={{ fontSize: '13px', color: 'var(--color-text-main)', fontFamily: 'monospace' }}>{riderAnnouncementColorEdit}</span>
+                          </div>
+                        </div>
                         <button className="neon-btn" onClick={handleSaveRiderAnnouncement} style={{ alignSelf: 'flex-start', padding: '8px 20px', width: '100%' }}>
                           Save Rider Announcement Settings
+                        </button>
+                      </div>
+
+                      {/* Merchant Banner Settings */}
+                      <div>
+                        <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: merchantAnnouncementColorEdit || '#ff007f', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          🏪 Merchant Storefront Announcement
+                        </h3>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Marquee Message</label>
+                          <textarea
+                            value={merchantAnnouncementEdit}
+                            onChange={(e) => setMerchantAnnouncementEdit(e.target.value)}
+                            className="custom-input"
+                            placeholder="e.g. 📢 Welcome to PIXIgo Merchant Dashboard! Keep your inventory updated and manage orders efficiently."
+                            rows={2}
+                            style={{ width: '100%', height: '60px', padding: '8px', resize: 'vertical' }}
+                          />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: '12px' }}>
+                          <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Theme Color</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="color"
+                              value={merchantAnnouncementColorEdit}
+                              onChange={(e) => setMerchantAnnouncementColorEdit(e.target.value)}
+                              style={{ width: '40px', height: '40px', border: '1px solid var(--color-border)', borderRadius: '4px', cursor: 'pointer', background: 'transparent', padding: '2px' }}
+                            />
+                            <span style={{ fontSize: '13px', color: 'var(--color-text-main)', fontFamily: 'monospace' }}>{merchantAnnouncementColorEdit}</span>
+                          </div>
+                        </div>
+                        <button className="neon-btn" onClick={handleSaveMerchantAnnouncement} style={{ alignSelf: 'flex-start', padding: '8px 20px', width: '100%' }}>
+                          Save Merchant Announcement Settings
                         </button>
                       </div>
                     </div>
@@ -7027,20 +7425,20 @@ function App() {
                   <div className="rider-announcement-banner" style={{
                     marginBottom: '24px',
                     padding: '8px 16px',
-                    background: 'rgba(0, 255, 242, 0.05)',
-                    border: '1px solid rgba(0, 255, 242, 0.15)',
+                    background: hexToRgba(riderAnnouncementColor, 0.05),
+                    border: `1px solid ${hexToRgba(riderAnnouncementColor, 0.15)}`,
                     borderRadius: '24px',
                     display: 'flex',
                     alignItems: 'center',
                     gap: '12px',
                     overflow: 'hidden',
-                    boxShadow: '0 0 10px rgba(0, 255, 242, 0.05)'
+                    boxShadow: `0 0 10px ${hexToRgba(riderAnnouncementColor, 0.05)}`
                   }}>
                     <span style={{
                       fontSize: '12px',
                       fontWeight: '800',
-                      color: 'var(--color-primary)',
-                      background: 'rgba(0, 255, 242, 0.15)',
+                      color: riderAnnouncementColor,
+                      background: hexToRgba(riderAnnouncementColor, 0.15),
                       padding: '4px 10px',
                       borderRadius: '12px',
                       textTransform: 'uppercase',
@@ -7057,8 +7455,8 @@ function App() {
                       scrollamount="4"
                       style={{
                         fontSize: '13px',
-                        color: '#00fff2',
-                        textShadow: '0 0 4px rgba(0, 255, 242, 0.3)',
+                        color: riderAnnouncementColor,
+                        textShadow: `0 0 4px ${hexToRgba(riderAnnouncementColor, 0.3)}`,
                         fontWeight: '600',
                         margin: 0,
                         padding: 0
@@ -7383,6 +7781,53 @@ function App() {
             <div className="merchant-portal-wrap fade-in">
               <div className="merchant-layout glass-panel">
 
+                {/* Merchant Announcement Marquee Banner */}
+                {merchantAnnouncement && (
+                  <div className="merchant-announcement-banner" style={{
+                    marginBottom: '24px',
+                    padding: '8px 16px',
+                    background: hexToRgba(merchantAnnouncementColor, 0.05),
+                    border: `1px solid ${hexToRgba(merchantAnnouncementColor, 0.15)}`,
+                    borderRadius: '24px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    overflow: 'hidden',
+                    boxShadow: `0 0 10px ${hexToRgba(merchantAnnouncementColor, 0.05)}`
+                  }}>
+                    <span style={{
+                      fontSize: '12px',
+                      fontWeight: '800',
+                      color: merchantAnnouncementColor,
+                      background: hexToRgba(merchantAnnouncementColor, 0.15),
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      whiteSpace: 'nowrap',
+                      display: 'inline-flex',
+                      alignItems: 'center'
+                    }}>
+                      📢 Notice
+                    </span>
+                    <marquee
+                      behavior="scroll"
+                      direction="left"
+                      scrollamount="4"
+                      style={{
+                        fontSize: '13px',
+                        color: merchantAnnouncementColor,
+                        textShadow: `0 0 4px ${hexToRgba(merchantAnnouncementColor, 0.3)}`,
+                        fontWeight: '600',
+                        margin: 0,
+                        padding: 0
+                      }}
+                    >
+                      {merchantAnnouncement}
+                    </marquee>
+                  </div>
+                )}
+
                 {/* Associated Shop Welcome */}
                 <div style={{ textAlign: 'left', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
                   <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
@@ -7490,7 +7935,7 @@ function App() {
                               Customer: {o.customerName} | Address: {o.customerLocation}
                             </span>
                             <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--color-text-main)' }}>
-                              <strong>Items:</strong> {o.items.map(i => `${i.name} (${i.quantity})`).join(', ')}
+                              <strong>Items:</strong> {o.items.map(i => `${i.name}${i.specs ? ` (${i.specs})` : ''} (${i.quantity})`).join(', ')}
                             </div>
                           </div>
                           <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
@@ -7535,7 +7980,7 @@ function App() {
                               Customer: {o.customerName} | Rider: <span style={{ color: 'var(--color-primary)', fontWeight: 'bold' }}>{o.deliveryPartnerName || 'Assigning Rider...'}</span>
                             </span>
                             <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--color-text-main)' }}>
-                              <strong>Items:</strong> {o.items.map(i => `${i.name} (${i.quantity})`).join(', ')}
+                              <strong>Items:</strong> {o.items.map(i => `${i.name}${i.specs ? ` (${i.specs})` : ''} (${i.quantity})`).join(', ')}
                             </div>
                             <div style={{ marginTop: '4px' }}>
                               <span className="badge badge-warning">{o.status}</span>
@@ -7989,7 +8434,7 @@ function App() {
                     </div>
                     <div className="past-order-body-premium">
                       <p className="order-items-summary-premium">
-                        {o.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                        {o.items.map(item => `${item.name}${item.specs ? ` (${item.specs})` : ''} (x${item.quantity})`).join(', ')}
                       </p>
                       <div className="order-meta-info-premium">
                         <span>Paid: <strong>₹{o.totalAmount}</strong></span>
@@ -7999,6 +8444,150 @@ function App() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Variant Selection Modal */}
+      {selectedVariantProduct && (
+        <div className="modal-backdrop fade-in" onClick={() => setSelectedVariantProduct(null)}>
+          <div className="variant-select-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ background: 'var(--color-card-bg)', border: '1px solid var(--color-border)', boxShadow: '0 12px 40px var(--color-primary-glow-strong)', padding: '24px' }}>
+            <button className="modal-close-btn" onClick={() => setSelectedVariantProduct(null)} style={{ color: 'var(--color-text-muted)' }}>
+              <X size={20} />
+            </button>
+
+            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '20px' }}>
+              <div className="profile-avatar-glow" style={{ background: 'var(--color-primary-glow)', border: '2px solid var(--color-primary)', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {selectedVariantProduct.image && selectedVariantProduct.image.startsWith('http') ? (
+                  <img src={selectedVariantProduct.image} alt={selectedVariantProduct.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <span style={{ fontSize: '32px' }}>{selectedVariantProduct.image || selectedVariantProduct.emoji || '📦'}</span>
+                )}
+              </div>
+              <h3 className="section-title-premium" style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--color-text-main)', marginTop: '12px' }}>{selectedVariantProduct.name}</h3>
+              <p className="profile-sub" style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                Store: <strong style={{ color: 'var(--color-text-main)' }}>{selectedVariantProduct.store}</strong>
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: '400px', overflowY: 'auto', padding: '12px 4px 4px 4px' }}>
+              {(() => {
+                const variants = parseProductVariants(selectedVariantProduct);
+                if (!variants) return <p style={{ color: 'var(--color-text-muted)' }}>No variants defined.</p>;
+                return variants.map((variant, index) => {
+                  const cartItemId = `${selectedVariantProduct.id}_${variant.specs}`;
+                  const cartItem = cart.find(item => item.cartItemId === cartItemId || (item.id === cartItemId));
+                  const hasDiscount = variant.originalPrice > variant.price;
+                  const savingsPercent = hasDiscount ? Math.round(((variant.originalPrice - variant.price) / variant.originalPrice) * 100) : 0;
+
+                  return (
+                    <div 
+                      key={index} 
+                      className="variant-row-card"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'var(--color-dark-bg)',
+                        border: hasDiscount ? '1.5px solid var(--color-accent-vibrant)' : '1px solid var(--color-border)',
+                        padding: '16px',
+                        borderRadius: '12px',
+                        position: 'relative',
+                        gap: '12px'
+                      }}
+                    >
+                      {hasDiscount && (
+                        <span 
+                          style={{
+                            position: 'absolute',
+                            top: '-10px',
+                            left: '16px',
+                            background: 'var(--color-success)',
+                            color: '#ffffff',
+                            fontSize: '9px',
+                            fontWeight: 'bold',
+                            padding: '2px 8px',
+                            borderRadius: '8px',
+                            textTransform: 'uppercase',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            zIndex: 10
+                          }}
+                        >
+                          ★ SAVE {savingsPercent}%
+                        </span>
+                      )}
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, textAlign: 'left' }}>
+                        <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--color-text-main)' }}>{variant.specs}</h4>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--color-success)' }}>
+                            {formatINR(variant.price)}
+                          </span>
+                          {hasDiscount && (
+                            <span style={{ fontSize: '12px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
+                              {formatINR(variant.originalPrice)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: '90px' }}>
+                        {cartItem ? (
+                          <div className="prod-qty-selector" style={{ margin: 0, background: 'var(--color-primary)', color: '#ffffff', height: '36px' }}>
+                            <button className="qty-btn dec" style={{ color: '#ffffff' }} onClick={() => handleUpdateQty(cartItemId, -1)}>-</button>
+                            <span className="qty-val" style={{ color: '#ffffff' }}>{cartItem.quantity}</span>
+                            <button className="qty-btn inc" style={{ color: '#ffffff' }} onClick={() => handleUpdateQty(cartItemId, 1)}>+</button>
+                          </div>
+                        ) : (
+                          <button
+                            className="neon-btn small-btn"
+                            onClick={() => {
+                              const pShop = shops.find(s => s.name === selectedVariantProduct.store || s.storeName === selectedVariantProduct.store);
+                              const statusInfo = getShopOpenStatus(pShop);
+                              const isClosed = !statusInfo.isOpen;
+                              
+                              const customerCoords = parseCoords(customerAddress);
+                              let shopDistance = null;
+                              let isOutOfRange = false;
+                              if (pShop && pShop.lat && pShop.lng && customerCoords) {
+                                shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
+                                isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
+                              }
+                              
+                              if (isClosed) {
+                                showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                                return;
+                              }
+                              if (isOutOfRange) {
+                                showToast(`We do not deliver at your location.`, 'warning');
+                                return;
+                              }
+                              handleAddToCart(selectedVariantProduct, variant);
+                            }}
+                            style={{
+                              background: 'var(--color-primary-glow)',
+                              borderColor: 'var(--color-primary)',
+                              color: 'var(--color-primary)',
+                              padding: '8px 18px',
+                              borderRadius: '20px',
+                              fontWeight: '700',
+                              fontSize: '13px',
+                              cursor: 'pointer',
+                              height: '36px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            Add +
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
@@ -9313,6 +9902,9 @@ function App() {
                       <div>
                         <span>{item.emoji || '📦'} </span>
                         <strong>{item.name}</strong>
+                        {item.specs && (
+                          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginLeft: '6px' }}>({item.specs})</span>
+                        )}
                         <span style={{ color: 'var(--color-text-muted)', marginLeft: '8px' }}>x{item.quantity}</span>
                       </div>
                       <strong style={{ color: 'var(--color-success)' }}>{formatINR(item.price * item.quantity)}</strong>
@@ -9501,7 +10093,7 @@ function App() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                               {o.items?.map((item, idx) => (
                                 <div key={idx} style={{ fontSize: '12px' }}>
-                                  • {item.name} <span style={{ color: 'var(--color-text-muted)' }}>(x{item.quantity || 1})</span>
+                                  • {item.name}{item.specs ? ` (${item.specs})` : ''} <span style={{ color: 'var(--color-text-muted)' }}>(x{item.quantity || 1})</span>
                                 </div>
                               ))}
                             </div>
