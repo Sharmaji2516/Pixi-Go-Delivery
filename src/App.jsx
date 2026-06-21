@@ -351,6 +351,9 @@ function App() {
   const [commissionPercent, setCommissionPercent] = useState(10);
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
   const [perKmCharge, setPerKmCharge] = useState(5);
+  const [promoDelivery30Enabled, setPromoDelivery30Enabled] = useState(true);
+  const [promoFoodFreeEnabled, setPromoFoodFreeEnabled] = useState(true);
+  const [promoGroceryFreeEnabled, setPromoGroceryFreeEnabled] = useState(true);
   const [bankAccount, setBankAccount] = useState('SBI - A/C 98127391238 (IFSC: SBIN0007204)');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState('item'); // item | shop
@@ -1341,6 +1344,22 @@ function App() {
       }
     }, (error) => {
       console.error("Firestore merchant announcement subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time delivery promos configuration from Firestore
+  useEffect(() => {
+    const docRef = doc(db, "configs", "delivery_promos");
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.promoDelivery30Enabled !== undefined) setPromoDelivery30Enabled(data.promoDelivery30Enabled);
+        if (data.promoFoodFreeEnabled !== undefined) setPromoFoodFreeEnabled(data.promoFoodFreeEnabled);
+        if (data.promoGroceryFreeEnabled !== undefined) setPromoGroceryFreeEnabled(data.promoGroceryFreeEnabled);
+      }
+    }, (error) => {
+      console.warn("Firestore delivery promos config fetch error:", error);
     });
     return () => unsubscribe();
   }, []);
@@ -2412,7 +2431,11 @@ function App() {
     }
 
     const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
-    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge);
+    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, {
+      promoDelivery30Enabled,
+      promoFoodFreeEnabled,
+      promoGroceryFreeEnabled
+    });
 
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
@@ -3577,6 +3600,27 @@ function App() {
     }
   };
 
+  const handleTogglePromoRule = async (ruleName, currentVal) => {
+    try {
+      const docRef = doc(db, "configs", "delivery_promos");
+      const updatedVal = !currentVal;
+      if (ruleName === 'promoDelivery30') {
+        setPromoDelivery30Enabled(updatedVal);
+        await setDoc(docRef, { promoDelivery30Enabled: updatedVal }, { merge: true });
+      } else if (ruleName === 'promoFoodFree') {
+        setPromoFoodFreeEnabled(updatedVal);
+        await setDoc(docRef, { promoFoodFreeEnabled: updatedVal }, { merge: true });
+      } else if (ruleName === 'promoGroceryFree') {
+        setPromoGroceryFreeEnabled(updatedVal);
+        await setDoc(docRef, { promoGroceryFreeEnabled: updatedVal }, { merge: true });
+      }
+      showToast("Delivery promotional rule updated successfully!");
+    } catch (err) {
+      console.error("Error toggling delivery promo:", err);
+      alert(`Failed to save toggle: ${err.message}`);
+    }
+  };
+
   const handleCreateAuthAccount = async (type, email, password, id) => {
     if (!email || !password) {
       alert("Please provide both email/username and password.");
@@ -4144,14 +4188,59 @@ function App() {
                   : ` (${dist.toFixed(2)} km)`;
                 const rates = calculateDeliveryRates(dist);
                 originalFee = rates.customerCharge;
-                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee);
+                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee, {
+                  promoDelivery30Enabled,
+                  promoFoodFreeEnabled,
+                  promoGroceryFreeEnabled
+                });
               } else {
-                fee = getPromotionalDeliveryFee(subtotal, cart, 33);
+                fee = getPromotionalDeliveryFee(subtotal, cart, 33, {
+                  promoDelivery30Enabled,
+                  promoFoodFreeEnabled,
+                  promoGroceryFreeEnabled
+                });
+              }
+
+              // Check which delivery promo is applied
+              let promoNotification = '';
+              const hasFoodItems = cart.some(item => 
+                ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
+              );
+              const hasGroceryItems = cart.some(item => 
+                ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
+              );
+
+              if (promoFoodFreeEnabled && subtotal > 999 && hasFoodItems && originalFee > 0) {
+                promoNotification = `🎉 Delivery is FREE because your cart is above ₹999 and contains Food items!`;
+              } else if (promoGroceryFreeEnabled && subtotal > 1999 && hasGroceryItems && originalFee > 0) {
+                promoNotification = `🎉 Delivery is FREE because your cart is above ₹1999 and contains Grocery items!`;
+              } else if (promoDelivery30Enabled && subtotal > 599 && originalFee > 0) {
+                promoNotification = `🎉 You saved 30% on delivery because your cart value is above ₹599!`;
               }
 
               const totalAmount = subtotal + fee - appliedDiscount;
               return (
                 <>
+                  {promoNotification && (
+                    <div className="fade-in" style={{
+                      background: 'rgba(16, 185, 129, 0.08)',
+                      border: '1px solid rgba(16, 185, 129, 0.25)',
+                      borderRadius: '12px',
+                      padding: '12px 14px',
+                      marginBottom: '16px',
+                      color: '#34d399',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      textAlign: 'left',
+                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.05)'
+                    }}>
+                      <span>{promoNotification}</span>
+                    </div>
+                  )}
+
                   <div className="blinkit-bill-details">
                     <h3 className="bill-details-header">Bill details</h3>
 
@@ -7336,6 +7425,49 @@ function App() {
 
                       <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid var(--color-border)' }}></div>
 
+                      <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: 'var(--color-primary)' }}>Promotional Delivery Rules</h4>
+                      
+                      <div className="form-group" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          id="promo-delivery-30-chk"
+                          checked={promoDelivery30Enabled}
+                          onChange={() => handleTogglePromoRule('promoDelivery30', promoDelivery30Enabled)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="promo-delivery-30-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
+                          Enable 30% Delivery Discount (Orders &gt; ₹599)
+                        </label>
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          id="promo-food-free-chk"
+                          checked={promoFoodFreeEnabled}
+                          onChange={() => handleTogglePromoRule('promoFoodFree', promoFoodFreeEnabled)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="promo-food-free-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
+                          Enable FREE Food Delivery (Orders &gt; ₹999 + Food items)
+                        </label>
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <input
+                          type="checkbox"
+                          id="promo-grocery-free-chk"
+                          checked={promoGroceryFreeEnabled}
+                          onChange={() => handleTogglePromoRule('promoGroceryFree', promoGroceryFreeEnabled)}
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                        <label htmlFor="promo-grocery-free-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
+                          Enable FREE Grocery Delivery (Orders &gt; ₹1999 + Grocery items)
+                        </label>
+                      </div>
+
+                      <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid var(--color-border)' }}></div>
+
                       <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px' }}>Modify Storefront Categories</h4>
                       <div className="cat-admin-list">
                         {categories.slice(1).map(c => (
@@ -9520,9 +9652,11 @@ function App() {
               )}
 
               {/* Delivery Discounts Section Header */}
-              <div style={{ fontSize: '11px', fontWeight: '800', color: 'var(--color-primary)', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '12px', marginBottom: '-4px', opacity: 0.8 }}>
-                Delivery Discounts (Auto-Applied)
-              </div>
+              {(promoDelivery30Enabled || promoFoodFreeEnabled || promoGroceryFreeEnabled) && (
+                <div style={{ fontSize: '11px', fontWeight: '800', color: 'var(--color-primary)', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '12px', marginBottom: '-4px', opacity: 0.8 }}>
+                  Delivery Discounts (Auto-Applied)
+                </div>
+              )}
 
               {(() => {
                 const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
@@ -9540,6 +9674,7 @@ function App() {
                     desc: 'Apply 30% discount on the delivery fee for orders above ₹599.',
                     minCart: 599,
                     isActive: subtotal > 599,
+                    enabled: promoDelivery30Enabled,
                     statusText: subtotal > 599 ? '✓ Auto-applied' : `✗ Needs ₹${599 - subtotal} more`,
                     gradient: 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)'
                   },
@@ -9548,6 +9683,7 @@ function App() {
                     desc: 'FREE delivery for orders above ₹999 containing Food or Bakery items.',
                     minCart: 999,
                     isActive: subtotal > 999 && hasFoodItems,
+                    enabled: promoFoodFreeEnabled,
                     statusText: (subtotal > 999 && hasFoodItems) 
                       ? '✓ Auto-applied' 
                       : (!hasFoodItems && cart.length > 0)
@@ -9560,6 +9696,7 @@ function App() {
                     desc: 'FREE delivery for orders above ₹1999 containing Grocery or Kirana items.',
                     minCart: 1999,
                     isActive: subtotal > 1999 && hasGroceryItems,
+                    enabled: promoGroceryFreeEnabled,
                     statusText: (subtotal > 1999 && hasGroceryItems)
                       ? '✓ Auto-applied'
                       : (!hasGroceryItems && cart.length > 0)
@@ -9567,7 +9704,7 @@ function App() {
                         : `✗ Needs ₹${1999 - subtotal} more`,
                     gradient: 'linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%)'
                   }
-                ];
+                ].filter(p => p.enabled);
 
                 return deliveryPromos.map((promo, idx) => {
                   return (

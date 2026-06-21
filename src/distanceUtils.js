@@ -100,29 +100,40 @@ export const fetchRoadDistance = async (shopLat, shopLng, customerLat, customerL
  * @param {number} subtotal Cart item value subtotal
  * @param {Array} cartItems Array of cart item objects
  * @param {number} baseDeliveryFee Computed base delivery charge
+ * @param {object} options Enable/disable toggles for rules
  * @returns {number} Final delivery fee for the customer
  */
-export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee) => {
+export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee, options = {}) => {
+  const {
+    promoDelivery30Enabled = true,
+    promoFoodFreeEnabled = true,
+    promoGroceryFreeEnabled = true
+  } = options;
+
   if (baseDeliveryFee <= 0) return 0;
 
   // 1. Order Value Above ₹999 & contains Food items -> FREE
-  const hasFoodItems = cartItems.some(item => 
-    ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
-  );
-  if (subtotal > 999 && hasFoodItems) {
-    return 0;
+  if (promoFoodFreeEnabled) {
+    const hasFoodItems = cartItems.some(item => 
+      ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
+    );
+    if (subtotal > 999 && hasFoodItems) {
+      return 0;
+    }
   }
 
   // 2. Order Value Above ₹1999 & contains Grocery items -> FREE
-  const hasGroceryItems = cartItems.some(item => 
-    ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
-  );
-  if (subtotal > 1999 && hasGroceryItems) {
-    return 0;
+  if (promoGroceryFreeEnabled) {
+    const hasGroceryItems = cartItems.some(item => 
+      ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
+    );
+    if (subtotal > 1999 && hasGroceryItems) {
+      return 0;
+    }
   }
 
   // 3. Order Value Above ₹599 -> 30% Discount on Delivery Fee
-  if (subtotal > 599) {
+  if (promoDelivery30Enabled && subtotal > 599) {
     return Math.round(baseDeliveryFee * 0.7); // 30% discount
   }
 
