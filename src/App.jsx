@@ -2325,6 +2325,11 @@ function App() {
 
   // Checkout and Order Placement
   const handlePlaceOrder = async () => {
+    if (!user) {
+      showToast("🔐 Please sign in or register to place your order!", "warning");
+      setIsAuthModalOpen(true);
+      return;
+    }
     if (cart.length === 0) return alert('Your cart is empty!');
 
     // Check store-specific operating hours and manual toggle status
@@ -4227,6 +4232,11 @@ function App() {
               className="neon-btn checkout-btn"
               disabled={isOutOfRange || isDistanceLoading || isUnderMinimumOrder}
               onClick={() => {
+                if (!user) {
+                  showToast("🔐 Please sign in or register to place your order!", "warning");
+                  setIsAuthModalOpen(true);
+                  return;
+                }
                 if (isOutOfRange) {
                   showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
                   return;
