@@ -73,6 +73,23 @@ const extractFriendlyAddress = (locationStr) => {
   return locationStr;
 };
 
+const cleanUndefined = (obj) => {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj.map(cleanUndefined).filter(x => x !== undefined);
+  }
+  if (typeof obj === 'object') {
+    const cleaned = {};
+    for (const key in obj) {
+      if (obj[key] !== undefined) {
+        cleaned[key] = cleanUndefined(obj[key]);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+};
+
 function useRiderLocation(trackingOrderId) {
   const [riderCoords, setRiderCoords] = useState(null);
   useEffect(() => {
@@ -411,8 +428,8 @@ function App() {
   const [showSalesPin, setShowSalesPin] = useState(false);
   const [selectedAnalyticsMerchant, setSelectedAnalyticsMerchant] = useState(null);
   const [selectedAnalyticsRider, setSelectedAnalyticsRider] = useState(null);
-  const [selectedAnalyticsSalesGroup, setSelectedAnalyticsSalesGroup] = useState(null);
   const [salesTab, setSalesTab] = useState('merchants'); // merchants | riders
+  const [salesModalSearchQuery, setSalesModalSearchQuery] = useState('');
 
   const audioContextRef = useRef(null);
 
@@ -608,6 +625,8 @@ function App() {
           vehicle: r.vehicle || 'N/A',
           phone: r.phone || 'N/A',
           completedCount: 0,
+          activeCount: 0,
+          cancelledCount: 0,
           totalPayout: 0
         };
       }
@@ -626,13 +645,20 @@ function App() {
           vehicle: 'N/A',
           phone: 'N/A',
           completedCount: 0,
+          activeCount: 0,
+          cancelledCount: 0,
           totalPayout: 0
         };
       }
 
+      const isCancelled = o.status?.startsWith('CANCELLED');
       if (o.status === 'COMPLETED') {
         riderStatsMap[rId].completedCount += 1;
         riderStatsMap[rId].totalPayout += (o.riderPayout || 0);
+      } else if (isCancelled) {
+        riderStatsMap[rId].cancelledCount += 1;
+      } else {
+        riderStatsMap[rId].activeCount += 1;
       }
     });
 
@@ -1815,7 +1841,6 @@ function App() {
     setIsSalesUnlocked(false);
     setSelectedAnalyticsMerchant(null);
     setSelectedAnalyticsRider(null);
-    setSelectedAnalyticsSalesGroup(null);
     setSalesTab('merchants');
     localStorage.removeItem('pixigo_rider_session');
     localStorage.removeItem('pixigo_customerName');
@@ -1954,7 +1979,7 @@ function App() {
   });
 
   // Admin search filtering logic
-  const filteredOrders = orders.filter(o => o.status !== 'COMPLETED').filter(o => {
+  const filteredOrders = orders.filter(o => o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')).filter(o => {
     if (!adminSearchQuery) return true;
     const queryLower = adminSearchQuery.toLowerCase();
     return (
@@ -2355,7 +2380,7 @@ function App() {
 
     try {
       // Save order to Firestore Database
-      await addDoc(collection(db, "orders"), newOrder);
+      await addDoc(collection(db, "orders"), cleanUndefined(newOrder));
 
       // Auto-sync merchant profile doc if it does not exist
       try {
@@ -2632,7 +2657,8 @@ function App() {
           ...o,
           status: 'ASSIGNED',
           deliveryPartnerId: user.uid,
-          deliveryPartnerName: rider.name
+          deliveryPartnerName: rider.name,
+          riderAccepted: true
         };
       }
       return o;
@@ -2645,7 +2671,8 @@ function App() {
           status: 'ASSIGNED',
           deliveryPartnerId: user.uid,
           deliveryPartnerName: rider.name,
-          riderId: user.uid
+          riderId: user.uid,
+          riderAccepted: true
         });
 
         // Set rider status to busy in delivery_boys collection
@@ -2659,6 +2686,36 @@ function App() {
       } catch (err) {
         console.error("Error accepting job in Firestore:", err);
         showToast("Failed to claim job. Please try again.");
+      }
+    }
+  };
+
+  const handleRiderConfirmAccept = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Update local state first
+    setOrders(orders.map(o => {
+      if (o.id === orderId) {
+        return {
+          ...o,
+          riderAccepted: true
+        };
+      }
+      return o;
+    }));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, {
+          riderAccepted: true
+        });
+
+        showToast(`Successfully accepted delivery run for Order ${orderId}!`);
+      } catch (err) {
+        console.error("Error accepting job in Firestore:", err);
+        showToast("Failed to accept run. Please try again.");
       }
     }
   };
@@ -3156,10 +3213,14 @@ function App() {
   const [riderInputOTP, setRiderInputOTP] = useState('');
   const handleRiderCompleteDelivery = async (orderId) => {
     const order = orders.find(o => o.id === orderId);
+    console.log("handleRiderCompleteDelivery called for order:", orderId);
+    console.log("riderInputOTP:", riderInputOTP, "typeof:", typeof riderInputOTP);
+    console.log("order.otp:", order ? order.otp : "no order", "typeof:", order ? typeof order.otp : "no order");
     if (!order) return;
 
     if (riderInputOTP.trim().toString() !== (order.otp || '').toString().trim()) {
-      return alert('Invalid OTP Code! Please confirm with the customer.');
+      console.log("OTP mismatch! Entered:", riderInputOTP.trim(), "Expected:", (order.otp || '').toString().trim());
+      return alert(`Invalid OTP Code! Entered: "${riderInputOTP}", but Order OTP is: "${order.otp || 'None'}". Please confirm with the customer.`);
     }
 
     // Stop Live GPS Tracking and clean up database
@@ -3168,10 +3229,13 @@ function App() {
       setRiderWatchId(null);
       setRiderTrackingOrderId(null);
     }
+    // Clean up RTDB node in the background so database connection hangs don't block order completion
     try {
-      await rtdbRemove(rtdbRef(rtdb, `deliveries/${orderId}`));
+      rtdbRemove(rtdbRef(rtdb, `deliveries/${orderId}`)).catch(e => {
+        console.error("Error removing RTDB node:", e);
+      });
     } catch (e) {
-      console.error("Error removing RTDB node:", e);
+      console.error("Error referencing RTDB node:", e);
     }
 
     // Update local state first
@@ -3234,7 +3298,13 @@ function App() {
     }));
 
     setRiderInputOTP('');
-    alert(`Order ${orderId} delivered successfully! Payment captures and commissions computed.`);
+    
+    // Provide dynamic instructions to the delivery boy based on payment method
+    const instructions = order.paymentMethod === 'COD' 
+      ? `Please collect cash: ₹${order.totalAmount} from the customer.` 
+      : 'Payment was made online. No cash collection required.';
+      
+    alert(`Order ${orderId} delivered successfully!\n\nInstructions: ${instructions}`);
   };
 
   const handleStartRiderTracking = (orderId) => {
@@ -3562,7 +3632,7 @@ function App() {
 
     try {
       // Save order to Firestore Database
-      await addDoc(collection(db, "orders"), pendingPaymentOrder);
+      await addDoc(collection(db, "orders"), cleanUndefined(pendingPaymentOrder));
 
       // Auto-sync merchant profile doc if it does not exist
       const merchantId = pendingPaymentOrder.merchantId;
@@ -4520,6 +4590,161 @@ function App() {
     return children;
   };
 
+  const renderProductCard = (p) => {
+    const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+    const statusInfo = getShopOpenStatus(pShop);
+    const isClosed = !statusInfo.isOpen;
+
+    const customerCoords = parseCoords(customerAddress);
+    let shopDistance = null;
+    let isOutOfRange = false;
+    if (pShop && pShop.lat && pShop.lng && customerCoords) {
+      shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
+      isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
+    }
+
+    const displayInfo = getProductDisplayInfo(p);
+
+    return (
+      <div key={p.id} className="product-card glass-panel" style={{ position: 'relative' }}>
+        <div className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} style={{ position: 'relative' }}>
+          {p.offerText && (
+            <span className="prod-img-badge">{p.offerText}</span>
+          )}
+          {p.image && p.image.startsWith('http') ? (
+            <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
+              e.target.style.display = 'none';
+            }} />
+          ) : (
+            <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
+          )}
+        </div>
+        <div className="prod-meta" style={{ opacity: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
+            <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
+              <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
+            </span>
+          </div>
+          
+          {displayInfo.specs && (
+            <div className="prod-specs-text">{displayInfo.specs}</div>
+          )}
+          <span className="prod-store">
+            {p.store}
+            {shopDistance !== null && (
+              <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginLeft: '6px' }}>
+                ({shopDistance.toFixed(1)} km)
+              </span>
+            )}
+          </span>
+
+          {/* Rating Component */}
+          <div className="product-card-rating">
+            {(() => {
+              const { rating, reviews } = getProductRating(p.id);
+              const rounded = Math.min(5, Math.max(0, Math.round(parseFloat(rating))));
+              return (
+                <>
+                  {'★'.repeat(rounded)}
+                  {'☆'.repeat(5 - rounded)}
+                  <span>{rating} ({reviews}+)</span>
+                </>
+              );
+            })()}
+          </div>
+
+          <p className="prod-category" style={{ marginTop: '6px' }}>{p.category}</p>
+
+          {(displayInfo.originalPrice > displayInfo.price || p.offerText) && (
+            <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
+                {p.offerText || `SAVE ${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}%`}
+              </span>
+            </div>
+          )}
+
+          <div className="prod-buy">
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span className="prod-price" style={{ color: displayInfo.originalPrice > displayInfo.price ? 'var(--color-success)' : 'inherit' }}>
+                {formatINR(displayInfo.price)}
+              </span>
+              {displayInfo.originalPrice > displayInfo.price && (
+                <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
+                  {formatINR(displayInfo.originalPrice)}
+                </span>
+              )}
+            </div>
+            {(() => {
+              const variants = parseProductVariants(p);
+              if (variants && variants.length > 0) {
+                const variantsInCart = cart.filter(item => item.id === p.id);
+                const totalQty = variantsInCart.reduce((sum, item) => sum + item.quantity, 0);
+
+                if (totalQty > 0) {
+                  return (
+                    <button
+                      className="neon-btn small-btn"
+                      onClick={() => setSelectedVariantProduct(p)}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '11px',
+                        background: 'rgba(0, 255, 242, 0.1)',
+                        borderColor: 'var(--color-primary)',
+                        borderRadius: '20px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      In Cart: {totalQty} ⚙
+                    </button>
+                  );
+                }
+                return (
+                  <button
+                    className="circular-add-btn"
+                    onClick={() => setSelectedVariantProduct(p)}
+                  >
+                    +
+                  </button>
+                );
+              }
+
+              const cartItem = cart.find(item => item.id === p.id);
+              if (cartItem) {
+                return (
+                  <div className="prod-qty-selector">
+                    <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
+                    <span className="qty-val">{cartItem.quantity}</span>
+                    <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
+                  </div>
+                );
+              }
+              return (
+                <button
+                  className="circular-add-btn"
+                  onClick={() => {
+                    if (isClosed) {
+                      showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                      return;
+                    }
+                    if (isOutOfRange) {
+                      showToast(`We do not deliver at your location.`, 'warning');
+                      return;
+                    }
+                    handleAddToCart(p);
+                  }}
+                >
+                  +
+                </button>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="app-container">
@@ -4940,168 +5165,45 @@ function App() {
                   </button>
                 </div>
 
-                {/* Product Grid */}
-                <div className="products-grid">
-                  {filteredProducts.map(p => {
-                    const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-                    const statusInfo = getShopOpenStatus(pShop);
-                    const isClosed = !statusInfo.isOpen;
+                {/* Product Grid / Sectioned Rows */}
+                {searchQuery.trim() !== '' || selectedCategory !== 'All' ? (
+                  <div className="products-grid">
+                    {filteredProducts.map(p => renderProductCard(p))}
+                  </div>
+                ) : (
+                  <div className="category-sections-container">
+                    {(() => {
+                      // Group products by category
+                      const productsByCategory = {};
+                      filteredProducts.forEach(p => {
+                        if (!productsByCategory[p.category]) {
+                          productsByCategory[p.category] = [];
+                        }
+                        productsByCategory[p.category].push(p);
+                      });
 
-                    const customerCoords = parseCoords(customerAddress);
-                    let shopDistance = null;
-                    let isOutOfRange = false;
-                    if (pShop && pShop.lat && pShop.lng && customerCoords) {
-                      shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
-                      isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
-                    }
-
-                    return (
-                      <div key={p.id} className={`product-card glass-panel`} style={{ position: 'relative' }}>
-                        <div className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} style={{ position: 'relative' }}>
-                          {p.offerText && (
-                            <span className="prod-img-badge">{p.offerText}</span>
-                          )}
-                          {p.image && p.image.startsWith('http') ? (
-                            <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
-                              e.target.style.display = 'none';
-                            }} />
-                          ) : (
-                            <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
-                          )}
-                        </div>
-                        <div className="prod-meta" style={{ opacity: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                            <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
-                            <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
-                              <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
-                            </span>
+                      return Object.entries(productsByCategory).map(([categoryName, categoryProds]) => {
+                        if (categoryProds.length === 0) return null;
+                        return (
+                          <div key={categoryName} className="category-section-row">
+                            <div className="category-section-header">
+                              <h2 className="category-section-title">{categoryName}</h2>
+                              <button
+                                className="category-section-view-all"
+                                onClick={() => setSelectedCategory(categoryName)}
+                              >
+                                View All <ArrowRight size={14} />
+                              </button>
+                            </div>
+                            <div className="horizontal-products-scroll">
+                              {categoryProds.map(p => renderProductCard(p))}
+                            </div>
                           </div>
-                          {(() => {
-                            const displayInfo = getProductDisplayInfo(p);
-                            return (
-                              <>
-                                {displayInfo.specs && (
-                                  <div className="prod-specs-text">{displayInfo.specs}</div>
-                                )}
-                                <span className="prod-store">
-                                  {p.store}
-                                  {shopDistance !== null && (
-                                    <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginLeft: '6px' }}>
-                                      ({shopDistance.toFixed(1)} km)
-                                    </span>
-                                  )}
-                                </span>
-
-                                {/* Rating Component */}
-                                <div className="product-card-rating">
-                                  {(() => {
-                                    const { rating, reviews } = getProductRating(p.id);
-                                    const rounded = Math.min(5, Math.max(0, Math.round(parseFloat(rating))));
-                                    return (
-                                      <>
-                                        {'★'.repeat(rounded)}
-                                        {'☆'.repeat(5 - rounded)}
-                                        <span>{rating} ({reviews}+)</span>
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-
-                                <p className="prod-category" style={{ marginTop: '6px' }}>{p.category}</p>
-
-                                {(displayInfo.originalPrice > displayInfo.price || p.offerText) && (
-                                  <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                    <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
-                                      {p.offerText || `SAVE ${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}%`}
-                                    </span>
-                                  </div>
-                                )}
-
-                                <div className="prod-buy">
-                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                    <span className="prod-price" style={{ color: displayInfo.originalPrice > displayInfo.price ? 'var(--color-success)' : 'inherit' }}>
-                                      {formatINR(displayInfo.price)}
-                                    </span>
-                                    {displayInfo.originalPrice > displayInfo.price && (
-                                      <span style={{ fontSize: '11px', textDecoration: 'line-through', color: 'var(--color-text-muted)' }}>
-                                        {formatINR(displayInfo.originalPrice)}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {(() => {
-                                    const variants = parseProductVariants(p);
-                                    if (variants && variants.length > 0) {
-                                      const variantsInCart = cart.filter(item => item.id === p.id);
-                                      const totalQty = variantsInCart.reduce((sum, item) => sum + item.quantity, 0);
-
-                                      if (totalQty > 0) {
-                                        return (
-                                          <button
-                                            className="neon-btn small-btn"
-                                            onClick={() => setSelectedVariantProduct(p)}
-                                            style={{
-                                              padding: '6px 12px',
-                                              fontSize: '11px',
-                                              background: 'rgba(0, 255, 242, 0.1)',
-                                              borderColor: 'var(--color-primary)',
-                                              borderRadius: '20px',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '4px'
-                                            }}
-                                          >
-                                            In Cart: {totalQty} ⚙
-                                          </button>
-                                        );
-                                      }
-                                      return (
-                                        <button
-                                          className="circular-add-btn"
-                                          onClick={() => setSelectedVariantProduct(p)}
-                                        >
-                                          +
-                                        </button>
-                                      );
-                                    }
-
-                                    const cartItem = cart.find(item => item.id === p.id);
-                                    if (cartItem) {
-                                      return (
-                                        <div className="prod-qty-selector">
-                                          <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
-                                          <span className="qty-val">{cartItem.quantity}</span>
-                                          <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
-                                        </div>
-                                      );
-                                    }
-                                    return (
-                                      <button
-                                        className="circular-add-btn"
-                                        onClick={() => {
-                                          if (isClosed) {
-                                            showToast(`We do not deliver at your location. Store is closed.`, 'warning');
-                                            return;
-                                          }
-                                          if (isOutOfRange) {
-                                            showToast(`We do not deliver at your location.`, 'warning');
-                                            return;
-                                          }
-                                          handleAddToCart(p);
-                                        }}
-                                      >
-                                        +
-                                      </button>
-                                    );
-                                  })()}
-                                </div>
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
               </div> {/* Closes .catalog-section */}
 
               {/* Shopping Cart, Checkout & Live Status Sidebar (Right Side - Desktop only) */}
@@ -5427,7 +5529,7 @@ function App() {
                     {/* Summary Cards Grid */}
                     <div className="analytics-cards-grid">
                       {/* Today's Sales */}
-                      <div className="analytics-card card-grad-primary" onClick={() => setSelectedAnalyticsSalesGroup('today')} style={{ cursor: 'pointer' }}>
+                      <div className="analytics-card card-grad-primary" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">Today's Gross Sales</div>
                         <div className="analytics-card-value">₹{analytics.todayStats.grossSales}</div>
                         <div className="analytics-card-footer">
@@ -5437,7 +5539,7 @@ function App() {
                       </div>
 
                       {/* All-Time Sales */}
-                      <div className="analytics-card card-grad-profit" onClick={() => setSelectedAnalyticsSalesGroup('all-time')} style={{ cursor: 'pointer' }}>
+                      <div className="analytics-card card-grad-profit" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">All-Time Gross Sales</div>
                         <div className="analytics-card-value">₹{analytics.allTimeStats.grossSales}</div>
                         <div className="analytics-card-footer">
@@ -5447,16 +5549,16 @@ function App() {
                       </div>
 
                       {/* Net Profit */}
-                      <div className="analytics-card card-grad-success">
+                      <div className="analytics-card card-grad-success" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">All-Time Net Profit</div>
                         <div className="analytics-card-value">₹{stats.netProfit}</div>
                         <div className="analytics-card-footer">
-                          <span>Commission: {commissionPercent}%</span>
+                          <span>Successful Earnings Summary</span>
                         </div>
                       </div>
 
                       {/* Cancelled */}
-                      <div className="analytics-card card-grad-cancelled" onClick={() => setSelectedAnalyticsSalesGroup('cancelled')} style={{ cursor: 'pointer' }}>
+                      <div className="analytics-card card-grad-cancelled" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">Cancelled Orders</div>
                         <div className="analytics-card-value">{analytics.allTimeStats.cancelledCount}</div>
                         <div className="analytics-card-footer">
@@ -5473,7 +5575,7 @@ function App() {
                         style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
                       >
                         <Store size={15} />
-                        Merchant Earnings Summary
+                        Merchant Performance
                       </button>
                       <button
                         onClick={() => setSalesTab('riders')}
@@ -5481,7 +5583,15 @@ function App() {
                         style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
                       >
                         <Bike size={15} />
-                        Rider Payouts Summary
+                        Rider Performance
+                      </button>
+                      <button
+                        onClick={() => setSalesTab('orders_log')}
+                        className={`nav-link ${salesTab === 'orders_log' ? 'active' : ''}`}
+                        style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
+                      >
+                        <FileText size={15} />
+                        Detailed Orders Log
                       </button>
                     </div>
 
@@ -5499,7 +5609,11 @@ function App() {
                                 <tr>
                                   <th>Shop Name</th>
                                   <th>Category</th>
-                                  <th>Orders</th>
+                                  <th>Completed</th>
+                                  <th>Cancelled</th>
+                                  <th>Total Orders</th>
+                                  <th>Cancel Rate</th>
+                                  <th>Performance Rating</th>
                                   <th>Gross Sales</th>
                                   <th>Net Earnings</th>
                                 </tr>
@@ -5507,34 +5621,69 @@ function App() {
                               <tbody>
                                 {analytics.merchantStats.length === 0 ? (
                                   <tr>
-                                    <td colSpan="5" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                                    <td colSpan="9" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
                                       No merchants registered.
                                     </td>
                                   </tr>
                                 ) : (
-                                  analytics.merchantStats.map(m => (
-                                    <tr key={m.id} onClick={() => setSelectedAnalyticsMerchant(m)} className="clickable-row" style={{ cursor: 'pointer' }}>
-                                      <td>
-                                        <strong>{m.name}</strong>
-                                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{m.phone}</div>
-                                      </td>
-                                      <td>{m.category}</td>
-                                      <td>
-                                        <span className="analytics-badge-pill analytics-badge-info" style={{ marginRight: '4px' }}>
-                                          {m.completedCount} Done
-                                        </span>
-                                        {m.activeCount > 0 && (
-                                          <span className="analytics-badge-pill analytics-badge-warning">
-                                            {m.activeCount} Active
+                                  analytics.merchantStats.map(m => {
+                                    const completed = m.completedCount;
+                                    const cancelled = m.cancelledCount;
+                                    const active = m.activeCount;
+                                    const total = completed + cancelled + active;
+                                    const cancelRate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
+                                    
+                                    let perfText = "No Data";
+                                    let perfColor = "var(--color-text-muted)";
+                                    if (total > 0) {
+                                      if (cancelRate <= 10) {
+                                        perfText = "⭐⭐⭐⭐⭐ Excellent";
+                                        perfColor = "var(--color-success)";
+                                      } else if (cancelRate <= 25) {
+                                        perfText = "⭐⭐⭐⭐ Good";
+                                        perfColor = "var(--color-accent-yellow-dark)";
+                                      } else {
+                                        perfText = "⭐⭐ Needs Attention";
+                                        perfColor = "var(--color-danger)";
+                                      }
+                                    }
+
+                                    return (
+                                      <tr key={m.id} onClick={() => setSelectedAnalyticsMerchant(m)} className="clickable-row" style={{ cursor: 'pointer' }}>
+                                        <td>
+                                          <strong>{m.name}</strong>
+                                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{m.phone}</div>
+                                        </td>
+                                        <td>{m.category}</td>
+                                        <td>
+                                          <span className="analytics-badge-pill analytics-badge-success">{completed} Done</span>
+                                          {active > 0 && (
+                                            <span className="analytics-badge-pill analytics-badge-warning" style={{ marginLeft: '4px' }}>{active} Active</span>
+                                          )}
+                                        </td>
+                                        <td>
+                                          <span className="analytics-badge-pill analytics-badge-danger">{cancelled} Cancelled</span>
+                                        </td>
+                                        <td>
+                                          <strong>{total}</strong>
+                                        </td>
+                                        <td>
+                                          <span className={`badge ${cancelRate > 25 ? 'badge-danger' : cancelRate > 10 ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                            {cancelRate}%
                                           </span>
-                                        )}
-                                      </td>
-                                      <td>₹{m.grossSales}</td>
-                                      <td>
-                                        <strong style={{ color: '#4ade80' }}>₹{m.netEarnings}</strong>
-                                      </td>
-                                    </tr>
-                                  ))
+                                        </td>
+                                        <td>
+                                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: perfColor }}>
+                                            {perfText}
+                                          </span>
+                                        </td>
+                                        <td>₹{m.grossSales}</td>
+                                        <td>
+                                          <strong style={{ color: '#4ade80' }}>₹{m.netEarnings}</strong>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
                                 )}
                               </tbody>
                             </table>
@@ -5554,36 +5703,246 @@ function App() {
                                 <tr>
                                   <th>Rider Name</th>
                                   <th>Vehicle</th>
-                                  <th>Completed Runs</th>
+                                  <th>Completed</th>
+                                  <th>Active</th>
+                                  <th>Cancelled</th>
+                                  <th>Total Runs</th>
+                                  <th>Cancel Rate</th>
+                                  <th>Performance Rating</th>
                                   <th>Total Payout</th>
                                 </tr>
                               </thead>
                               <tbody>
                                 {analytics.riderStats.length === 0 ? (
                                   <tr>
-                                    <td colSpan="4" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                                    <td colSpan="9" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
                                       No delivery agents registered.
                                     </td>
                                   </tr>
                                 ) : (
-                                  analytics.riderStats.map(r => (
-                                    <tr key={r.id} onClick={() => setSelectedAnalyticsRider(r)} className="clickable-row" style={{ cursor: 'pointer' }}>
-                                      <td>
-                                        <strong>{r.name}</strong>
-                                        <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{r.phone}</div>
-                                      </td>
-                                      <td>{r.vehicle}</td>
-                                      <td>
-                                        <span className="analytics-badge-pill analytics-badge-success">
-                                          {r.completedCount} Deliveries
-                                        </span>
-                                      </td>
-                                      <td>
-                                        <strong style={{ color: '#fbbf24' }}>₹{r.totalPayout}</strong>
-                                      </td>
-                                    </tr>
-                                  ))
+                                  analytics.riderStats.map(r => {
+                                    const completed = r.completedCount || 0;
+                                    const active = r.activeCount || 0;
+                                    const cancelled = r.cancelledCount || 0;
+                                    const total = completed + active + cancelled;
+                                    const cancelRate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
+
+                                    let riderRating = "⭐ New / Idle";
+                                    let ratingColor = "var(--color-text-muted)";
+                                    if (total > 0) {
+                                      if (cancelRate <= 10 && completed >= 5) {
+                                        riderRating = "⭐⭐⭐⭐⭐ Champion";
+                                        ratingColor = "var(--color-primary)";
+                                      } else if (cancelRate <= 20 && completed >= 2) {
+                                        riderRating = "⭐⭐⭐⭐ Active";
+                                        ratingColor = "var(--color-success)";
+                                      } else if (cancelRate <= 30) {
+                                        riderRating = "⭐⭐ Reliable";
+                                        ratingColor = "var(--color-accent-yellow-dark)";
+                                      } else {
+                                        riderRating = "⭐ Needs Attention";
+                                        ratingColor = "var(--color-danger)";
+                                      }
+                                    }
+
+                                    return (
+                                      <tr key={r.id} onClick={() => setSelectedAnalyticsRider(r)} className="clickable-row" style={{ cursor: 'pointer' }}>
+                                        <td>
+                                          <strong>{r.name}</strong>
+                                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>{r.phone}</div>
+                                        </td>
+                                        <td>{r.vehicle}</td>
+                                        <td>
+                                          <span className="analytics-badge-pill analytics-badge-success">{completed} Done</span>
+                                        </td>
+                                        <td>
+                                          <span className="analytics-badge-pill analytics-badge-warning">{active} Active</span>
+                                        </td>
+                                        <td>
+                                          <span className="analytics-badge-pill analytics-badge-danger">{cancelled} Cancelled</span>
+                                        </td>
+                                        <td>
+                                          <strong>{total}</strong>
+                                        </td>
+                                        <td>
+                                          <span className={`badge ${cancelRate > 25 ? 'badge-danger' : cancelRate > 10 ? 'badge-warning' : 'badge-success'}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
+                                            {cancelRate}%
+                                          </span>
+                                        </td>
+                                        <td>
+                                          <span style={{ fontSize: '12px', fontWeight: 'bold', color: ratingColor }}>
+                                            {riderRating}
+                                          </span>
+                                        </td>
+                                        <td>
+                                          <strong style={{ color: '#fbbf24' }}>₹{r.totalPayout}</strong>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
                                 )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Detailed Orders Log */}
+                      {salesTab === 'orders_log' && (
+                        <div className="glass-panel fade-in" style={{ padding: '24px', width: '100%' }}>
+                          {/* Log Statistics Summary */}
+                          {(() => {
+                            const completedCount = orders.filter(o => o.status === 'COMPLETED').length;
+                            const cancelledCount = orders.filter(o => o.status?.startsWith('CANCELLED')).length;
+                            const totalLogCount = completedCount + cancelledCount;
+                            const platformCancelRate = totalLogCount > 0 ? Math.round((cancelledCount / totalLogCount) * 100) : 0;
+                            
+                            let platformRating = "No Data";
+                            let platformRatingColor = "var(--color-text-muted)";
+                            if (totalLogCount > 0) {
+                              if (platformCancelRate <= 10) {
+                                platformRating = "⭐⭐⭐⭐⭐ Excellent";
+                                platformRatingColor = "var(--color-success)";
+                              } else if (platformCancelRate <= 25) {
+                                platformRating = "⭐⭐⭐⭐ Good";
+                                platformRatingColor = "var(--color-accent-yellow-dark)";
+                              } else {
+                                platformRating = "⭐⭐ Needs Attention";
+                                platformRatingColor = "var(--color-danger)";
+                              }
+                            }
+
+                            return (
+                              <div style={{ marginBottom: '24px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
+                                  <h3 style={{ margin: 0 }}>📋 Detailed Orders Performance Log</h3>
+                                  
+                                  <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '280px' }}>
+                                    <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                                    <input
+                                      type="text"
+                                      placeholder="Search orders..."
+                                      value={salesModalSearchQuery}
+                                      onChange={(e) => setSalesModalSearchQuery(e.target.value)}
+                                      style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                                    />
+                                    {salesModalSearchQuery && (
+                                      <button onClick={() => setSalesModalSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                        <X size={14} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="analytics-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+                                  <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '12px 16px', borderRadius: '12px' }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Total Logged Orders</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0' }}>{totalLogCount}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Completed + Cancelled</div>
+                                  </div>
+                                  <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '12px 16px', borderRadius: '12px' }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Completed / Accepted</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0', color: 'var(--color-success)' }}>{completedCount}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Delivered successful runs</div>
+                                  </div>
+                                  <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '12px 16px', borderRadius: '12px' }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Cancelled Orders</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0', color: 'var(--color-danger)' }}>{cancelledCount}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>All cancellations logged</div>
+                                  </div>
+                                  <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '12px 16px', borderRadius: '12px' }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Cancellation Rate</div>
+                                    <div style={{ fontSize: '20px', fontWeight: 'bold', margin: '4px 0', color: platformCancelRate > 25 ? 'var(--color-danger)' : platformCancelRate > 10 ? 'var(--color-accent-yellow-dark)' : 'var(--color-success)' }}>
+                                      {platformCancelRate}%
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Formula: Cancelled / Total</div>
+                                  </div>
+                                  <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '12px 16px', borderRadius: '12px' }}>
+                                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Platform Performance</div>
+                                    <div style={{ fontSize: '14px', fontWeight: 'bold', margin: '8px 0 4px 0', color: platformRatingColor }}>{platformRating}</div>
+                                    <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Based on cancellation rate</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Table of Orders */}
+                          <div className="analytics-table-wrapper" style={{ maxHeight: '550px' }}>
+                            <table className="analytics-table">
+                              <thead>
+                                <tr>
+                                  <th>Order ID</th>
+                                  <th>Date & Time</th>
+                                  <th>Merchant</th>
+                                  <th>Customer Info</th>
+                                  <th>Rider</th>
+                                  <th>Total Amount</th>
+                                  <th>Status</th>
+                                  <th>Payout & Profit</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(() => {
+                                  const logOrders = orders.filter(o => o.status === 'COMPLETED' || o.status?.startsWith('CANCELLED')).filter(o => {
+                                    if (!salesModalSearchQuery) return true;
+                                    const qLower = salesModalSearchQuery.toLowerCase();
+                                    return (
+                                      (o.id && o.id.toLowerCase().includes(qLower)) ||
+                                      (o.customerName && o.customerName.toLowerCase().includes(qLower)) ||
+                                      (o.customerPhone && o.customerPhone.toLowerCase().includes(qLower)) ||
+                                      (o.merchantName && o.merchantName.toLowerCase().includes(qLower)) ||
+                                      (o.deliveryPartnerName && o.deliveryPartnerName.toLowerCase().includes(qLower)) ||
+                                      (o.status && o.status.toLowerCase().includes(qLower))
+                                    );
+                                  });
+
+                                  if (logOrders.length === 0) {
+                                    return (
+                                      <tr>
+                                        <td colSpan="8" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                                          No order records match search query.
+                                        </td>
+                                      </tr>
+                                    );
+                                  }
+
+                                  return logOrders.map(o => {
+                                    const isCancelled = o.status?.startsWith('CANCELLED');
+                                    return (
+                                      <tr key={o.id}>
+                                        <td><strong>{o.id}</strong></td>
+                                        <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
+                                        <td><strong>{o.merchantName || o.storeName}</strong></td>
+                                        <td>
+                                          <div>{o.customerName}</div>
+                                          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
+                                        </td>
+                                        <td>{o.deliveryPartnerName || 'N/A'}</td>
+                                        <td>
+                                          <strong style={{ textDecoration: isCancelled ? 'line-through' : 'none', color: isCancelled ? 'var(--color-text-muted)' : 'var(--color-success)' }}>
+                                            ₹{o.totalAmount || 0}
+                                          </strong>
+                                        </td>
+                                        <td>
+                                          <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' : 'analytics-badge-danger'}`} style={{ textTransform: 'uppercase', fontSize: '10px' }}>
+                                            {o.status.replace(/_/g, ' ')}
+                                          </span>
+                                        </td>
+                                        <td>
+                                          {isCancelled ? (
+                                            <span style={{ fontSize: '11px', color: 'var(--color-danger)' }}>Cancelled (₹0 earnings)</span>
+                                          ) : (
+                                            <>
+                                              <div style={{ fontSize: '12px' }}>Net Profit: <strong>₹{o.netAdminEarning || Math.round((o.totalAmount || 0) * 0.1)}</strong></div>
+                                              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Rider: ₹{o.riderPayout || 0}</div>
+                                            </>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  });
+                                })()}
                               </tbody>
                             </table>
                           </div>
@@ -5862,23 +6221,33 @@ function App() {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.filter(o => o.status === 'COMPLETED').length === 0 ? (
-                          <tr>
-                            <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
-                              No completed orders found.
-                            </td>
-                          </tr>
-                        ) : (
-                          orders.filter(o => o.status === 'COMPLETED').map(o => {
+                        {(() => {
+                          const pastOrdersList = orders.filter(o => o.status === 'COMPLETED' || o.status?.startsWith('CANCELLED')).slice(0, 20);
+                          if (pastOrdersList.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                                  No completed or cancelled orders found.
+                                </td>
+                              </tr>
+                            );
+                          }
+                          return pastOrdersList.map(o => {
                             const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
+                            const isCancelled = o.status?.startsWith('CANCELLED');
                             return (
                               <tr key={o.id}>
                                 <td>
                                   <strong>{o.id}</strong>
-                                  <div style={{ marginTop: '4px' }}>
-                                    <span className={`badge ${routing === 'Option 1 (Shop-Direct)' ? 'badge-primary' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px' }}>
+                                  <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                    <span className={`badge ${routing === 'Option 1 (Shop-Direct)' ? 'badge-primary' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px', width: 'max-content' }}>
                                       {routing}
                                     </span>
+                                    {isCancelled && (
+                                      <span className="badge badge-danger" style={{ fontSize: '9px', padding: '2px 6px', textTransform: 'uppercase', width: 'max-content' }}>
+                                        {o.status.replace(/_/g, ' ')}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 <td>
@@ -5887,11 +6256,11 @@ function App() {
                                 </td>
                                 <td>
                                   <div>{o.items[0]?.store}</div>
-                                  <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
+                                  <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category || 'N/A'}</div>
                                 </td>
                                 <td>{formatINR(o.totalAmount)}</td>
                                 <td>
-                                  <span className="badge badge-success">
+                                  <span className={`badge ${isCancelled ? 'badge-danger' : 'badge-success'}`}>
                                     {o.paymentMethod} ({o.paymentStatus})
                                   </span>
                                 </td>
@@ -5901,8 +6270,8 @@ function App() {
                                 <td><strong>{o.otp}</strong></td>
                               </tr>
                             );
-                          })
-                        )}
+                          });
+                        })()}
                       </tbody>
                     </table>
                   </div>
@@ -7548,10 +7917,10 @@ function App() {
                         <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
                           <button
                             className="neon-btn"
-                            style={{ width: '100%', background: 'var(--color-primary)', color: '#000000', fontWeight: 'bold' }}
+                            style={{ width: '100%', background: 'rgba(0, 150, 255, 0.15)', border: '1px solid rgba(0, 150, 255, 0.4)', color: '#00fff2', fontWeight: 'bold' }}
                             onClick={() => handleRiderAcceptJob(o.id)}
                           >
-                            🤝 Claim & Accept Delivery Run
+                            🤝 Claim Order
                           </button>
                         </div>
                       </div>
@@ -7568,100 +7937,123 @@ function App() {
                       <p>No active delivery runs assigned to you at the moment.</p>
                     </div>
                   ) : (
-                    activeJobs.map(o => (
-                      <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px' }}>
-                        <div className="job-header">
-                          <div style={{ textAlign: 'left' }}>
-                            <h3 style={{ margin: 0 }}>Order {o.id}</h3>
-                            <span className="badge badge-warning" style={{ marginTop: '4px', display: 'inline-block' }}>{o.status}</span>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
-                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                              {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
+                    activeJobs.map(o => {
+                      const matchedShop = shops.find(s => s.name === o.merchantName || s.storeName === o.merchantName);
+                      return (
+                        <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px' }}>
+                          <div className="job-header">
+                            <div style={{ textAlign: 'left' }}>
+                              <h3 style={{ margin: 0 }}>Order {o.id}</h3>
+                              <span className="badge badge-warning" style={{ marginTop: '4px', display: 'inline-block' }}>{o.status}</span>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
+                              <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                                {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="job-info-grid">
-                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
-                            <h4>🏪 Merchant Pickup</h4>
-                            <p><strong>Shop:</strong> {o.items[0]?.store}</p>
-                            <p><strong>Location:</strong> Vaishali Market Area, Jaipur</p>
-                            <a href={`tel:9251054064`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
-                              <Phone size={14} style={{ marginRight: '6px' }} /> Call Shop Owner
-                            </a>
+                          <div className="job-info-grid">
+                            {/* Pickup Details: Merchant Name, Shop Name, Contact Number, Address */}
+                            <div className="job-meta-box" style={{ textAlign: 'left' }}>
+                              <h4>🏪 Pickup Details</h4>
+                              <p><strong>Shop Name:</strong> {o.merchantName || o.items[0]?.store}</p>
+                              <p><strong>Merchant Name:</strong> {matchedShop?.name || matchedShop?.storeName || 'Store Owner'}</p>
+                              <p><strong>Contact Number:</strong> {matchedShop?.phone || '9251054064'}</p>
+                              <p><strong>Shop Address:</strong> {matchedShop?.address || 'Collectorate Road, Chittorgarh'}</p>
+                              <a href={`tel:${matchedShop?.phone || '9251054064'}`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
+                                <Phone size={14} style={{ marginRight: '6px' }} /> Call Shop Owner
+                              </a>
+                            </div>
+
+                            {/* Drop Details: Customer Name, Contact Number, Address */}
+                            <div className="job-meta-box" style={{ textAlign: 'left' }}>
+                              <h4>🏠 Drop Details</h4>
+                              <p><strong>Customer Name:</strong> {o.customerName}</p>
+                              <p><strong>Contact Number:</strong> {o.customerPhone || '9251054064'}</p>
+                              <p><strong>Address:</strong> {o.customerLocation}</p>
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="maps-link-btn"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
+                              >
+                                📍 View on Google Maps
+                              </a>
+                              <p><strong>Collect Payment:</strong> <span style={{ color: 'var(--color-success)', fontWeight: 'bold' }}>{formatINR(o.totalAmount)}</span> ({o.paymentMethod})</p>
+                              <a href={`tel:${o.customerPhone || '9251054064'}`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
+                                <Phone size={14} style={{ marginRight: '6px' }} /> Call Customer
+                              </a>
+                            </div>
                           </div>
 
-                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
-                            <h4>🏠 Customer Delivery</h4>
-                            <p><strong>Name:</strong> {o.customerName}</p>
-                            <p><strong>Address:</strong> {o.customerLocation}</p>
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="maps-link-btn"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
-                            >
-                              📍 View on Google Maps
-                            </a>
-                            <p><strong>Phone:</strong> {o.customerPhone || '9251054064'}</p>
-                            <p><strong>Collect Payment:</strong> <span style={{ color: 'var(--color-success)', fontWeight: 'bold' }}>{formatINR(o.totalAmount)}</span> ({o.paymentMethod})</p>
-                            <a href={`tel:${o.customerPhone || '9251054064'}`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
-                              <Phone size={14} style={{ marginRight: '6px' }} /> Call Customer
-                            </a>
-                          </div>
-                        </div>
-
-                        <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                          {riderTrackingOrderId === o.id ? (
-                            <button
-                              className="neon-btn"
-                              style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
-                              onClick={handleStopRiderTracking}
-                            >
-                              🔴 Stop Live GPS Tracking
-                            </button>
+                          {!o.riderAccepted ? (
+                            <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
+                              <button
+                                className="neon-btn"
+                                style={{ width: '100%', background: 'var(--color-success)', borderColor: 'var(--color-success)', color: '#ffffff', fontWeight: 'bold' }}
+                                onClick={() => handleRiderConfirmAccept(o.id)}
+                              >
+                                🟢 Accept Run
+                              </button>
+                            </div>
                           ) : (
-                            <button
-                              className="neon-btn"
-                              style={{ flexGrow: 1 }}
-                              onClick={() => handleStartRiderTracking(o.id)}
-                            >
-                              🟢 Start Live Ride Tracking
-                            </button>
+                            <>
+                              <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                                {riderTrackingOrderId === o.id ? (
+                                  <button
+                                    className="neon-btn"
+                                    style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
+                                    onClick={handleStopRiderTracking}
+                                  >
+                                    🔴 Stop Live GPS Tracking
+                                  </button>
+                                ) : (
+                                  <button
+                                    className="neon-btn"
+                                    style={{ flexGrow: 1 }}
+                                    onClick={() => handleStartRiderTracking(o.id)}
+                                  >
+                                    🟢 Start Live Ride Tracking
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="job-otp-form" style={{ marginTop: '20px' }}>
+                                <input
+                                  type="text"
+                                  placeholder="Enter Customer Delivery OTP"
+                                  value={riderInputOTP}
+                                  onChange={(e) => setRiderInputOTP(e.target.value)}
+                                  className="custom-input"
+                                />
+                                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                  <button
+                                    className="neon-btn"
+                                    onClick={() => handleRiderCompleteDelivery(o.id)}
+                                    style={{ flexGrow: 2 }}
+                                  >
+                                    {o.paymentMethod === 'COD' 
+                                      ? 'Complete Delivery & Collect Cash (COD)' 
+                                      : 'Complete Delivery (Paid Online)'}
+                                  </button>
+                                  <button
+                                    className="neon-btn"
+                                    onClick={() => setActiveQrModalOrder(o)}
+                                    style={{ flexGrow: 1, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    title="Show QR Code"
+                                  >
+                                    📱 Show QR
+                                  </button>
+                                </div>
+                              </div>
+                            </>
                           )}
                         </div>
-
-                        <div className="job-otp-form" style={{ marginTop: '20px' }}>
-                          <input
-                            type="text"
-                            placeholder="Enter Customer Delivery OTP"
-                            value={riderInputOTP}
-                            onChange={(e) => setRiderInputOTP(e.target.value)}
-                            className="custom-input"
-                          />
-                          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                            <button
-                              className="neon-btn"
-                              onClick={() => handleRiderCompleteDelivery(o.id)}
-                              style={{ flexGrow: 2 }}
-                            >
-                              Complete Delivery & Collect Cash
-                            </button>
-                            <button
-                              className="neon-btn"
-                              onClick={() => setActiveQrModalOrder(o)}
-                              style={{ flexGrow: 1, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                              title="Show QR Code"
-                            >
-                              📱 Show QR
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
 
@@ -8457,7 +8849,7 @@ function App() {
               <X size={20} />
             </button>
 
-            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '20px' }}>
+            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
               <div className="profile-avatar-glow" style={{ background: 'var(--color-primary-glow)', border: '2px solid var(--color-primary)', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {selectedVariantProduct.image && selectedVariantProduct.image.startsWith('http') ? (
                   <img src={selectedVariantProduct.image} alt={selectedVariantProduct.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -8465,10 +8857,23 @@ function App() {
                   <span style={{ fontSize: '32px' }}>{selectedVariantProduct.image || selectedVariantProduct.emoji || '📦'}</span>
                 )}
               </div>
-              <h3 className="section-title-premium" style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--color-text-main)', marginTop: '12px' }}>{selectedVariantProduct.name}</h3>
-              <p className="profile-sub" style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                Store: <strong style={{ color: 'var(--color-text-main)' }}>{selectedVariantProduct.store}</strong>
-              </p>
+              <h3 className="section-title-premium" style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--color-text-main)', marginTop: '12px', textAlign: 'center' }}>{selectedVariantProduct.name}</h3>
+              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+                <span style={{
+                  background: 'var(--color-primary-glow)',
+                  color: 'var(--color-primary)',
+                  border: '1px solid rgba(31, 78, 61, 0.2)',
+                  padding: '4px 12px',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}>
+                  🏪 {selectedVariantProduct.store}
+                </span>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxHeight: '400px', overflowY: 'auto', padding: '12px 4px 4px 4px' }}>
@@ -8588,6 +8993,53 @@ function App() {
                   );
                 });
               })()}
+            </div>
+
+            {/* Next / Proceed Actions at bottom of variant selector */}
+            <div style={{ marginTop: '24px', borderTop: '1px solid var(--color-border)', paddingTop: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                className="neon-btn"
+                onClick={() => {
+                  setSelectedVariantProduct(null);
+                  setIsCartDrawerOpen(true);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  borderRadius: '12px',
+                  fontWeight: 'bold',
+                  fontSize: '15px',
+                  background: 'var(--color-primary)',
+                  color: '#ffffff',
+                  border: 'none',
+                  boxShadow: '0 4px 15px var(--color-primary-glow-strong)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                Go to Cart & Checkout <ArrowRight size={18} />
+              </button>
+              
+              <button
+                className="neon-btn"
+                onClick={() => setSelectedVariantProduct(null)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '12px',
+                  fontWeight: '600',
+                  fontSize: '13px',
+                  background: 'transparent',
+                  color: 'var(--color-text-muted)',
+                  border: '1px solid var(--color-border)',
+                  cursor: 'pointer'
+                }}
+              >
+                Continue Shopping
+              </button>
             </div>
           </div>
         </div>
@@ -10135,7 +10587,7 @@ function App() {
       {/* Rider Deliveries Detail Modal */}
       {selectedAnalyticsRider && (
         <div className="modal-backdrop fade-in" onClick={() => setSelectedAnalyticsRider(null)}>
-          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '700px' }}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '850px' }}>
             <button className="modal-close-btn" onClick={() => setSelectedAnalyticsRider(null)}>
               <X size={20} />
             </button>
@@ -10144,66 +10596,111 @@ function App() {
               <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
                 <Bike size={40} style={{ color: 'var(--color-primary)' }} />
               </div>
-              <h3 className="section-title-premium">{selectedAnalyticsRider.name} Delivery Run Log</h3>
+              <h3 className="section-title-premium">{selectedAnalyticsRider.name} Earning & Delivery Summary</h3>
               <p className="profile-sub" style={{ marginTop: '4px' }}>Vehicle: <strong>{selectedAnalyticsRider.vehicle}</strong> | Contact: <strong>{selectedAnalyticsRider.phone}</strong></p>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
-              <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
-                <table className="analytics-table">
-                  <thead>
-                    <tr>
-                      <th>Order ID</th>
-                      <th>Date & Time</th>
-                      <th>Merchant (Pickup)</th>
-                      <th>Customer (Delivery)</th>
-                      <th>Payout</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const riderOrders = orders.filter(o => o.deliveryPartnerId === selectedAnalyticsRider.id);
+            {/* Rider Metrics Grid */}
+            {(() => {
+              const riderOrders = orders.filter(o => o.deliveryPartnerId === selectedAnalyticsRider.id);
+              const completed = riderOrders.filter(o => o.status === 'COMPLETED').length;
+              const cancelled = riderOrders.filter(o => o.status?.startsWith('CANCELLED')).length;
+              const active = riderOrders.filter(o => o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')).length;
+              const total = completed + cancelled + active;
+              const cancelRate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
+              const totalPayout = riderOrders.filter(o => o.status === 'COMPLETED').reduce((acc, o) => acc + (o.riderPayout || 0), 0);
+              const avgPayout = completed > 0 ? Math.round(totalPayout / completed) : 0;
 
-                      if (riderOrders.length === 0) {
-                        return (
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)' }}>
+                  <div className="analytics-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', margin: '0 0 16px 0' }}>
+                    <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '10px 14px', borderRadius: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Total Assigned</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', margin: '2px 0' }}>{total}</div>
+                    </div>
+                    <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '10px 14px', borderRadius: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Completed Runs</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', margin: '2px 0', color: 'var(--color-success)' }}>{completed}</div>
+                    </div>
+                    <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '10px 14px', borderRadius: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Cancelled Runs</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', margin: '2px 0', color: 'var(--color-danger)' }}>{cancelled}</div>
+                    </div>
+                    <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '10px 14px', borderRadius: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Cancellation Rate</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', margin: '2px 0', color: cancelRate > 25 ? 'var(--color-danger)' : 'var(--color-success)' }}>{cancelRate}%</div>
+                    </div>
+                    <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '10px 14px', borderRadius: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Total Payout</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', margin: '2px 0', color: '#fbbf24' }}>₹{totalPayout}</div>
+                    </div>
+                    <div className="analytics-card" style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', padding: '10px 14px', borderRadius: '10px' }}>
+                      <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Avg Run Earning</div>
+                      <div style={{ fontSize: '18px', fontWeight: 'bold', margin: '2px 0', color: '#fbbf24' }}>₹{avgPayout}</div>
+                    </div>
+                  </div>
+
+                  <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: '350px', overflowY: 'auto' }}>
+                    <table className="analytics-table">
+                      <thead>
+                        <tr>
+                          <th>Order ID</th>
+                          <th>Date & Time</th>
+                          <th>Merchant (Pickup)</th>
+                          <th>Customer (Delivery)</th>
+                          <th>Items Ordered</th>
+                          <th>Payout</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {riderOrders.length === 0 ? (
                           <tr>
-                            <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
+                            <td colSpan="7" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
                               No delivery runs found for this agent.
                             </td>
                           </tr>
-                        );
-                      }
-
-                      return riderOrders.map(o => (
-                        <tr key={o.id}>
-                          <td><strong>{o.id}</strong></td>
-                          <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
-                          <td><strong>{o.merchantName}</strong></td>
-                          <td>
-                            <div>{o.customerName}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
-                          </td>
-                          <td>
-                            <strong style={{ color: o.status === 'COMPLETED' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                              ₹{o.riderPayout || 0}
-                            </strong>
-                          </td>
-                          <td>
-                            <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                                o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
-                                  'analytics-badge-info'
-                              }`}>
-                              {o.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                        ) : (
+                          riderOrders.map(o => (
+                            <tr key={o.id}>
+                              <td><strong>{o.id}</strong></td>
+                              <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
+                              <td><strong>{o.merchantName || o.storeName}</strong></td>
+                              <td>
+                                <div>{o.customerName}</div>
+                                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  {o.items?.map((item, idx) => (
+                                    <div key={idx} style={{ fontSize: '12px' }}>
+                                      • {item.name}{item.specs ? ` (${item.specs})` : ''} <span style={{ color: 'var(--color-text-muted)' }}>(x{item.quantity || 1})</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                              <td>
+                                <strong style={{ color: o.status === 'COMPLETED' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                                  ₹{o.riderPayout || 0}
+                                </strong>
+                              </td>
+                              <td>
+                                <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
+                                    o.status?.startsWith('CANCELLED') ? 'analytics-badge-danger' :
+                                      'analytics-badge-info'
+                                  }`}>
+                                  {o.status.replace(/_/g, ' ')}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
               <button
@@ -10211,114 +10708,14 @@ function App() {
                 onClick={() => setSelectedAnalyticsRider(null)}
                 style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
               >
-                Close Logs
+                Close Earning Summary
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Sales Group Detail Modal */}
-      {selectedAnalyticsSalesGroup && (
-        <div className="modal-backdrop fade-in" onClick={() => setSelectedAnalyticsSalesGroup(null)}>
-          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '750px' }}>
-            <button className="modal-close-btn" onClick={() => setSelectedAnalyticsSalesGroup(null)}>
-              <X size={20} />
-            </button>
 
-            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
-              <div className="profile-avatar-glow" style={{ background: 'rgba(139, 92, 246, 0.1)' }}>
-                <DollarSign size={40} style={{ color: 'var(--color-primary)' }} />
-              </div>
-              <h3 className="section-title-premium">
-                {selectedAnalyticsSalesGroup === 'today' ? "Today's Gross Sales Log" :
-                  selectedAnalyticsSalesGroup === 'all-time' ? "All-Time Gross Sales Log" :
-                    "Cancelled Orders Log"}
-              </h3>
-              <p className="profile-sub" style={{ marginTop: '4px' }}>Detailed list of transaction records</p>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)', maxHeight: '50vh', overflowY: 'auto' }}>
-              <div className="analytics-table-wrapper" style={{ margin: 0, maxHeight: 'none' }}>
-                <table className="analytics-table">
-                  <thead>
-                    <tr>
-                      <th>Order ID</th>
-                      <th>Date & Time</th>
-                      <th>Merchant</th>
-                      <th>Customer</th>
-                      <th>Total Amount</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const todayStart = new Date();
-                      todayStart.setHours(0, 0, 0, 0);
-
-                      const targetOrders = orders.filter(o => {
-                        if (selectedAnalyticsSalesGroup === 'today') {
-                          return o.createdAt && new Date(o.createdAt) >= todayStart && !o.status?.startsWith('CANCELLED');
-                        }
-                        if (selectedAnalyticsSalesGroup === 'all-time') {
-                          return !o.status?.startsWith('CANCELLED');
-                        }
-                        // cancelled
-                        return o.status?.startsWith('CANCELLED');
-                      });
-
-                      if (targetOrders.length === 0) {
-                        return (
-                          <tr>
-                            <td colSpan="6" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '20px' }}>
-                              No order records found in this group.
-                            </td>
-                          </tr>
-                        );
-                      }
-
-                      return targetOrders.map(o => (
-                        <tr key={o.id}>
-                          <td><strong>{o.id}</strong></td>
-                          <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
-                          <td><strong>{o.merchantName}</strong></td>
-                          <td>
-                            <div>{o.customerName}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.customerPhone}</div>
-                          </td>
-                          <td>
-                            <strong style={{ color: o.status?.startsWith('CANCELLED') ? 'var(--color-danger)' : 'var(--color-success)' }}>
-                              ₹{o.totalAmount || 0}
-                            </strong>
-                          </td>
-                          <td>
-                            <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                                o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
-                                  'analytics-badge-info'
-                              }`}>
-                              {o.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ));
-                    })()}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', width: '100%', marginTop: '20px' }}>
-              <button
-                className="neon-btn"
-                onClick={() => setSelectedAnalyticsSalesGroup(null)}
-                style={{ width: '100%', padding: '12px', fontWeight: 'bold' }}
-              >
-                Close Log List
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Toast Notification */}
       {toast.show && (
