@@ -30,7 +30,10 @@ const INITIAL_PRODUCTS = [
   { id: 'p13', name: 'Double Chocolate Ice Cream', price: 150, category: 'Icecream and dessert', store: 'Gelato Heaven', image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&auto=format&fit=crop&q=60', emoji: '🍨', isVeg: true },
   { id: 'p14', name: 'Premium Multi-vitamins (60 Caps)', price: 890, category: 'Medical and fitness', store: 'Apollo Wellness', image: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=300&auto=format&fit=crop&q=60', emoji: '💊', isVeg: true },
   { id: 'p15', name: 'Fresh Orange Juice (500ml)', price: 110, category: 'Juice and drink', store: 'Juice Junction', image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=300&auto=format&fit=crop&q=60', emoji: '🍹', isVeg: true },
-  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&auto=format&fit=crop&q=60', emoji: '☕', isVeg: true }
+  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&auto=format&fit=crop&q=60', emoji: '☕', isVeg: true },
+  { id: 'p17', name: 'PixiGo Instant Noodles (Pack of 4)', price: 60, category: 'PixiGo Store', store: 'PixiGo Store', image: 'https://images.unsplash.com/photo-1612966608967-3e2b7e7ab7e9?w=300&auto=format&fit=crop&q=60', emoji: '🍜', isVeg: true },
+  { id: 'p18', name: 'PixiGo Premium Fresh Milk (1L)', price: 70, category: 'PixiGo Store', store: 'PixiGo Store', image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=300&auto=format&fit=crop&q=60', emoji: '🥛', isVeg: true },
+  { id: 'p19', name: 'PixiGo Energy Drink (250ml)', price: 110, category: 'PixiGo Store', store: 'PixiGo Store', emoji: '⚡', isVeg: true }
 ];
 
 const INITIAL_SHOPS = [
@@ -38,7 +41,8 @@ const INITIAL_SHOPS = [
   { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Bojunda, Chittorgarh', verified: true, docs: 'Approved', openTime: '07:00', closeTime: '22:00', lat: 24.8887, lng: 74.6269 },
   { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Police Line, Chittorgarh', verified: true, docs: 'Approved', openTime: '06:00', closeTime: '21:00', lat: 24.8887, lng: 74.6269 },
   { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'Birla Hospital Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '11:00', closeTime: '23:30', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Pauta Chowk, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '20:00', lat: 24.8887, lng: 74.6269 }
+  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Pauta Chowk, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '20:00', lat: 24.8887, lng: 74.6269 },
+  { id: 'merch_pixigo_store', storeName: 'PixiGo Store', name: 'PixiGo Store', category: 'PixiGo Store', phone: '9251054064', email: 'pixigodelivery@gmail.com', address: 'Central Hub, Chittorgarh', verified: true, docs: 'Approved', openTime: '00:00', closeTime: '23:59', lat: 24.8887, lng: 74.6269 }
 ];
 
 const INITIAL_DELIVERY_PARTNERS = [];
@@ -259,6 +263,11 @@ const LeafletMap = ({
 const getShopOpenStatus = (shop) => {
   if (!shop) return { isOpen: false, reason: 'Unknown Store' };
 
+  // PixiGo Store bypasses all operating hours & manual closed checks
+  if (shop.name === 'PixiGo Store' || shop.storeName === 'PixiGo Store') {
+    return { isOpen: true, reason: 'OPEN' };
+  }
+
   // 1. Check manual toggle status (defaults to true if undefined)
   if (shop.isAcceptingOrders === false) {
     return { isOpen: false, reason: 'MANUAL_CLOSED' };
@@ -290,6 +299,7 @@ const getShopOpenStatus = (shop) => {
 
 const getCategoryBgClass = (cat) => {
   switch (cat) {
+    case 'PixiGo Store': return 'cat-bg-pixigo';
     case 'Vegetable': return 'cat-bg-veg';
     case 'Dairy': return 'cat-bg-dairy';
     case 'Bakery': return 'cat-bg-bakery';
@@ -389,6 +399,8 @@ function App() {
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isAboutDeveloperOpen, setIsAboutDeveloperOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [isMerchantTermsOpen, setIsMerchantTermsOpen] = useState(false);
+  const [isRiderTermsOpen, setIsRiderTermsOpen] = useState(false);
   const [adminSubView, setAdminSubView] = useState('sales'); // sales | orders | shops | riders
   const [allAdmins, setAllAdmins] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
@@ -440,6 +452,13 @@ function App() {
   const [editProductCategory, setEditProductCategory] = useState('General Store');
   const [isEditProductModalOpen, setIsEditProductModalOpen] = useState(false);
   const [isProductApprovalsOpen, setIsProductApprovalsOpen] = useState(true);
+  const [guestOrderIds, setGuestOrderIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pixigo_guest_order_ids') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Deal of the Day States
   const [dealOfTheDay, setDealOfTheDay] = useState({
@@ -493,6 +512,34 @@ function App() {
   const [shopDocLng, setShopDocLng] = useState('');
 
   // --- HELPER FUNCTIONS ---
+  const isUserOrder = (o) => {
+    if (user) {
+      const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
+      const targetEmail = (user.email || customerEmail || '').trim().toLowerCase();
+      const isEmailMatch = emailVal === targetEmail;
+      const isUidMatch = o.userId && o.userId === user.uid;
+      const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
+      return isEmailMatch || isUidMatch || isPhoneMatch;
+    } else {
+      return guestOrderIds.includes(o.id);
+    }
+  };
+
+  const saveGuestOrder = (orderId) => {
+    if (!auth.currentUser) {
+      try {
+        const storedGuestOrders = JSON.parse(localStorage.getItem('pixigo_guest_order_ids') || '[]');
+        if (!storedGuestOrders.includes(orderId)) {
+          const updated = [...storedGuestOrders, orderId];
+          localStorage.setItem('pixigo_guest_order_ids', JSON.stringify(updated));
+          setGuestOrderIds(updated);
+        }
+      } catch (e) {
+        console.error("Error saving guest order id:", e);
+      }
+    }
+  };
+
   const parseProductVariants = (product) => {
     if (!product) return null;
     if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
@@ -1864,7 +1911,7 @@ function App() {
 
   // Active Category list derived from standard categories + custom product categories
   const standardCategories = [
-    'All', 'General Store', 'Vegetable', 'Dairy', 'Bakery', 'Fast Food',
+    'All', 'PixiGo Store', 'General Store', 'Vegetable', 'Dairy', 'Bakery', 'Fast Food',
     'Restaurant Cafe', 'Icecream and dessert', 'Medical and fitness',
     'Juice and drink', 'Snacks and breakfast'
   ];
@@ -1886,6 +1933,7 @@ function App() {
   const getCategoryEmoji = (category) => {
     const mapping = {
       'All': '🌟',
+      'PixiGo Store': '⚡',
       'General Store': '🏪',
       'Vegetable': '🍅',
       'Dairy': '🥛',
@@ -2401,6 +2449,7 @@ function App() {
       }
 
       // Update local state for immediate UI tracking feedback
+      saveGuestOrder(newOrder.id);
       setOrders([newOrder, ...orders]);
       setCart([]);
       setCouponCode('');
@@ -3647,17 +3696,11 @@ function App() {
 
   // Compute active orders for the current customer (excluding completed, delivered, and cancelled ones)
   const activeCustomerOrders = orders.filter(o => {
-    const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
-    const targetEmail = customerEmail.trim().toLowerCase();
-    const isEmailMatch = emailVal === targetEmail;
-    const isUidMatch = user && o.userId && o.userId === user.uid;
-    const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
-    const isUserOrder = isEmailMatch || isUidMatch || isPhoneMatch;
     const isActive = o.status &&
       o.status.toUpperCase() !== 'COMPLETED' &&
       o.status.toUpperCase() !== 'DELIVERED' &&
       !o.status.toUpperCase().startsWith('CANCEL');
-    return isUserOrder && isActive;
+    return isUserOrder(o) && isActive;
   });
 
   const trackingOrderIdForHook = currentOrderTracking || activeCustomerOrders[0]?.id;
@@ -3691,6 +3734,7 @@ function App() {
       }
 
       // Update local state for immediate UI tracking feedback
+      saveGuestOrder(pendingPaymentOrder.id);
       setOrders([pendingPaymentOrder, ...orders]);
       setCart([]);
       setCouponCode('');
@@ -8236,6 +8280,25 @@ function App() {
                   </div>
                 </div>
 
+                {/* Rider Onboarding Agreement Footer */}
+                <div style={{
+                  marginTop: '40px',
+                  paddingTop: '20px',
+                  borderTop: '1px solid var(--color-border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  alignItems: 'center',
+                  width: '100%'
+                }}>
+                  <span style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', textAlign: 'center', lineHeight: '1.5' }}>
+                    By remaining active as a partner, you agree to be bound by the <span style={{ color: 'var(--color-accent-yellow-dark)', cursor: 'pointer', textDecoration: 'underline', fontWeight: '700' }} onClick={() => setIsRiderTermsOpen(true)}>Delivery Partner (Rider) Service Agreement</span>.
+                  </span>
+                  <span style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>
+                    © {new Date().getFullYear()} PixiGo Logistics. All rights reserved.
+                  </span>
+                </div>
+
               </div>
             </div>
           );
@@ -8682,6 +8745,25 @@ function App() {
                   </div>
                 </div>
 
+                {/* Merchant Onboarding Agreement Footer */}
+                <div style={{
+                  marginTop: '40px',
+                  paddingTop: '20px',
+                  borderTop: '1px solid var(--color-border)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  alignItems: 'center',
+                  width: '100%'
+                }}>
+                  <span style={{ fontSize: '12.5px', color: 'var(--color-text-muted)', textAlign: 'center', lineHeight: '1.5' }}>
+                    By remaining active on this platform, you agree to be bound by the <span style={{ color: 'var(--color-accent-yellow-dark)', cursor: 'pointer', textDecoration: 'underline', fontWeight: '700' }} onClick={() => setIsMerchantTermsOpen(true)}>Merchant Partner Agreement & Terms of Service</span>.
+                  </span>
+                  <span style={{ fontSize: '11.5px', color: 'var(--color-text-muted)' }}>
+                    © {new Date().getFullYear()} PixiGo Logistics. All rights reserved.
+                  </span>
+                </div>
+
               </div>
             </div>
           );
@@ -8829,7 +8911,7 @@ function App() {
                 <User size={40} style={{ color: 'var(--color-primary)' }} />
               </div>
               <h3 className="section-title-premium">Edit Profile Settings</h3>
-              <p className="profile-sub">{customerEmail}</p>
+              <p className="profile-sub">{user ? customerEmail : "Guest Account (Not Synced)"}</p>
             </div>
 
             <form onSubmit={handleSaveProfile} className="profile-form-premium">
@@ -8906,13 +8988,8 @@ function App() {
 
             <div className="past-orders-list-premium">
               {orders.filter(o => {
-                const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
-                const targetEmail = customerEmail.trim().toLowerCase();
-                const isEmailMatch = emailVal === targetEmail;
-                const isUidMatch = user && o.userId && o.userId === user.uid;
-                const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
                 const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
-                return (isEmailMatch || isUidMatch || isPhoneMatch) && isFinished;
+                return isUserOrder(o) && isFinished;
               }).length === 0 ? (
                 <div className="no-past-orders-premium">
                   <ShoppingCart size={40} style={{ color: 'var(--color-text-muted)', opacity: 0.4 }} />
@@ -8920,13 +8997,8 @@ function App() {
                 </div>
               ) : (
                 orders.filter(o => {
-                  const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
-                  const targetEmail = customerEmail.trim().toLowerCase();
-                  const isEmailMatch = emailVal === targetEmail;
-                  const isUidMatch = user && o.userId && o.userId === user.uid;
-                  const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
                   const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
-                  return (isEmailMatch || isUidMatch || isPhoneMatch) && isFinished;
+                  return isUserOrder(o) && isFinished;
                 }).map(o => (
                   <div key={o.id} className="past-order-card-premium border-glow">
                     <div className="past-order-header-premium">
@@ -9361,14 +9433,7 @@ function App() {
               <button
                 className="mobile-menu-link"
                 onClick={() => {
-                  const customerOrders = orders.filter(o => {
-                    const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
-                    const targetEmail = customerEmail.trim().toLowerCase();
-                    const isEmailMatch = emailVal === targetEmail;
-                    const isUidMatch = user && o.userId && o.userId === user.uid;
-                    const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
-                    return isEmailMatch || isUidMatch || isPhoneMatch;
-                  });
+                  const customerOrders = orders.filter(o => isUserOrder(o));
                   const activeOrdersList = customerOrders.filter(o => o.status && o.status.toUpperCase() !== 'COMPLETED' && o.status.toUpperCase() !== 'DELIVERED' && !o.status.toUpperCase().startsWith('CANCEL'));
                   if (activeOrdersList.length > 0) {
                     setCurrentOrderTracking(activeOrdersList[0].id);
@@ -9996,6 +10061,213 @@ function App() {
                 style={{ padding: '10px 20px', fontSize: '13px' }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merchant Partner Agreement Modal */}
+      {isMerchantTermsOpen && (
+        <div className="terms-modal-overlay" onClick={() => setIsMerchantTermsOpen(false)}>
+          <div className="terms-modal-card" onClick={(e) => e.stopPropagation()}>
+            <button className="terms-modal-close" onClick={() => setIsMerchantTermsOpen(false)} title="Close">
+              <X size={18} />
+            </button>
+
+            <div className="terms-modal-header">
+              <div className="terms-icon-wrapper">
+                <Store size={28} />
+              </div>
+              <div className="terms-header-title">
+                <h3>Merchant Partner Agreement</h3>
+                <p>PixiGo Logistics Service Agreement & Onboarding Terms</p>
+              </div>
+            </div>
+
+            <div className="terms-modal-body">
+              <p className="terms-welcome-note">
+                This agreement is a binding independent contractor service contract between PixiGo Logistics Private Limited (hereinafter "PixiGo") and the Independent Merchant Partner (hereinafter "Merchant Partner" or "Store"). These terms and conditions apply immediately upon logging into the PixiGo Merchant Dashboard/App, listing products, or using PixiGo logistics services.
+              </p>
+
+              <div className="terms-section-title">1. Independent Merchant Status</div>
+              <div className="terms-item-card">
+                <h5>Independent Business Entity</h5>
+                <p>
+                  The Merchant Partner explicitly understands and agrees that they are an independent business entity and not an employee, agent, or franchise of PixiGo. The Merchant operates independently and has the sole freedom to manage their store timings, product prices, and inventory on the platform. No employer-employee or agency relationship exists between PixiGo and the Merchant.
+                </p>
+                <div style={{ marginTop: '12px', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--color-danger)' }}>
+                  <strong style={{ color: 'var(--color-danger)', fontSize: '11px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Packaging & Product Liability</strong>
+                  <span style={{ fontSize: '12.5px', color: 'var(--color-text-main)' }}>
+                    The Merchant bears sole responsibility for the preparation, quality, freshness, and proper sealing of all products before handover to the Delivery Partner. All items must be packed securely in non-leaking, tamper-proof packaging. Any customer complaints or losses arising from food quality, incorrect items, or poor merchant packaging shall be the sole liability of the Merchant.
+                  </span>
+                </div>
+              </div>
+
+              <div className="terms-section-title">2. Order Handover & Preparation</div>
+              <div className="terms-item-card">
+                <h5>Preparation & Handover Responsibility</h5>
+                <ul className="terms-list">
+                  <li>The Merchant must ensure that all products listed on the platform comply with local food safety, legal standards, and descriptions.</li>
+                  <li>The Merchant must package the items securely to prevent any damage, leakage, or spoilage during transit.</li>
+                </ul>
+                <div style={{ marginTop: '12px', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--color-danger)' }}>
+                  <strong style={{ color: 'var(--color-danger)', fontSize: '11px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>Order Delay & Quality Disclaimer</strong>
+                  <span style={{ fontSize: '12.5px', color: 'var(--color-text-main)' }}>
+                    Merchant Partners must prepare and pack orders within the designated preparation window. Delays in handovers directly affect delivery timelines and customer satisfaction. PixiGo shall not be liable for any customer cancellations or refunds resulting from merchant preparation delays, missing items, or subpar food/product quality.
+                  </span>
+                </div>
+              </div>
+
+              <div className="terms-section-title">3. Order Accuracy & Handover</div>
+              <div className="terms-item-card">
+                <h5>Verification and Dispatch System</h5>
+                <ul className="terms-list">
+                  <li>The Merchant must verify that the item count and packaging match the details displayed on the Merchant Dashboard/order slip.</li>
+                  <li>Upon the arrival of the assigned PixiGo Delivery Partner, the Merchant must verify the Delivery Partner's credentials and hand over the order promptly.</li>
+                  <li>If the customer has selected Cash on Delivery (COD), the Merchant must ensure the order is marked correctly on the system to enable cash collection by the Delivery Partner.</li>
+                </ul>
+              </div>
+
+              <div className="terms-section-title">4. Code of Conduct & Platform Regulations</div>
+              <div className="terms-item-card">
+                <h5>Professionalism and Customer Misbehavior Policies</h5>
+                <ul className="terms-list">
+                  <li>The Merchant and their staff must maintain a professional, respectful, and courteous behavior towards both Customers and PixiGo Delivery Partners. Any form of abuse, misbehavior, or physical conflict will result in immediate suspension.</li>
+                  <li>Selling illegal, prohibited, or expired substances on the platform is strictly prohibited and will lead to immediate store termination and legal action.</li>
+                  <li><strong>Delivery Partner Interaction Policy:</strong> Merchants must cooperate professionally with Delivery Partners during order pickup. Any harassment or misbehavior with PixiGo personnel will be subject to strict disciplinary actions.</li>
+                  <li><strong>Store Termination & Defamation:</strong> PixiGo reserves the right to terminate the Merchant's onboarding agreement immediately if the Merchant is found spreading false information, defaming the platform, or violating core business guidelines.</li>
+                </ul>
+              </div>
+
+              <div className="terms-section-title">5. Right to Amend</div>
+              <div className="terms-item-card">
+                <h5>Modification of Terms & Commission Structure</h5>
+                <p>
+                  PixiGo reserves the right to change, modify, or update the terms of this agreement, commission structures, payout cycles, and platform fees at its sole discretion. Any such updates will be updated directly on the Merchant Dashboard/App. Remaining active on the platform constitutes full acceptance of the revised terms.
+                </p>
+              </div>
+
+              <div className="terms-section-title">6. Acceptance of Terms</div>
+              <div className="terms-item-card">
+                <h5>Acceptance of Onboarding Terms</h5>
+                <p>
+                  By completing the onboarding process, listing products, and going online on the PixiGo platform, you accept this agreement in full.
+                </p>
+              </div>
+            </div>
+
+            <div className="terms-modal-footer">
+              <button
+                className="terms-download-btn"
+                onClick={() => setIsMerchantTermsOpen(false)}
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Accept & Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delivery Partner Agreement Modal */}
+      {isRiderTermsOpen && (
+        <div className="terms-modal-overlay" onClick={() => setIsRiderTermsOpen(false)}>
+          <div className="terms-modal-card" onClick={(e) => e.stopPropagation()}>
+            <button className="terms-modal-close" onClick={() => setIsRiderTermsOpen(false)} title="Close">
+              <X size={18} />
+            </button>
+
+            <div className="terms-modal-header">
+              <div className="terms-icon-wrapper">
+                <Bike size={28} />
+              </div>
+              <div className="terms-header-title">
+                <h3>Delivery Partner Agreement</h3>
+                <p>PixiGo Logistics Service Agreement & Onboarding Terms</p>
+              </div>
+            </div>
+
+            <div className="terms-modal-body">
+              <p className="terms-welcome-note">
+                This agreement is a binding independent contractor service contract between PixiGo Logistics Private Limited (hereinafter "PixiGo") and the Independent Delivery Partner (hereinafter "Delivery Rider", "Partner", or "Rider"). These terms and conditions apply immediately upon logging into the PixiGo Delivery Partner Application, completing the offline onboarding form, or providing delivery services.
+              </p>
+
+              <div className="terms-section-title">1. Independent Contractor Status</div>
+              <div className="terms-item-card">
+                <h5>Freelancer / Contractor Status</h5>
+                <p>
+                  The Delivery Rider explicitly understands and agrees that they are not an employee of PixiGo. The Rider operates as an independent freelancer and contractor. The Delivery Rider has the absolute freedom to choose their own working hours and log online or offline on the platform at their discretion. No employer-employee relationship exists between PixiGo and the Rider.
+                </p>
+                <div style={{ marginTop: '12px', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--color-danger)' }}>
+                  <strong style={{ color: 'var(--color-danger)', fontSize: '11px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>TRANSIT SAFETY & PACKAGING LIABILITY</strong>
+                  <span style={{ fontSize: '12.5px', color: 'var(--color-text-main)' }}>
+                    From the moment an order is picked up from the Merchant until it is successfully handed over to the Customer, the Delivery Rider bears sole responsibility for maintaining the integrity of the product packaging (ensuring it remains undamaged and in a non-leaking condition). Any loss resulting from packaging damage or spillage due to the Rider's negligence must be fully borne by the Rider.
+                  </span>
+                </div>
+              </div>
+
+              <div className="terms-section-title">2. Packaging & Safe Handling Responsibility</div>
+              <div className="terms-item-card">
+                <h5>Packaging & Safe Handling</h5>
+                <ul className="terms-list">
+                  <li>The Rider must verify at the time of pickup whether the Merchant has properly packed and sealed the items.</li>
+                  <li>The Rider must correctly utilize the insulated/delivery bag in accordance with the safety and operational guidelines prescribed by PixiGo.</li>
+                </ul>
+                <div style={{ marginTop: '12px', background: 'rgba(239, 68, 68, 0.05)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--color-danger)' }}>
+                  <strong style={{ color: 'var(--color-danger)', fontSize: '11px', display: 'block', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px' }}>ABSOLUTE ACCIDENT & LEGAL LIABILITY DISCLAIMER</strong>
+                  <span style={{ fontSize: '12.5px', color: 'var(--color-text-main)' }}>
+                    It is 100% mandatory for the Delivery Rider to wear a helmet, possess a valid driving license, and strictly adhere to all traffic laws and regulations during deliveries. PixiGo shall not be held liable under any circumstances for road accidents, injuries, physical harm, vehicle damage, third-party liability, or any other untoward incidents. The Rider assumes full responsibility for their personal safety and the maintenance of their vehicle.
+                  </span>
+                </div>
+              </div>
+
+              <div className="terms-section-title">3. Order Verification and OTP System</div>
+              <div className="terms-item-card">
+                <h5>Order Verification & OTP Verification</h5>
+                <ul className="terms-list">
+                  <li>The Rider must check and verify that the quantity of packets handed over by the Merchant matches the number of items displayed in the app/system.</li>
+                  <li>Upon arriving at the Customer's location, the Rider must allow the Customer the opportunity to physically check and count the items if they wish to do so.</li>
+                  <li>The Rider must obtain the secure OTP (One-Time Password) from the Customer before marking the order as "Delivered" in the application. Marking an order as delivered without physically handing it over or without verifying the OTP will be treated as fraudulent activity.</li>
+                  <li>For Cash on Delivery (COD) orders, receiving the full payment first is mandatory before verifying the OTP and completing the delivery on the application.</li>
+                </ul>
+              </div>
+
+              <div className="terms-section-title">4. Code of Conduct & Zero Tolerance Policy</div>
+              <div className="terms-item-card">
+                <h5>Behavior and Zero Tolerance Policy</h5>
+                <ul className="terms-list">
+                  <li>The Rider must behave in an extremely polite and professional manner with both Merchants and Customers. Any form of misbehavior, abuse, or physical altercations will result in a permanent ban from the platform.</li>
+                  <li>Consuming alcohol, drugs, or any intoxicating substances while on duty is strictly prohibited. Violation will lead to immediate ID termination and appropriate legal action.</li>
+                  <li><strong>Customer Misbehavior & Harassment Policy (Strict Enforcement):</strong> The Rider must maintain professional boundaries and respectful behavior with all customers. Any form of harassment, inappropriate contact, saving a customer's phone number for personal use, or reaching out to female customers outside of business purposes is strictly forbidden.</li>
+                  <li><strong>Penalties and Disciplinary Action:</strong> If a customer files a complaint regarding harassment, inappropriate behavior, or unsolicited contact, and provides concrete evidence, PixiGo will take immediate, severe legal and disciplinary action against the Rider, including permanent termination of their platform ID.</li>
+                </ul>
+              </div>
+
+              <div className="terms-section-title">5. Right to Amend</div>
+              <div className="terms-item-card">
+                <h5>Modification of Terms</h5>
+                <p>
+                  PixiGo reserves the sole right to modify, amend, or update the terms, conditions, payout structure, and rules of this agreement at any time. No individual notice will be sent to the Rider. Updated terms will take effect immediately upon being posted or updated on the platform, and the Rider's continued use of the platform/app constitutes full acceptance of the revised terms.
+                </p>
+              </div>
+
+              <div className="terms-section-title">6. Acceptance of Terms</div>
+              <div className="terms-item-card">
+                <h5>Acceptance of Terms</h5>
+                <p>
+                  By logging online and utilizing the PixiGo Delivery Partner App, you acknowledge that you have read, understood, and accepted this agreement in its entirety.
+                </p>
+              </div>
+            </div>
+
+            <div className="terms-modal-footer">
+              <button
+                className="terms-download-btn"
+                onClick={() => setIsRiderTermsOpen(false)}
+                style={{ background: 'var(--color-primary)' }}
+              >
+                Accept & Close
               </button>
             </div>
           </div>
