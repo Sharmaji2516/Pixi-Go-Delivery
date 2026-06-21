@@ -11,7 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
-import { getDistance, calculateDeliveryRates, fetchRoadDistance } from './distanceUtils';
+import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee } from './distanceUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -2384,7 +2384,7 @@ function App() {
     }
 
     const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
-    const delCharge = customerCharge;
+    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge);
 
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
@@ -4108,13 +4108,17 @@ function App() {
 
               let distanceText = '';
               let fee = 33; // Default fallback (standard 2km base)
+              let originalFee = 33;
 
               if (dist !== null) {
                 distanceText = isDistanceLoading
                   ? ' (Calculating route...)'
                   : ` (${dist.toFixed(2)} km)`;
                 const rates = calculateDeliveryRates(dist);
-                fee = rates.customerCharge;
+                originalFee = rates.customerCharge;
+                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee);
+              } else {
+                fee = getPromotionalDeliveryFee(subtotal, cart, 33);
               }
 
               const totalAmount = subtotal + fee - appliedDiscount;
@@ -4138,7 +4142,27 @@ function App() {
                         </button>
                       </span>
                       <span className="bill-value">
-                        {isOutOfRange ? 'N/A' : (fee === 0 ? 'FREE' : formatINR(fee))}
+                        {isOutOfRange ? 'N/A' : (
+                          fee === 0 ? (
+                            <span>
+                              {originalFee > 0 && (
+                                <span style={{ textDecoration: 'line-through', marginRight: '6px', opacity: 0.6, fontSize: '12px' }}>
+                                  {formatINR(originalFee)}
+                                </span>
+                              )}
+                              <span className="text-success" style={{ fontWeight: 'bold', color: '#4ade80' }}>FREE</span>
+                            </span>
+                          ) : (
+                            <span>
+                              {originalFee > fee && (
+                                <span style={{ textDecoration: 'line-through', marginRight: '6px', opacity: 0.6, fontSize: '12px' }}>
+                                  {formatINR(originalFee)}
+                                </span>
+                              )}
+                              <span>{formatINR(fee)}</span>
+                            </span>
+                          )
+                        )}
                       </span>
                     </div>
 
