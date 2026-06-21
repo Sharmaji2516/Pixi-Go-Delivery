@@ -4837,6 +4837,37 @@ function App() {
     );
   };
 
+  const renderPlaceholderCard = (p) => {
+    return (
+      <div key={p.id} className="product-card glass-panel coming-soon-card desktop-only" style={{ position: 'relative', opacity: 0.7 }}>
+        <div className="prod-img-wrap" style={{ 
+          position: 'relative', 
+          background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.08) 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <span className="prod-emoji-text" style={{ filter: 'grayscale(0.5)' }}>⏳</span>
+        </div>
+        <div className="prod-meta" style={{ opacity: 1 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+            <h3 className="prod-title" style={{ margin: 0, color: 'var(--color-text-muted)' }}>{p.name}</h3>
+          </div>
+          <span className="prod-store" style={{ color: 'var(--color-text-muted)' }}>
+            {p.store}
+          </span>
+          <p className="prod-category" style={{ marginTop: '6px', background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-muted)' }}>{p.category}</p>
+          <div className="prod-buy">
+            <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--color-text-muted)' }}>
+              Stay Tuned!
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+
   return (
     <div className="app-container">
       {/* Header Banner */}
@@ -5075,17 +5106,11 @@ function App() {
             )}
 
             {/* Custom PIXIgo Brand Banner */}
-            <div className="custom-brand-banner-wrap" style={{ margin: '16px auto 10px auto', width: '100%', boxSizing: 'border-box' }}>
+            <div className="custom-brand-banner-wrap">
               <img 
                 src="/pixigo_banner.png" 
                 alt="PIXIgo Delivery Banner" 
-                style={{ 
-                  width: '100%', 
-                  height: 'auto', 
-                  borderRadius: '20px', 
-                  display: 'block', 
-                  boxShadow: '0 8px 24px rgba(31, 78, 61, 0.08)' 
-                }} 
+                className="custom-brand-banner-img"
               />
             </div>
 
@@ -5259,7 +5284,31 @@ function App() {
                 {/* Product Grid / Sectioned Rows */}
                 {searchQuery.trim() !== '' || selectedCategory !== 'All' ? (
                   <div className="products-grid">
-                    {filteredProducts.map(p => renderProductCard(p))}
+                    {(() => {
+                      const paddedFiltered = [...filteredProducts];
+                      if (selectedCategory !== 'All' && paddedFiltered.length < 5) {
+                        const shortage = 5 - paddedFiltered.length;
+                        for (let i = 0; i < shortage; i++) {
+                          paddedFiltered.push({
+                            id: `coming-soon-cat-${selectedCategory}-${i}`,
+                            name: 'More Coming Soon!',
+                            price: null,
+                            category: selectedCategory,
+                            store: 'Stay Tuned',
+                            image: null,
+                            emoji: '✨',
+                            isVeg: true,
+                            isPlaceholder: true
+                          });
+                        }
+                      }
+                      return paddedFiltered.map(p => {
+                        if (p.isPlaceholder) {
+                          return renderPlaceholderCard(p);
+                        }
+                        return renderProductCard(p);
+                      });
+                    })()}
                   </div>
                 ) : (
                   <div className="category-sections-container">
@@ -5275,6 +5324,25 @@ function App() {
 
                       return Object.entries(productsByCategory).map(([categoryName, categoryProds]) => {
                         if (categoryProds.length === 0) return null;
+                        
+                        const paddedProds = [...categoryProds];
+                        if (paddedProds.length < 5) {
+                          const shortage = 5 - paddedProds.length;
+                          for (let i = 0; i < shortage; i++) {
+                            paddedProds.push({
+                              id: `coming-soon-${categoryName}-${i}`,
+                              name: 'More Coming Soon!',
+                              price: null,
+                              category: categoryName,
+                              store: 'Stay Tuned',
+                              image: null,
+                              emoji: '✨',
+                              isVeg: true,
+                              isPlaceholder: true
+                            });
+                          }
+                        }
+
                         return (
                           <div key={categoryName} className="category-section-row">
                             <div className="category-section-header">
@@ -5287,7 +5355,12 @@ function App() {
                               </button>
                             </div>
                             <div className="horizontal-products-scroll">
-                              {categoryProds.map(p => renderProductCard(p))}
+                              {paddedProds.map(p => {
+                                if (p.isPlaceholder) {
+                                  return renderPlaceholderCard(p);
+                                }
+                                return renderProductCard(p);
+                              })}
                             </div>
                           </div>
                         );
@@ -8854,7 +8927,7 @@ function App() {
                 </div>
 
                 {!isSignUp && (
-                  <div style={{ textAlign: 'right', marginTop: '-8px' }}>
+                  <div style={{ textAlign: 'center', marginTop: '-8px' }}>
                     <button
                       type="button"
                       className="toggle-btn-link-premium"

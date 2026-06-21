@@ -150,9 +150,17 @@
   }
 
   .customer-grid {
-    grid-template-columns: 220px minmax(0, 1fr) 350px !important;
+    grid-template-columns: 1fr !important;
     gap: 24px;
     width: 100% !important;
+  }
+  
+  .categories-sidebar.desktop-only {
+    display: none !important;
+  }
+
+  .checkout-sidebar.desktop-only {
+    display: none !important;
   }
   
   .cat-selector-scroll {
@@ -3718,6 +3726,13 @@
 }
 
 /* Portal Specific Input & Label overrides */
+.auth-form-premium {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
 .portal-auth-card-dark .form-label-premium {
   color: #e5e7eb !important;
   font-weight: 700;
@@ -3726,7 +3741,7 @@
   letter-spacing: 0.08em;
   margin-bottom: 6px;
   display: block;
-  text-align: left;
+  text-align: center;
 }
 
 .portal-auth-card-dark .custom-input-premium {
@@ -3739,6 +3754,7 @@
   transition: all 0.2s ease;
   width: 100%;
   box-sizing: border-box;
+  text-align: center;
 }
 
 .portal-auth-card-dark .custom-input-premium::placeholder {
@@ -6132,6 +6148,62 @@
 
 .terms-close-btn:hover {
   background-color: rgba(15, 23, 42, 0.05);
+}
+
+/* ==================== CUSTOM DESKTOP BRAND BANNER & PLACEHOLDER STYLES ==================== */
+.custom-brand-banner-wrap {
+  margin: 16px auto 10px auto;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+}
+
+.custom-brand-banner-img {
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  display: block;
+  box-shadow: 0 8px 24px rgba(31, 78, 61, 0.08);
+  transition: max-width 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .custom-brand-banner-img {
+    max-width: 500px;
+    margin: 0 auto;
+  }
+}
+
+/* Coming Soon Placeholder Cards for Desktop Screen */
+.coming-soon-card {
+  border: 1px dashed var(--color-border) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  pointer-events: none; /* Disable hover animations & clicks */
+  user-select: none;
+}
+
+.coming-soon-card .prod-img-wrap {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px dashed var(--color-border) !important;
+}
+
+.coming-soon-card .prod-emoji-text {
+  opacity: 0.4;
+}
+
+.coming-soon-card .prod-store,
+.coming-soon-card .prod-title {
+  color: var(--color-text-muted) !important;
+  font-style: italic;
+}
+
+.coming-soon-card .prod-buy span {
+  font-size: 13px !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted) !important;
 }
 
 
