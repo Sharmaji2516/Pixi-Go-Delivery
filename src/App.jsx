@@ -1404,9 +1404,36 @@ function App() {
         });
       });
       
-      setCoupons(fetchedCoupons);
+      // Deduplicate coupons automatically to resolve database and UI duplication
+      const seen = new Set();
+      const duplicatesToDelete = [];
+      const cleanCouponsList = [];
+      for (const coupon of fetchedCoupons) {
+        const uppercaseCode = coupon.code?.toUpperCase();
+        if (uppercaseCode) {
+          if (seen.has(uppercaseCode)) {
+            duplicatesToDelete.push(coupon);
+          } else {
+            seen.add(uppercaseCode);
+            cleanCouponsList.push(coupon);
+          }
+        }
+      }
 
-      // If empty, auto-create default coupons for testing
+      if (duplicatesToDelete.length > 0) {
+        console.log("Deduplication: found duplicate coupons to delete from Firestore:", duplicatesToDelete);
+        for (const dup of duplicatesToDelete) {
+          try {
+            await deleteDoc(doc(db, "coupons", dup.firestoreId));
+          } catch (err) {
+            console.error("Error deleting duplicate coupon from Firestore:", err);
+          }
+        }
+      }
+
+      setCoupons(cleanCouponsList);
+
+      // If empty, auto-create default coupons for testing with unique document IDs
       if (snapshot.empty) {
         const defaultCoupons = [
           {
@@ -1438,7 +1465,8 @@ function App() {
         
         for (const coupon of defaultCoupons) {
           try {
-            await addDoc(collection(db, "coupons"), coupon);
+            // Using coupon code as document ID ensures uniqueness
+            await setDoc(doc(db, "coupons", coupon.code), coupon);
           } catch (e) {
             console.error("Error creating default coupon: ", e);
           }
@@ -3219,7 +3247,7 @@ function App() {
     };
     
     try {
-      await addDoc(collection(db, "coupons"), couponData);
+      await setDoc(doc(db, "coupons", codeUpper), couponData);
       showToast(`Coupon "${codeUpper}" created successfully!`);
       // Reset form
       setNewCouponCode('');
@@ -9352,11 +9380,17 @@ function App() {
               <p className="profile-sub" style={{ marginTop: '4px' }}>Click any coupon code below to copy & apply it!</p>
             </div>
 
-            {/* List of active coupons */}
+            {/* List of active coupons & delivery promotions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
+              
+              {/* Promo Codes Section Header */}
+              <div style={{ fontSize: '11px', fontWeight: '800', color: 'var(--color-primary)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '-4px', opacity: 0.8 }}>
+                Promo Codes
+              </div>
+
               {coupons.filter(c => c.isActive).length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 10px', color: 'var(--color-text-muted)', fontSize: '14px' }}>
-                  😔 No active coupons available at the moment. Please check back later!
+                <div style={{ textAlign: 'center', padding: '15px 10px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                  😔 No active coupons available at the moment.
                 </div>
               ) : (
                 coupons.filter(c => c.isActive).map(c => {
@@ -9368,12 +9402,12 @@ function App() {
                       key={c.firestoreId}
                       style={{
                         display: 'flex',
-                        background: '#ffffff',
-                        border: `1px solid ${copiedCode === c.code ? 'var(--color-primary)' : '#e2e8f0'}`,
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: `1px solid ${copiedCode === c.code ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.08)'}`,
                         borderRadius: '14px',
                         overflow: 'hidden',
                         position: 'relative',
-                        boxShadow: copiedCode === c.code ? '0 0 15px rgba(0, 255, 242, 0.25)' : '0 4px 12px rgba(0, 0, 0, 0.05)',
+                        boxShadow: copiedCode === c.code ? '0 0 15px rgba(0, 255, 242, 0.25)' : '0 4px 12px rgba(0, 0, 0, 0.15)',
                         transition: 'all 0.25s ease',
                         cursor: 'pointer'
                       }}
@@ -9388,14 +9422,16 @@ function App() {
                         if (copiedCode !== c.code) {
                           e.currentTarget.style.transform = 'translateY(-2px)';
                           e.currentTarget.style.borderColor = 'var(--color-primary)';
-                          e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 0, 0, 0.1)';
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
+                          e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 255, 242, 0.15)';
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (copiedCode !== c.code) {
                           e.currentTarget.style.transform = 'none';
-                          e.currentTarget.style.borderColor = '#e2e8f0';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.05)';
+                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
                         }
                       }}
                     >
@@ -9409,9 +9445,9 @@ function App() {
                       }}></div>
 
                       {/* Card Content body */}
-                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', color: '#0f172a' }}>
+                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', color: '#ffffff' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', fontWeight: '800', color: meetsMinCart ? '#059669' : '#64748b', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: meetsMinCart ? '#10b981' : 'rgba(255, 255, 255, 0.4)', letterSpacing: '1px', textTransform: 'uppercase' }}>
                             {c.type === 'flat' ? 'Flat Discount' : 'Percentage Off'}
                           </span>
                           
@@ -9421,9 +9457,9 @@ function App() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: '4px',
-                              background: '#d1fae5',
+                              background: 'rgba(16, 185, 129, 0.15)',
                               border: '1px solid #10b981',
-                              color: '#065f46',
+                              color: '#34d399',
                               padding: '2px 8px',
                               borderRadius: '20px',
                               fontSize: '11px',
@@ -9433,9 +9469,9 @@ function App() {
                             </span>
                           ) : (
                             <span style={{
-                              background: '#f8fafc',
-                              border: '1px dashed #cbd5e1',
-                              color: '#0f172a',
+                              background: 'rgba(255, 255, 255, 0.05)',
+                              border: '1px dashed rgba(255, 255, 255, 0.2)',
+                              color: 'var(--color-primary)',
                               padding: '3px 10px',
                               borderRadius: '8px',
                               fontSize: '12px',
@@ -9449,10 +9485,10 @@ function App() {
                         </div>
 
                         <div>
-                          <h4 style={{ fontSize: '20px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+                          <h4 style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff', margin: 0 }}>
                             {c.type === 'flat' ? `₹${c.discount} OFF` : `${c.discount}% OFF`}
                           </h4>
-                          <p style={{ fontSize: '12px', color: '#475569', margin: '4px 0 0', lineHeight: '1.4' }}>
+                          <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', margin: '4px 0 0', lineHeight: '1.4' }}>
                             {c.type === 'flat' 
                               ? `Save flat ₹${c.discount} on your total order value.` 
                               : `Get ${c.discount}% off up to ₹${c.maxDiscount || 50} on your subtotal.`}
@@ -9460,19 +9496,19 @@ function App() {
                         </div>
 
                         <div style={{
-                          borderTop: '1px dashed #e2e8f0',
+                          borderTop: '1px dashed rgba(255, 255, 255, 0.15)',
                           paddingTop: '8px',
                           display: 'flex',
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           fontSize: '11px',
-                          color: '#475569'
+                          color: 'rgba(255, 255, 255, 0.5)'
                         }}>
                           <div>
-                            Min. Cart: <strong>₹{c.minCart || 0}</strong>
+                            Min. Cart: <strong style={{ color: '#ffffff' }}>₹{c.minCart || 0}</strong>
                           </div>
                           {cart.length > 0 && (
-                            <div style={{ color: meetsMinCart ? '#059669' : '#dc2626', fontWeight: '700' }}>
+                            <div style={{ color: meetsMinCart ? '#10b981' : '#ef4444', fontWeight: '700' }}>
                               {meetsMinCart ? '✓ Meets criteria' : `✗ Needs ₹${c.minCart - subtotal} more`}
                             </div>
                           )}
@@ -9482,6 +9518,131 @@ function App() {
                   );
                 })
               )}
+
+              {/* Delivery Discounts Section Header */}
+              <div style={{ fontSize: '11px', fontWeight: '800', color: 'var(--color-primary)', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '12px', marginBottom: '-4px', opacity: 0.8 }}>
+                Delivery Discounts (Auto-Applied)
+              </div>
+
+              {(() => {
+                const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+                
+                const hasFoodItems = cart.some(item => 
+                  ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
+                );
+                const hasGroceryItems = cart.some(item => 
+                  ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
+                );
+
+                const deliveryPromos = [
+                  {
+                    title: '30% Delivery Discount',
+                    desc: 'Apply 30% discount on the delivery fee for orders above ₹599.',
+                    minCart: 599,
+                    isActive: subtotal > 599,
+                    statusText: subtotal > 599 ? '✓ Auto-applied' : `✗ Needs ₹${599 - subtotal} more`,
+                    gradient: 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)'
+                  },
+                  {
+                    title: 'FREE Food Delivery',
+                    desc: 'FREE delivery for orders above ₹999 containing Food or Bakery items.',
+                    minCart: 999,
+                    isActive: subtotal > 999 && hasFoodItems,
+                    statusText: (subtotal > 999 && hasFoodItems) 
+                      ? '✓ Auto-applied' 
+                      : (!hasFoodItems && cart.length > 0)
+                        ? '✗ Add Food/Bakery items'
+                        : `✗ Needs ₹${999 - subtotal} more`,
+                    gradient: 'linear-gradient(180deg, #10b981 0%, #047857 100%)'
+                  },
+                  {
+                    title: 'FREE Grocery Delivery',
+                    desc: 'FREE delivery for orders above ₹1999 containing Grocery or Kirana items.',
+                    minCart: 1999,
+                    isActive: subtotal > 1999 && hasGroceryItems,
+                    statusText: (subtotal > 1999 && hasGroceryItems)
+                      ? '✓ Auto-applied'
+                      : (!hasGroceryItems && cart.length > 0)
+                        ? '✗ Add Grocery/Kirana items'
+                        : `✗ Needs ₹${1999 - subtotal} more`,
+                    gradient: 'linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%)'
+                  }
+                ];
+
+                return deliveryPromos.map((promo, idx) => {
+                  return (
+                    <div
+                      key={`del-promo-${idx}`}
+                      style={{
+                        display: 'flex',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: `1px solid ${promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.08)'}`,
+                        borderRadius: '14px',
+                        overflow: 'hidden',
+                        position: 'relative',
+                        boxShadow: promo.isActive ? '0 0 15px rgba(0, 255, 242, 0.25)' : '0 4px 12px rgba(0, 0, 0, 0.15)',
+                        transition: 'all 0.25s ease'
+                      }}
+                    >
+                      {/* Left accent strip */}
+                      <div style={{
+                        width: '6px',
+                        background: promo.gradient,
+                        opacity: promo.isActive ? 1 : 0.4
+                      }}></div>
+
+                      {/* Card Content body */}
+                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', color: '#ffffff' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '11px', fontWeight: '800', color: promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.4)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                            {promo.title}
+                          </span>
+                          
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            background: promo.isActive ? 'rgba(0, 255, 242, 0.1)' : 'rgba(255, 255, 255, 0.05)',
+                            border: `1px ${promo.isActive ? 'solid' : 'dashed'} ${promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.2)'}`,
+                            color: promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.5)',
+                            padding: '2px 8px',
+                            borderRadius: '20px',
+                            fontSize: '10px',
+                            fontWeight: '700',
+                            textTransform: 'uppercase'
+                          }}>
+                            {promo.isActive ? 'ACTIVE' : 'AUTO-APPLY'}
+                          </span>
+                        </div>
+
+                        <div>
+                          <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', margin: '4px 0 0', lineHeight: '1.4' }}>
+                            {promo.desc}
+                          </p>
+                        </div>
+
+                        <div style={{
+                          borderTop: '1px dashed rgba(255, 255, 255, 0.15)',
+                          paddingTop: '8px',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          fontSize: '11px',
+                          color: 'rgba(255, 255, 255, 0.5)'
+                        }}>
+                          <div>
+                            Min. Cart: <strong style={{ color: '#ffffff' }}>₹{promo.minCart}</strong>
+                          </div>
+                          {cart.length > 0 && (
+                            <div style={{ color: promo.isActive ? '#10b981' : '#ef4444', fontWeight: '700' }}>
+                              {promo.statusText}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
             </div>
 
             <div style={{ marginTop: '24px', textAlign: 'center' }}>
