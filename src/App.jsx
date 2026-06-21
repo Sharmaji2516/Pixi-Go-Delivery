@@ -351,9 +351,6 @@ function App() {
   const [commissionPercent, setCommissionPercent] = useState(10);
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
   const [perKmCharge, setPerKmCharge] = useState(5);
-  const [promoDelivery30Enabled, setPromoDelivery30Enabled] = useState(true);
-  const [promoFoodFreeEnabled, setPromoFoodFreeEnabled] = useState(true);
-  const [promoGroceryFreeEnabled, setPromoGroceryFreeEnabled] = useState(true);
   const [bankAccount, setBankAccount] = useState('SBI - A/C 98127391238 (IFSC: SBIN0007204)');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState('item'); // item | shop
@@ -362,6 +359,18 @@ function App() {
   const [couponCode, setCouponCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [coupons, setCoupons] = useState([]);
+
+  // Derived enabled toggles for the three promotional delivery rules
+  const promoDelivery30Coupon = coupons.find(c => c.isDeliveryPromo && c.deliveryPromoType === 'discount_delivery_percent');
+  const promoFoodFreeCoupon = coupons.find(c => c.isDeliveryPromo && c.deliveryPromoType === 'free_delivery_food');
+  const promoGroceryFreeCoupon = coupons.find(c => c.isDeliveryPromo && c.deliveryPromoType === 'free_delivery_grocery');
+
+  const promoDelivery30Enabled = !!(promoDelivery30Coupon ? promoDelivery30Coupon.isActive : false);
+  const promoFoodFreeEnabled = !!(promoFoodFreeCoupon ? promoFoodFreeCoupon.isActive : false);
+  const promoGroceryFreeEnabled = !!(promoGroceryFreeCoupon ? promoGroceryFreeCoupon.isActive : false);
+
+  const [newCouponPurpose, setNewCouponPurpose] = useState('standard'); // 'standard' | 'delivery'
+  const [newDeliveryPromoType, setNewDeliveryPromoType] = useState('discount_delivery_percent');
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponDiscount, setNewCouponDiscount] = useState('');
   const [newCouponMinCart, setNewCouponMinCart] = useState('');
@@ -1348,22 +1357,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch real-time delivery promos configuration from Firestore
-  useEffect(() => {
-    const docRef = doc(db, "configs", "delivery_promos");
-    const unsubscribe = onSnapshot(docRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.promoDelivery30Enabled !== undefined) setPromoDelivery30Enabled(data.promoDelivery30Enabled);
-        if (data.promoFoodFreeEnabled !== undefined) setPromoFoodFreeEnabled(data.promoFoodFreeEnabled);
-        if (data.promoGroceryFreeEnabled !== undefined) setPromoGroceryFreeEnabled(data.promoGroceryFreeEnabled);
-      }
-    }, (error) => {
-      console.warn("Firestore delivery promos config fetch error:", error);
-    });
-    return () => unsubscribe();
-  }, []);
-
   // Fetch real-time admins from Firestore
   useEffect(() => {
     const adminsRef = collection(db, "admins");
@@ -1461,6 +1454,7 @@ function App() {
             type: 'flat',
             minCart: 200,
             isActive: true,
+            isDeliveryPromo: false,
             createdAt: new Date().toISOString()
           },
           {
@@ -1470,6 +1464,7 @@ function App() {
             maxDiscount: 50,
             minCart: 150,
             isActive: true,
+            isDeliveryPromo: false,
             createdAt: new Date().toISOString()
           },
           {
@@ -1478,6 +1473,37 @@ function App() {
             type: 'flat',
             minCart: 100,
             isActive: true,
+            isDeliveryPromo: false,
+            createdAt: new Date().toISOString()
+          },
+          {
+            code: 'DELIVERY30',
+            discount: 30,
+            type: 'percentage',
+            minCart: 599,
+            isActive: true,
+            isDeliveryPromo: true,
+            deliveryPromoType: 'discount_delivery_percent',
+            createdAt: new Date().toISOString()
+          },
+          {
+            code: 'DELIVERYFOOD',
+            discount: 100,
+            type: 'percentage',
+            minCart: 999,
+            isActive: true,
+            isDeliveryPromo: true,
+            deliveryPromoType: 'free_delivery_food',
+            createdAt: new Date().toISOString()
+          },
+          {
+            code: 'DELIVERYGROCERY',
+            discount: 100,
+            type: 'percentage',
+            minCart: 1999,
+            isActive: true,
+            isDeliveryPromo: true,
+            deliveryPromoType: 'free_delivery_grocery',
             createdAt: new Date().toISOString()
           }
         ];
@@ -2431,11 +2457,8 @@ function App() {
     }
 
     const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
-    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, {
-      promoDelivery30Enabled,
-      promoFoodFreeEnabled,
-      promoGroceryFreeEnabled
-    });
+    const activeDeliveryPromos = coupons.filter(c => c.isDeliveryPromo && c.isActive);
+    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, activeDeliveryPromos);
 
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
@@ -3245,29 +3268,49 @@ function App() {
   // Admin: Coupon Actions
   const handleAddCoupon = async (e) => {
     e.preventDefault();
-    if (!newCouponCode.trim() || !newCouponDiscount) {
-      alert('Please fill out the Coupon Code and Discount value.');
+    if (!newCouponCode.trim()) {
+      alert('Please fill out the Coupon Code.');
       return;
     }
-    
     const codeUpper = newCouponCode.trim().toUpperCase();
-    
-    // Check if code already exists
     const exists = coupons.some(c => c.code?.toUpperCase() === codeUpper);
     if (exists) {
       alert('A coupon with this code already exists!');
       return;
     }
-    
-    const couponData = {
-      code: codeUpper,
-      discount: Number(newCouponDiscount),
-      type: newCouponType,
-      minCart: Number(newCouponMinCart) || 0,
-      maxDiscount: newCouponType === 'percentage' && newCouponMaxDiscount ? Number(newCouponMaxDiscount) : null,
-      isActive: true,
-      createdAt: new Date().toISOString()
-    };
+
+    let couponData = {};
+    if (newCouponPurpose === 'standard') {
+      if (!newCouponDiscount) {
+        alert('Please specify the discount value for the standard coupon.');
+        return;
+      }
+      couponData = {
+        code: codeUpper,
+        discount: Number(newCouponDiscount),
+        type: newCouponType,
+        minCart: Number(newCouponMinCart) || 0,
+        maxDiscount: newCouponType === 'percentage' && newCouponMaxDiscount ? Number(newCouponMaxDiscount) : null,
+        isActive: true,
+        isDeliveryPromo: false,
+        createdAt: new Date().toISOString()
+      };
+    } else {
+      // Delivery Promotion Rule
+      const discountVal = newDeliveryPromoType === 'discount_delivery_percent' ? (Number(newCouponDiscount) || 30) : 100;
+      const minCartVal = Number(newCouponMinCart) || (newDeliveryPromoType === 'discount_delivery_percent' ? 599 : newDeliveryPromoType === 'free_delivery_food' ? 999 : 1999);
+      
+      couponData = {
+        code: codeUpper,
+        discount: discountVal,
+        type: 'percentage',
+        minCart: minCartVal,
+        isActive: true,
+        isDeliveryPromo: true,
+        deliveryPromoType: newDeliveryPromoType,
+        createdAt: new Date().toISOString()
+      };
+    }
     
     try {
       await setDoc(doc(db, "coupons", codeUpper), couponData);
@@ -3601,23 +3644,27 @@ function App() {
   };
 
   const handleTogglePromoRule = async (ruleName, currentVal) => {
-    try {
-      const docRef = doc(db, "configs", "delivery_promos");
-      const updatedVal = !currentVal;
-      if (ruleName === 'promoDelivery30') {
-        setPromoDelivery30Enabled(updatedVal);
-        await setDoc(docRef, { promoDelivery30Enabled: updatedVal }, { merge: true });
-      } else if (ruleName === 'promoFoodFree') {
-        setPromoFoodFreeEnabled(updatedVal);
-        await setDoc(docRef, { promoFoodFreeEnabled: updatedVal }, { merge: true });
-      } else if (ruleName === 'promoGroceryFree') {
-        setPromoGroceryFreeEnabled(updatedVal);
-        await setDoc(docRef, { promoGroceryFreeEnabled: updatedVal }, { merge: true });
+    let targetPromoType = ruleName;
+    if (ruleName === 'promoDelivery30') {
+      targetPromoType = 'discount_delivery_percent';
+    } else if (ruleName === 'promoFoodFree') {
+      targetPromoType = 'free_delivery_food';
+    } else if (ruleName === 'promoGroceryFree') {
+      targetPromoType = 'free_delivery_grocery';
+    }
+
+    const coupon = coupons.find(c => c.isDeliveryPromo && c.deliveryPromoType === targetPromoType);
+    if (coupon) {
+      try {
+        const docRef = doc(db, "coupons", coupon.firestoreId);
+        await updateDoc(docRef, { isActive: !currentVal });
+        showToast("Delivery promotional rule updated successfully!");
+      } catch (err) {
+        console.error("Error toggling delivery promo coupon:", err);
+        alert(`Failed to save toggle: ${err.message}`);
       }
-      showToast("Delivery promotional rule updated successfully!");
-    } catch (err) {
-      console.error("Error toggling delivery promo:", err);
-      alert(`Failed to save toggle: ${err.message}`);
+    } else {
+      alert(`No delivery promotion rule document of type "${targetPromoType}" found. Please create one in the Coupons Dashboard first!`);
     }
   };
 
@@ -4182,23 +4229,17 @@ function App() {
               let fee = 33; // Default fallback (standard 2km base)
               let originalFee = 33;
 
+              const activeDeliveryPromos = coupons.filter(c => c.isDeliveryPromo && c.isActive);
+
               if (dist !== null) {
                 distanceText = isDistanceLoading
                   ? ' (Calculating route...)'
                   : ` (${dist.toFixed(2)} km)`;
                 const rates = calculateDeliveryRates(dist);
                 originalFee = rates.customerCharge;
-                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee, {
-                  promoDelivery30Enabled,
-                  promoFoodFreeEnabled,
-                  promoGroceryFreeEnabled
-                });
+                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee, activeDeliveryPromos);
               } else {
-                fee = getPromotionalDeliveryFee(subtotal, cart, 33, {
-                  promoDelivery30Enabled,
-                  promoFoodFreeEnabled,
-                  promoGroceryFreeEnabled
-                });
+                fee = getPromotionalDeliveryFee(subtotal, cart, 33, activeDeliveryPromos);
               }
 
               // Check which delivery promo is applied
@@ -4210,12 +4251,16 @@ function App() {
                 ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
               );
 
-              if (promoFoodFreeEnabled && subtotal > 999 && hasFoodItems && originalFee > 0) {
-                promoNotification = `🎉 Delivery is FREE because your cart is above ₹999 and contains Food items!`;
-              } else if (promoGroceryFreeEnabled && subtotal > 1999 && hasGroceryItems && originalFee > 0) {
-                promoNotification = `🎉 Delivery is FREE because your cart is above ₹1999 and contains Grocery items!`;
-              } else if (promoDelivery30Enabled && subtotal > 599 && originalFee > 0) {
-                promoNotification = `🎉 You saved 30% on delivery because your cart value is above ₹599!`;
+              const foodRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'free_delivery_food');
+              const groceryRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'free_delivery_grocery');
+              const discountRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'discount_delivery_percent');
+
+              if (foodRule && subtotal > (foodRule.minCart ?? 999) && hasFoodItems && originalFee > 0) {
+                promoNotification = `🎉 Delivery is FREE because your cart is above ₹${foodRule.minCart ?? 999} and contains Food items!`;
+              } else if (groceryRule && subtotal > (groceryRule.minCart ?? 1999) && hasGroceryItems && originalFee > 0) {
+                promoNotification = `🎉 Delivery is FREE because your cart is above ₹${groceryRule.minCart ?? 1999} and contains Grocery items!`;
+              } else if (discountRule && subtotal > (discountRule.minCart ?? 599) && originalFee > 0) {
+                promoNotification = `🎉 You saved ${discountRule.discount ?? 30}% on delivery because your cart value is above ₹${discountRule.minCart ?? 599}!`;
               }
 
               const totalAmount = subtotal + fee - appliedDiscount;
@@ -7963,6 +8008,65 @@ function App() {
                   
                   <form onSubmit={handleAddCoupon} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Purpose</label>
+                      <select
+                        value={newCouponPurpose}
+                        onChange={(e) => {
+                          setNewCouponPurpose(e.target.value);
+                          if (e.target.value === 'delivery') {
+                            setNewCouponType('percentage');
+                            // Prepopulate default delivery promo fields
+                            setNewDeliveryPromoType('discount_delivery_percent');
+                            setNewCouponCode('DELIVERY30');
+                            setNewCouponMinCart('599');
+                            setNewCouponDiscount('30');
+                          } else {
+                            setNewCouponCode('');
+                            setNewCouponMinCart('');
+                            setNewCouponDiscount('');
+                          }
+                        }}
+                        className="custom-input"
+                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                      >
+                        <option value="standard">Standard Discount Coupon</option>
+                        <option value="delivery">Delivery Promotion Rule</option>
+                      </select>
+                    </div>
+
+                    {newCouponPurpose === 'delivery' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Delivery Rule Type</label>
+                        <select
+                          value={newDeliveryPromoType}
+                          onChange={(e) => {
+                            const ruleType = e.target.value;
+                            setNewDeliveryPromoType(ruleType);
+                            if (ruleType === 'discount_delivery_percent') {
+                              setNewCouponCode('DELIVERY30');
+                              setNewCouponMinCart('599');
+                              setNewCouponDiscount('30');
+                            } else if (ruleType === 'free_delivery_food') {
+                              setNewCouponCode('DELIVERYFOOD');
+                              setNewCouponMinCart('999');
+                              setNewCouponDiscount('100');
+                            } else if (ruleType === 'free_delivery_grocery') {
+                              setNewCouponCode('DELIVERYGROCERY');
+                              setNewCouponMinCart('1999');
+                              setNewCouponDiscount('100');
+                            }
+                          }}
+                          className="custom-input"
+                          style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                        >
+                          <option value="discount_delivery_percent">Percentage Delivery Discount</option>
+                          <option value="free_delivery_food">FREE Delivery on Food categories</option>
+                          <option value="free_delivery_grocery">FREE Delivery on Grocery categories</option>
+                        </select>
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Code</label>
                       <input
                         type="text"
@@ -7975,31 +8079,37 @@ function App() {
                       />
                     </div>
                     
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
-                      <select
-                        value={newCouponType}
-                        onChange={(e) => setNewCouponType(e.target.value)}
-                        className="custom-input"
-                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                      >
-                        <option value="flat">Flat Discount (₹)</option>
-                        <option value="percentage">Percentage Discount (%)</option>
-                      </select>
-                    </div>
+                    {newCouponPurpose === 'standard' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
+                        <select
+                          value={newCouponType}
+                          onChange={(e) => setNewCouponType(e.target.value)}
+                          className="custom-input"
+                          style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                        >
+                          <option value="flat">Flat Discount (₹)</option>
+                          <option value="percentage">Percentage Discount (%)</option>
+                        </select>
+                      </div>
+                    )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>
-                        Discount {newCouponType === 'flat' ? 'Value (₹)' : 'Rate (%)'}
+                        {newCouponPurpose === 'delivery' 
+                          ? (newDeliveryPromoType === 'discount_delivery_percent' ? 'Delivery Discount (%)' : 'Delivery Discount (%) [Free = 100]') 
+                          : `Discount ${newCouponType === 'flat' ? 'Value (₹)' : 'Rate (%)'}`}
                       </label>
                       <input
                         type="number"
-                        placeholder={newCouponType === 'flat' ? 'e.g. 100' : 'e.g. 10'}
+                        placeholder={newCouponPurpose === 'delivery' ? '100' : (newCouponType === 'flat' ? 'e.g. 100' : 'e.g. 10')}
                         value={newCouponDiscount}
                         onChange={(e) => setNewCouponDiscount(e.target.value)}
                         className="custom-input"
                         style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
                         min="1"
+                        max="100"
+                        disabled={newCouponPurpose === 'delivery' && newDeliveryPromoType !== 'discount_delivery_percent'}
                         required
                       />
                     </div>
@@ -8017,7 +8127,7 @@ function App() {
                       />
                     </div>
 
-                    {newCouponType === 'percentage' && (
+                    {newCouponPurpose === 'standard' && newCouponType === 'percentage' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Max Discount Limit (₹)</label>
                         <input
@@ -8067,12 +8177,23 @@ function App() {
                           .map(c => (
                             <tr key={c.firestoreId}>
                               <td>
-                                <strong style={{ color: 'var(--color-primary)', letterSpacing: '0.5px' }}>{c.code}</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                  <strong style={{ color: 'var(--color-primary)', letterSpacing: '0.5px' }}>{c.code}</strong>
+                                  {c.isDeliveryPromo && (
+                                    <span style={{ fontSize: '9px', fontWeight: '800', background: 'rgba(0, 255, 242, 0.1)', color: 'var(--color-primary)', border: '1px solid rgba(0, 255, 242, 0.2)', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase' }}>
+                                      DELIVERY RULE
+                                    </span>
+                                  )}
+                                </div>
                               </td>
-                              <td style={{ textTransform: 'capitalize' }}>{c.type}</td>
+                              <td style={{ textTransform: 'capitalize' }}>
+                                {c.isDeliveryPromo 
+                                  ? (c.deliveryPromoType === 'discount_delivery_percent' ? 'Delivery Discount' : c.deliveryPromoType === 'free_delivery_food' ? 'Free Food Delivery' : 'Free Grocery Delivery')
+                                  : `${c.type} discount`}
+                              </td>
                               <td>{c.type === 'flat' ? `₹${c.discount}` : `${c.discount}%`}</td>
                               <td>₹{c.minCart || 0}</td>
-                              <td>{c.type === 'percentage' && c.maxDiscount ? `₹${c.maxDiscount}` : 'None'}</td>
+                              <td>{(!c.isDeliveryPromo && c.type === 'percentage' && c.maxDiscount) ? `₹${c.maxDiscount}` : 'None'}</td>
                               <td>
                                 <span className={`badge ${c.isActive ? 'badge-success' : 'badge-danger'}`}>
                                   {c.isActive ? 'Active' : 'Inactive'}
@@ -9520,29 +9641,19 @@ function App() {
                 Promo Codes
               </div>
 
-              {coupons.filter(c => c.isActive).length === 0 ? (
+              {coupons.filter(c => c.isActive && !c.isDeliveryPromo).length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '15px 10px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
                   😔 No active coupons available at the moment.
                 </div>
               ) : (
-                coupons.filter(c => c.isActive).map(c => {
+                coupons.filter(c => c.isActive && !c.isDeliveryPromo).map(c => {
                   const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
                   const meetsMinCart = subtotal >= (c.minCart || 0);
 
                   return (
                     <div
                       key={c.firestoreId}
-                      style={{
-                        display: 'flex',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: `1px solid ${copiedCode === c.code ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.08)'}`,
-                        borderRadius: '14px',
-                        overflow: 'hidden',
-                        position: 'relative',
-                        boxShadow: copiedCode === c.code ? '0 0 15px rgba(0, 255, 242, 0.25)' : '0 4px 12px rgba(0, 0, 0, 0.15)',
-                        transition: 'all 0.25s ease',
-                        cursor: 'pointer'
-                      }}
+                      className={`pixigo-coupon-card ${copiedCode === c.code ? 'applied' : ''}`}
                       onClick={() => {
                         navigator.clipboard.writeText(c.code);
                         setCouponCode(c.code);
@@ -9550,92 +9661,48 @@ function App() {
                         setTimeout(() => setCopiedCode(null), 2000);
                         showToast(`Coupon "${c.code}" applied to checkout!`);
                       }}
-                      onMouseEnter={(e) => {
-                        if (copiedCode !== c.code) {
-                          e.currentTarget.style.transform = 'translateY(-2px)';
-                          e.currentTarget.style.borderColor = 'var(--color-primary)';
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)';
-                          e.currentTarget.style.boxShadow = '0 8px 20px rgba(0, 255, 242, 0.15)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (copiedCode !== c.code) {
-                          e.currentTarget.style.transform = 'none';
-                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
-                        }
-                      }}
                     >
                       {/* Left side color accent strip depending on meetsMinCart */}
-                      <div style={{
-                        width: '6px',
-                        background: meetsMinCart 
-                          ? 'linear-gradient(180deg, #10b981 0%, #059669 100%)' 
-                          : 'linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%)',
-                        transition: 'background 0.3s'
-                      }}></div>
+                      <div 
+                        className="pixigo-coupon-accent-strip"
+                        style={{
+                          background: meetsMinCart 
+                            ? 'linear-gradient(180deg, #10b981 0%, #059669 100%)' 
+                            : 'linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%)'
+                        }}
+                      ></div>
 
                       {/* Card Content body */}
-                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', color: '#ffffff' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', fontWeight: '800', color: meetsMinCart ? '#10b981' : 'rgba(255, 255, 255, 0.4)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                      <div className="pixigo-coupon-body">
+                        <div className="pixigo-coupon-header">
+                          <span className="pixigo-coupon-type-badge" style={{ color: meetsMinCart ? '#10b981' : 'rgba(255, 255, 255, 0.4)' }}>
                             {c.type === 'flat' ? 'Flat Discount' : 'Percentage Off'}
                           </span>
                           
                           {/* Copy status action badge */}
                           {copiedCode === c.code ? (
-                            <span style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              background: 'rgba(16, 185, 129, 0.15)',
-                              border: '1px solid #10b981',
-                              color: '#34d399',
-                              padding: '2px 8px',
-                              borderRadius: '20px',
-                              fontSize: '11px',
-                              fontWeight: '700'
-                            }}>
+                            <span className="pixigo-coupon-applied-badge">
                               ✓ APPLIED
                             </span>
                           ) : (
-                            <span style={{
-                              background: 'rgba(255, 255, 255, 0.05)',
-                              border: '1px dashed rgba(255, 255, 255, 0.2)',
-                              color: 'var(--color-primary)',
-                              padding: '3px 10px',
-                              borderRadius: '8px',
-                              fontSize: '12px',
-                              fontWeight: 'bold',
-                              fontFamily: 'monospace',
-                              letterSpacing: '0.5px'
-                            }}>
+                            <span className="pixigo-coupon-code-badge">
                               {c.code}
                             </span>
                           )}
                         </div>
 
-                        <div>
-                          <h4 style={{ fontSize: '20px', fontWeight: '800', color: '#ffffff', margin: 0 }}>
+                        <div className="pixigo-coupon-detail-section">
+                          <h4 className="pixigo-coupon-title">
                             {c.type === 'flat' ? `₹${c.discount} OFF` : `${c.discount}% OFF`}
                           </h4>
-                          <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.6)', margin: '4px 0 0', lineHeight: '1.4' }}>
+                          <p className="pixigo-coupon-desc">
                             {c.type === 'flat' 
                               ? `Save flat ₹${c.discount} on your total order value.` 
                               : `Get ${c.discount}% off up to ₹${c.maxDiscount || 50} on your subtotal.`}
                           </p>
                         </div>
 
-                        <div style={{
-                          borderTop: '1px dashed rgba(255, 255, 255, 0.15)',
-                          paddingTop: '8px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          fontSize: '11px',
-                          color: 'rgba(255, 255, 255, 0.5)'
-                        }}>
+                        <div className="pixigo-coupon-footer">
                           <div>
                             Min. Cart: <strong style={{ color: '#ffffff' }}>₹{c.minCart || 0}</strong>
                           </div>
@@ -9652,7 +9719,7 @@ function App() {
               )}
 
               {/* Delivery Discounts Section Header */}
-              {(promoDelivery30Enabled || promoFoodFreeEnabled || promoGroceryFreeEnabled) && (
+              {coupons.filter(c => c.isDeliveryPromo && c.isActive).length > 0 && (
                 <div style={{ fontSize: '11px', fontWeight: '800', color: 'var(--color-primary)', letterSpacing: '1px', textTransform: 'uppercase', marginTop: '12px', marginBottom: '-4px', opacity: 0.8 }}>
                   Delivery Discounts (Auto-Applied)
                 </div>
@@ -9668,70 +9735,79 @@ function App() {
                   ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
                 );
 
-                const deliveryPromos = [
-                  {
-                    title: '30% Delivery Discount',
-                    desc: 'Apply 30% discount on the delivery fee for orders above ₹599.',
-                    minCart: 599,
-                    isActive: subtotal > 599,
-                    enabled: promoDelivery30Enabled,
-                    statusText: subtotal > 599 ? '✓ Auto-applied' : `✗ Needs ₹${599 - subtotal} more`,
-                    gradient: 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)'
-                  },
-                  {
-                    title: 'FREE Food Delivery',
-                    desc: 'FREE delivery for orders above ₹999 containing Food or Bakery items.',
-                    minCart: 999,
-                    isActive: subtotal > 999 && hasFoodItems,
-                    enabled: promoFoodFreeEnabled,
-                    statusText: (subtotal > 999 && hasFoodItems) 
-                      ? '✓ Auto-applied' 
+                const deliveryPromosFromDb = coupons.filter(c => c.isDeliveryPromo && c.isActive);
+
+                const deliveryPromos = deliveryPromosFromDb.map(c => {
+                  let title = '';
+                  let desc = '';
+                  let isPromoActive = false;
+                  let statusText = '';
+                  let gradient = '';
+
+                  if (c.deliveryPromoType === 'discount_delivery_percent') {
+                    title = `${c.discount}% Delivery Discount`;
+                    desc = `Apply ${c.discount}% discount on the delivery fee for orders above ₹${c.minCart}.`;
+                    isPromoActive = subtotal > c.minCart;
+                    statusText = subtotal > c.minCart ? '✓ Auto-applied' : `✗ Needs ₹${c.minCart - subtotal} more`;
+                    gradient = 'linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%)';
+                  } else if (c.deliveryPromoType === 'free_delivery_food') {
+                    title = 'FREE Food Delivery';
+                    desc = `FREE delivery for orders above ₹${c.minCart} containing Food or Bakery items.`;
+                    isPromoActive = subtotal > c.minCart && hasFoodItems;
+                    statusText = (subtotal > c.minCart && hasFoodItems)
+                      ? '✓ Auto-applied'
                       : (!hasFoodItems && cart.length > 0)
                         ? '✗ Add Food/Bakery items'
-                        : `✗ Needs ₹${999 - subtotal} more`,
-                    gradient: 'linear-gradient(180deg, #10b981 0%, #047857 100%)'
-                  },
-                  {
-                    title: 'FREE Grocery Delivery',
-                    desc: 'FREE delivery for orders above ₹1999 containing Grocery or Kirana items.',
-                    minCart: 1999,
-                    isActive: subtotal > 1999 && hasGroceryItems,
-                    enabled: promoGroceryFreeEnabled,
-                    statusText: (subtotal > 1999 && hasGroceryItems)
+                        : `✗ Needs ₹${c.minCart - subtotal} more`;
+                    gradient = 'linear-gradient(180deg, #10b981 0%, #047857 100%)';
+                  } else if (c.deliveryPromoType === 'free_delivery_grocery') {
+                    title = 'FREE Grocery Delivery';
+                    desc = `FREE delivery for orders above ₹${c.minCart} containing Grocery or Kirana items.`;
+                    isPromoActive = subtotal > c.minCart && hasGroceryItems;
+                    statusText = (subtotal > c.minCart && hasGroceryItems)
                       ? '✓ Auto-applied'
                       : (!hasGroceryItems && cart.length > 0)
                         ? '✗ Add Grocery/Kirana items'
-                        : `✗ Needs ₹${1999 - subtotal} more`,
-                    gradient: 'linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%)'
+                        : `✗ Needs ₹${c.minCart - subtotal} more`;
+                    gradient = 'linear-gradient(180deg, #8b5cf6 0%, #6d28d9 100%)';
+                  } else {
+                    title = c.code;
+                    desc = `Delivery promotion with code ${c.code} for orders above ₹${c.minCart}.`;
+                    isPromoActive = subtotal > c.minCart;
+                    statusText = subtotal > c.minCart ? '✓ Auto-applied' : `✗ Needs ₹${c.minCart - subtotal} more`;
+                    gradient = 'linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%)';
                   }
-                ].filter(p => p.enabled);
+
+                  return {
+                    code: c.code,
+                    title,
+                    desc,
+                    minCart: c.minCart,
+                    isActive: isPromoActive,
+                    statusText,
+                    gradient
+                  };
+                });
 
                 return deliveryPromos.map((promo, idx) => {
                   return (
                     <div
                       key={`del-promo-${idx}`}
-                      style={{
-                        display: 'flex',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: `1px solid ${promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.08)'}`,
-                        borderRadius: '14px',
-                        overflow: 'hidden',
-                        position: 'relative',
-                        boxShadow: promo.isActive ? '0 0 15px rgba(0, 255, 242, 0.25)' : '0 4px 12px rgba(0, 0, 0, 0.15)',
-                        transition: 'all 0.25s ease'
-                      }}
+                      className={`pixigo-coupon-card ${promo.isActive ? 'applied' : ''}`}
                     >
                       {/* Left accent strip */}
-                      <div style={{
-                        width: '6px',
-                        background: promo.gradient,
-                        opacity: promo.isActive ? 1 : 0.4
-                      }}></div>
+                      <div 
+                        className="pixigo-coupon-accent-strip" 
+                        style={{
+                          background: promo.gradient,
+                          opacity: promo.isActive ? 1 : 0.4
+                        }}
+                      ></div>
 
                       {/* Card Content body */}
-                      <div style={{ flex: 1, padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '8px', color: '#ffffff' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '11px', fontWeight: '800', color: promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.4)', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                      <div className="pixigo-coupon-body">
+                        <div className="pixigo-coupon-header">
+                          <span className="pixigo-coupon-type-badge" style={{ color: promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.4)' }}>
                             {promo.title}
                           </span>
                           
@@ -9745,27 +9821,20 @@ function App() {
                             borderRadius: '20px',
                             fontSize: '10px',
                             fontWeight: '700',
-                            textTransform: 'uppercase'
+                            textTransform: 'uppercase',
+                            flexShrink: 0
                           }}>
                             {promo.isActive ? 'ACTIVE' : 'AUTO-APPLY'}
                           </span>
                         </div>
 
-                        <div>
-                          <p style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.7)', margin: '4px 0 0', lineHeight: '1.4' }}>
+                        <div className="pixigo-coupon-detail-section">
+                          <p className="pixigo-coupon-desc" style={{ color: 'rgba(255, 255, 255, 0.7)', marginTop: 0 }}>
                             {promo.desc}
                           </p>
                         </div>
 
-                        <div style={{
-                          borderTop: '1px dashed rgba(255, 255, 255, 0.15)',
-                          paddingTop: '8px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          fontSize: '11px',
-                          color: 'rgba(255, 255, 255, 0.5)'
-                        }}>
+                        <div className="pixigo-coupon-footer">
                           <div>
                             Min. Cart: <strong style={{ color: '#ffffff' }}>₹{promo.minCart}</strong>
                           </div>

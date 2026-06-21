@@ -6206,5 +6206,150 @@
   color: var(--color-text-muted) !important;
 }
 
+/* ==================== CUSTOM NEON PROMO & COUPON CARDS ==================== */
+.pixigo-coupon-card {
+  display: flex;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: all 0.25s ease;
+  cursor: pointer;
+  height: auto;
+  min-height: fit-content;
+  flex-shrink: 0;
+}
 
+.pixigo-coupon-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-primary);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 20px rgba(0, 255, 242, 0.15);
+}
 
+.pixigo-coupon-card.applied {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 15px rgba(0, 255, 242, 0.25);
+}
+
+.pixigo-coupon-accent-strip {
+  width: 6px;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.pixigo-coupon-body {
+  flex: 1;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: #ffffff;
+  min-width: 0; /* Ensures content text wraps correctly on mobile */
+  flex-shrink: 0;
+}
+
+.pixigo-coupon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.pixigo-coupon-type-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.pixigo-coupon-code-badge {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: var(--color-primary);
+  padding: 3px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: bold;
+  font-family: monospace;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.pixigo-coupon-applied-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+  color: #34d399;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.pixigo-coupon-detail-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pixigo-coupon-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.pixigo-coupon-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.pixigo-coupon-footer {
+  border-top: 1px dashed rgba(255, 255, 255, 0.15);
+  padding-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+  .pixigo-coupon-card {
+    border-radius: 12px;
+  }
+  .pixigo-coupon-body {
+    padding: 12px 14px;
+    gap: 6px;
+  }
+  .pixigo-coupon-title {
+    font-size: 16px;
+  }
+  .pixigo-coupon-desc {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .pixigo-coupon-footer {
+    font-size: 10px;
+  }
+  .pixigo-coupon-code-badge {
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+  .pixigo-coupon-applied-badge {
+    padding: 1px 6px;
+    font-size: 10px;
+  }
+}

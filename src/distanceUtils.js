@@ -100,41 +100,62 @@ export const fetchRoadDistance = async (shopLat, shopLng, customerLat, customerL
  * @param {number} subtotal Cart item value subtotal
  * @param {Array} cartItems Array of cart item objects
  * @param {number} baseDeliveryFee Computed base delivery charge
- * @param {object} options Enable/disable toggles for rules
+ * @param {Array|object} activeDeliveryPromos List of active delivery promo coupons or options object
  * @returns {number} Final delivery fee for the customer
  */
-export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee, options = {}) => {
-  const {
-    promoDelivery30Enabled = true,
-    promoFoodFreeEnabled = true,
-    promoGroceryFreeEnabled = true
-  } = options;
-
+export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee, activeDeliveryPromos = []) => {
   if (baseDeliveryFee <= 0) return 0;
 
-  // 1. Order Value Above ₹999 & contains Food items -> FREE
-  if (promoFoodFreeEnabled) {
+  let foodRule = null;
+  let groceryRule = null;
+  let discountRule = null;
+
+  if (Array.isArray(activeDeliveryPromos)) {
+    foodRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'free_delivery_food');
+    groceryRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'free_delivery_grocery');
+    discountRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'discount_delivery_percent');
+  } else if (activeDeliveryPromos && typeof activeDeliveryPromos === 'object') {
+    // Fallback support for old options object parameter format
+    if (activeDeliveryPromos.promoFoodFreeEnabled) {
+      foodRule = { minCart: 999 };
+    }
+    if (activeDeliveryPromos.promoGroceryFreeEnabled) {
+      groceryRule = { minCart: 1999 };
+    }
+    if (activeDeliveryPromos.promoDelivery30Enabled) {
+      discountRule = { minCart: 599, discount: 30 };
+    }
+  }
+
+  // 1. FREE Food Delivery: Order Value Above threshold & contains Food items
+  if (foodRule) {
     const hasFoodItems = cartItems.some(item => 
       ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
     );
-    if (subtotal > 999 && hasFoodItems) {
+    const minCartVal = foodRule.minCart ?? 999;
+    if (subtotal > minCartVal && hasFoodItems) {
       return 0;
     }
   }
 
-  // 2. Order Value Above ₹1999 & contains Grocery items -> FREE
-  if (promoGroceryFreeEnabled) {
+  // 2. FREE Grocery Delivery: Order Value Above threshold & contains Grocery items
+  if (groceryRule) {
     const hasGroceryItems = cartItems.some(item => 
       ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
     );
-    if (subtotal > 1999 && hasGroceryItems) {
+    const minCartVal = groceryRule.minCart ?? 1999;
+    if (subtotal > minCartVal && hasGroceryItems) {
       return 0;
     }
   }
 
-  // 3. Order Value Above ₹599 -> 30% Discount on Delivery Fee
-  if (promoDelivery30Enabled && subtotal > 599) {
-    return Math.round(baseDeliveryFee * 0.7); // 30% discount
+  // 3. Percentage Discount on Delivery Fee: Order Value Above threshold
+  if (discountRule) {
+    const minCartVal = discountRule.minCart ?? 599;
+    if (subtotal > minCartVal) {
+      const pct = discountRule.discount ?? 30;
+      return Math.round(baseDeliveryFee * (1 - pct / 100));
+    }
   }
 
   return baseDeliveryFee;
