@@ -34,7 +34,7 @@ const INITIAL_PRODUCTS = [
 ];
 
 const INITIAL_SHOPS = [
-  { id: 'merch_bake_house', storeName: 'Bake House', name: 'Bake House', category: 'Bakery', phone: '9251054064', address: 'Collectorate Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '23:00', lat: 24.8887, lng: 74.6269 },
+  { id: 'merch_bake_house', storeName: 'Bake House', name: 'Bake House', category: 'Bakery', phone: '9251054064', email: 'lavsharma.it25@gmail.com', address: 'Collectorate Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '23:00', lat: 24.8887, lng: 74.6269 },
   { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Bojunda, Chittorgarh', verified: true, docs: 'Approved', openTime: '07:00', closeTime: '22:00', lat: 24.8887, lng: 74.6269 },
   { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Police Line, Chittorgarh', verified: true, docs: 'Approved', openTime: '06:00', closeTime: '21:00', lat: 24.8887, lng: 74.6269 },
   { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'Birla Hospital Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '11:00', closeTime: '23:30', lat: 24.8887, lng: 74.6269 },
@@ -388,6 +388,7 @@ function App() {
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isAboutDeveloperOpen, setIsAboutDeveloperOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [adminSubView, setAdminSubView] = useState('sales'); // sales | orders | shops | riders
   const [allAdmins, setAllAdmins] = useState([]);
   const [allCustomers, setAllCustomers] = useState([]);
@@ -1573,7 +1574,7 @@ function App() {
   }, [riderActiveJobs.length, activeTab]);
 
   const prevPoolJobsCount = useRef(0);
-  const availablePoolJobs = orders.filter(o => o.status === 'ACCEPTED' && !o.deliveryPartnerId);
+  const availablePoolJobs = orders.filter(o => (o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId);
 
   useEffect(() => {
     if (activeTab === 'delivery') {
@@ -2573,6 +2574,25 @@ function App() {
     }
   };
 
+  const handleMerchantMarkPrepared = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Update local state first
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'READY_FOR_PICKUP' } : o));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, { status: 'READY_FOR_PICKUP' });
+        showToast(`Order ${orderId} marked as prepared & ready for pickup!`);
+      } catch (err) {
+        console.error("Error marking order as prepared:", err);
+        showToast("Failed to update order status.");
+      }
+    }
+  };
+
   // Admin: Assign Rider to Order
   const handleAdminAssignRider = async (orderId, riderId) => {
     const rider = deliveryPartners.find(d => d.id === riderId);
@@ -2655,7 +2675,6 @@ function App() {
       if (o.id === orderId) {
         return {
           ...o,
-          status: 'ASSIGNED',
           deliveryPartnerId: user.uid,
           deliveryPartnerName: rider.name,
           riderAccepted: true
@@ -2668,7 +2687,6 @@ function App() {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
         await updateDoc(orderRef, {
-          status: 'ASSIGNED',
           deliveryPartnerId: user.uid,
           deliveryPartnerName: rider.name,
           riderId: user.uid,
@@ -2716,6 +2734,25 @@ function App() {
       } catch (err) {
         console.error("Error accepting job in Firestore:", err);
         showToast("Failed to accept run. Please try again.");
+      }
+    }
+  };
+
+  const handleRiderStartRide = async (orderId) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    // Update local state first
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'OUT_FOR_DELIVERY' } : o));
+
+    if (order.firestoreId) {
+      try {
+        const orderRef = doc(db, "orders", order.firestoreId);
+        await updateDoc(orderRef, { status: 'OUT_FOR_DELIVERY' });
+        showToast(`Ride started for Order ${orderId}! Status updated to Dispatched.`);
+      } catch (err) {
+        console.error("Error starting ride:", err);
+        showToast("Failed to update status. Please try again.");
       }
     }
   };
@@ -5226,9 +5263,10 @@ function App() {
                             <span className="eta-countdown-sidebar">
                               {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' :
                                 trackedOrder.status?.startsWith('CANCELLED') ? 'Order Cancelled' :
-                                  trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
-                                    trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
-                                      'Awaiting Confirmation'}
+                                  ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in ~10 mins' :
+                                    trackedOrder.status === 'READY_FOR_PICKUP' ? 'Prepared, ready for pickup!' :
+                                      trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
+                                        'Awaiting Confirmation'}
                             </span>
                           </div>
 
@@ -5434,22 +5472,34 @@ function App() {
                         <span style={{ fontSize: '13px' }}>Collectorate Road, Chittorgarh, Rajasthan - 312001</span>
                       </div>
                     </div>
+                    <div className="contact-item" style={{ cursor: 'pointer' }} onClick={() => setIsTermsModalOpen(true)}>
+                      <Shield size={16} className="contact-item-icon" style={{ color: 'var(--color-accent-yellow)' }} />
+                      <div className="contact-item-text">
+                        <strong style={{ display: 'block', color: '#ffffff', marginBottom: '2px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Privacy & Terms</strong>
+                        <span style={{ color: 'var(--color-accent-yellow)', textDecoration: 'underline', fontSize: '13px', fontWeight: '600' }}>Privacy Policy & Terms</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Bottom Copyright & Socials */}
-              <div className="footer-bottom">
-                <span className="footer-bottom-text">
-                  © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <span style={{ color: '#ffffff', fontWeight: '600' }}>ChittorTech</span>.
+              <div className="footer-bottom" style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)', textAlign: 'center', lineHeight: '1.5' }}>
+                  By accessing or using this website, you agree to be bound by our <span style={{ color: 'var(--color-accent-yellow)', cursor: 'pointer', textDecoration: 'underline', fontWeight: '600' }} onClick={() => setIsTermsModalOpen(true)}>Privacy Policy & Terms of Service</span>.
                 </span>
-                <div className="footer-socials">
-                  <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>
-                    <MessageCircle size={18} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+                  <span className="footer-bottom-text">
+                    © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <span style={{ color: '#ffffff', fontWeight: '600' }}>ChittorTech</span>.
                   </span>
-                  <span className="social-badge" title="Call Team" onClick={() => window.open('tel:+919251054064', '_blank')}>
-                    <Phone size={18} />
-                  </span>
+                  <div className="footer-socials">
+                    <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>
+                      <MessageCircle size={18} />
+                    </span>
+                    <span className="social-badge" title="Call Team" onClick={() => window.open('tel:+919251054064', '_blank')}>
+                      <Phone size={18} />
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -8001,54 +8051,103 @@ function App() {
                             </div>
                           ) : (
                             <>
-                              <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                                {riderTrackingOrderId === o.id ? (
+                              {['ACCEPTED', 'READY_FOR_PICKUP'].includes(o.status) ? (
+                                <div className="rider-preparation-controls" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                  {o.status === 'ACCEPTED' ? (
+                                    <div style={{
+                                      background: 'rgba(245, 158, 11, 0.1)',
+                                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                                      borderRadius: '8px',
+                                      padding: '10px',
+                                      fontSize: '12px',
+                                      color: '#f59e0b',
+                                      textAlign: 'center',
+                                      fontWeight: '600'
+                                    }}>
+                                      ⏳ Kitchen is preparing order...
+                                    </div>
+                                  ) : (
+                                    <div style={{
+                                      background: 'rgba(74, 222, 128, 0.1)',
+                                      border: '1px solid rgba(74, 222, 128, 0.3)',
+                                      borderRadius: '8px',
+                                      padding: '10px',
+                                      fontSize: '12px',
+                                      color: '#4ade80',
+                                      textAlign: 'center',
+                                      fontWeight: '600'
+                                    }}>
+                                      ✅ Order is Prepared & Ready for Pickup!
+                                    </div>
+                                  )}
                                   <button
                                     className="neon-btn"
-                                    style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
-                                    onClick={handleStopRiderTracking}
+                                    onClick={() => handleRiderStartRide(o.id)}
+                                    disabled={o.status === 'ACCEPTED'}
+                                    style={{
+                                      width: '100%',
+                                      background: o.status === 'ACCEPTED' ? 'rgba(255,255,255,0.05)' : 'var(--color-primary)',
+                                      borderColor: o.status === 'ACCEPTED' ? 'var(--color-border)' : 'var(--color-primary)',
+                                      color: o.status === 'ACCEPTED' ? 'var(--color-text-muted)' : '#000000',
+                                      fontWeight: 'bold',
+                                      cursor: o.status === 'ACCEPTED' ? 'not-allowed' : 'pointer'
+                                    }}
                                   >
-                                    🔴 Stop Live GPS Tracking
-                                  </button>
-                                ) : (
-                                  <button
-                                    className="neon-btn"
-                                    style={{ flexGrow: 1 }}
-                                    onClick={() => handleStartRiderTracking(o.id)}
-                                  >
-                                    🟢 Start Live Ride Tracking
-                                  </button>
-                                )}
-                              </div>
-
-                              <div className="job-otp-form" style={{ marginTop: '20px' }}>
-                                <input
-                                  type="text"
-                                  placeholder="Enter Customer Delivery OTP"
-                                  value={riderInputOTP}
-                                  onChange={(e) => setRiderInputOTP(e.target.value)}
-                                  className="custom-input"
-                                />
-                                <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                                  <button
-                                    className="neon-btn"
-                                    onClick={() => handleRiderCompleteDelivery(o.id)}
-                                    style={{ flexGrow: 2 }}
-                                  >
-                                    {o.paymentMethod === 'COD' 
-                                      ? 'Complete Delivery & Collect Cash (COD)' 
-                                      : 'Complete Delivery (Paid Online)'}
-                                  </button>
-                                  <button
-                                    className="neon-btn"
-                                    onClick={() => setActiveQrModalOrder(o)}
-                                    style={{ flexGrow: 1, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                    title="Show QR Code"
-                                  >
-                                    📱 Show QR
+                                    🚀 Start Ride (Dispatch Order)
                                   </button>
                                 </div>
-                              </div>
+                              ) : (
+                                <>
+                                  <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                                    {riderTrackingOrderId === o.id ? (
+                                      <button
+                                        className="neon-btn"
+                                        style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
+                                        onClick={handleStopRiderTracking}
+                                      >
+                                        🔴 Stop Live GPS Tracking
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="neon-btn"
+                                        style={{ flexGrow: 1 }}
+                                        onClick={() => handleStartRiderTracking(o.id)}
+                                      >
+                                        🟢 Start Live Ride Tracking
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <div className="job-otp-form" style={{ marginTop: '20px' }}>
+                                    <input
+                                      type="text"
+                                      placeholder="Enter Customer Delivery OTP"
+                                      value={riderInputOTP}
+                                      onChange={(e) => setRiderInputOTP(e.target.value)}
+                                      className="custom-input"
+                                    />
+                                    <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                                      <button
+                                        className="neon-btn"
+                                        onClick={() => handleRiderCompleteDelivery(o.id)}
+                                        style={{ flexGrow: 2 }}
+                                      >
+                                        {o.paymentMethod === 'COD' 
+                                          ? 'Complete Delivery & Collect Cash (COD)' 
+                                          : 'Complete Delivery (Paid Online)'}
+                                      </button>
+                                      <button
+                                        className="neon-btn"
+                                        onClick={() => setActiveQrModalOrder(o)}
+                                        style={{ flexGrow: 1, background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                        title="Show QR Code"
+                                      >
+                                        📱 Show QR
+                                      </button>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </>
                           )}
                         </div>
@@ -8162,7 +8261,7 @@ function App() {
           });
 
           const ongoingMerchantOrders = merchantOrders.filter(o =>
-            ['ACCEPTED', 'ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY'].includes(o.status)
+            ['ACCEPTED', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY', 'DISPATCHED'].includes(o.status)
           );
 
           const pendingMerchantOrders = merchantOrders.filter(o =>
@@ -8378,9 +8477,25 @@ function App() {
                               <span className="badge badge-warning">{o.status}</span>
                             </div>
                           </div>
-                          <div style={{ textAlign: 'right' }}>
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
                             <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{formatINR(o.totalAmount)}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{o.paymentMethod}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.paymentMethod}</div>
+                            {o.status === 'ACCEPTED' && (
+                              <button
+                                className="neon-btn small-btn"
+                                onClick={() => handleMerchantMarkPrepared(o.id)}
+                                style={{
+                                  background: 'var(--color-primary-glow-strong)',
+                                  color: 'var(--color-primary-dark)',
+                                  borderColor: 'var(--color-primary)',
+                                  marginTop: '4px',
+                                  fontSize: '11px',
+                                  padding: '4px 8px'
+                                }}
+                              >
+                                Mark Prepared
+                              </button>
+                            )}
                           </div>
                         </div>
                       ))}
@@ -8472,15 +8587,13 @@ function App() {
                     </div>
                     <div className="form-group">
                       <label>Representing Shop</label>
-                      <select
-                        value={merchantShopSelect}
-                        onChange={(e) => setMerchantShopSelect(e.target.value)}
-                        className="rider-select"
-                      >
-                        {shops.map(s => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
+                      <input
+                        type="text"
+                        value={currentMerchantShopName}
+                        disabled
+                        className="custom-input"
+                        style={{ opacity: 0.8, cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.05)' }}
+                      />
                     </div>
                     <button className="neon-btn" onClick={handleMerchantAddProduct}>
                       Add Product Listing
@@ -9320,6 +9433,14 @@ function App() {
                 <Code size={18} className="text-neon" />
                 <span>About Developer</span>
               </button>
+
+              <button
+                className="mobile-menu-link"
+                onClick={() => { setIsTermsModalOpen(true); setIsMobileMenuOpen(false); }}
+              >
+                <Shield size={18} className="text-neon" />
+                <span>Terms & Disclaimer</span>
+              </button>
             </div>
 
             <div className="divider" style={{ marginTop: 'auto' }}></div>
@@ -9365,8 +9486,8 @@ function App() {
               const getStatusStepIndex = (status) => {
                 const s = status?.toUpperCase() || '';
                 if (s === 'COMPLETED' || s === 'DELIVERED') return 4;
-                if (['ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY'].includes(s)) return 3;
-                if (s === 'ACCEPTED') return 2;
+                if (['PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY', 'DISPATCHED'].includes(s)) return 3;
+                if (['ACCEPTED', 'READY_FOR_PICKUP', 'ASSIGNED'].includes(s)) return 2;
                 return 1;
               };
 
@@ -9379,9 +9500,10 @@ function App() {
                         trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
                           trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
                             trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
-                              trackedOrder.status === 'ASSIGNED' ? 'Arriving in ~10 mins' :
-                                trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
-                                  'Awaiting Confirmation'}
+                              ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in ~10 mins' :
+                                trackedOrder.status === 'READY_FOR_PICKUP' ? 'Prepared, ready for pickup!' :
+                                  trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
+                                    'Awaiting Confirmation'}
                     </span>
                   </div>
 
@@ -9774,6 +9896,107 @@ function App() {
                 <Code size={18} />
                 <span>Visit chittortech.online</span>
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Terms & Disclaimer Modal */}
+      {isTermsModalOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsTermsModalOpen(false)}>
+          <div className="developer-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px', width: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <button className="modal-close-btn" onClick={() => setIsTermsModalOpen(false)}>
+              <X size={20} />
+            </button>
+
+            <div className="developer-modal-header" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div className="developer-logo-wrap" style={{ background: 'rgba(31, 78, 61, 0.1)' }}>
+                <Shield size={36} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium" style={{ marginBottom: '4px' }}>Terms & Disclaimer</h3>
+              <p className="developer-subtitle" style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-muted)', fontWeight: '500' }}>
+                PIXIgo Customer Terms of Service & Legal Disclaimer
+              </p>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '8px' }}>
+                Effective Date: June 15, 2026
+              </div>
+            </div>
+
+            <div className="developer-content" style={{ overflowY: 'auto', paddingRight: '8px', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '13px', lineHeight: '1.6', color: 'var(--color-text-muted)', flexGrow: 1 }}>
+              <p style={{ fontStyle: 'italic', background: 'rgba(31, 78, 61, 0.05)', padding: '12px', borderRadius: '8px', borderLeft: '3px solid var(--color-primary)', color: 'var(--color-text-main)' }}>
+                Welcome to the PIXIgo Mobile Application and Website. By accessing, downloading, or using our platform, you agree to be legally bound by these Terms of Service and Disclaimer. If you do not agree, please do not use the application.
+              </p>
+
+              <h4 style={{ color: 'var(--color-primary)', fontWeight: '700', fontSize: '14px', marginTop: '8px', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>PART A: TERMS OF SERVICE & FAIR USE POLICY</h4>
+              
+              <div>
+                <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>1. Nature of the PIXIgo Platform</h5>
+                <p>PIXIgo is an instant local delivery marketplace platform. PIXIgo does not sell any grocery, food, medicine, or dairy items directly. We connect you with local Merchants and Independent Delivery Partners (Riders) in your vicinity. The respective Merchant from whom you order is solely responsible for the real-time quality, taste, legal compliance, and exact availability of the products.</p>
+              </div>
+
+              <div>
+                <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>2. Order Verification & Pre-OTP Self-Check</h5>
+                <p><strong>CUSTOMER RIGHTS: VERIFICATION BEFORE DELIVERY COMPLETION</strong><br/>
+                Customers have the full right to inspect their parcel and verify the item count before sharing the Secure OTP with the Delivery Rider. Once the OTP is shared, the order will be considered "Successfully Delivered," and no claims regarding short-delivery, missing items, or incorrect quantities will be accepted.</p>
+              </div>
+
+              <div>
+                <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>3. Cancellation, Return, and Refund Policy</h5>
+                <p>PIXIgo is an instant delivery service; therefore, cancellation and refund policies are strictly enforced:</p>
+                <ul style={{ paddingLeft: '20px', margin: '4px 0' }}>
+                  <li><strong>No Automatic Cancellation:</strong> Once an order has been placed and approved by the Merchant, the Customer cannot cancel it directly through the app.</li>
+                  <li><strong>Special Exception Rule:</strong> Orders can only be cancelled under exceptional circumstances (such as excessive delay or incorrect store assignment) after discussing the issue with the PIXIgo Customer Support Team via live chat or phone call.</li>
+                  <li><strong>Merchant Quality Issues:</strong> If you believe a product is damaged, defective, or incorrect, you must report the complaint to PIXIgo Customer Support along with photo or video evidence. PIXIgo will forward the complaint to the Merchant. PIXIgo will only initiate a refund after receiving merchant approval or verification of the error.</li>
+                  <li><strong>Refund Processing Time:</strong> Once a refund is approved, the amount will be credited to your original payment method or bank account within 5-7 business days.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>4. Digital Evidence & Transparency</h5>
+                <p>For the safety of your orders, our backend system records packaging photos and details provided by the Merchant, order pickup proof from the Delivery Rider, and continuous real-time GPS tracking data. In case of any dispute, the records from our system shall be considered final.</p>
+              </div>
+
+              <div>
+                <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>5. Payment Terms and Account Security</h5>
+                <ul style={{ paddingLeft: '20px', margin: '4px 0' }}>
+                  <li><strong>Payment Options:</strong> You can choose to pay online (via UPI, Cards, Netbanking) or choose Cash on Delivery (COD). For COD orders, full payment is mandatory immediately upon delivery.</li>
+                  <li><strong>Account Credentials:</strong> You must keep your PIXIgo account login OTP and credentials strictly confidential. You are solely responsible for any orders and activities performed using your account.</li>
+                </ul>
+              </div>
+
+              <h4 style={{ color: 'var(--color-primary)', fontWeight: '700', fontSize: '14px', marginTop: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>PART B: LEGAL DISCLAIMER</h4>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <p><strong>1. Accuracy of Information:</strong> We make every effort to provide accurate, useful, and updated information on this website. However, we do not guarantee the complete accuracy, reliability, availability, or timeliness of any information.</p>
+                <p><strong>2. Business & Service Info:</strong> Shop timings, operating hours, addresses, mobile numbers, prices, offers, or details may change at any time without prior notice.</p>
+                <p><strong>3. Third-Party Responsibility:</strong> We are not responsible for the products, services, conduct, quality, or activities of any listed shops, businesses, or independent delivery riders.</p>
+                <p><strong>4. Purchases and Transactions:</strong> The platform shall not be responsible for any financial loss, dispute, fraud, or other damages arising from transactions with listed merchants.</p>
+                <p><strong>5. External Links:</strong> We have no control over the content, policies, security, or availability of linked external websites.</p>
+                <p><strong>6. Use at Your Own Risk:</strong> Any use of information, suggestions, or services is entirely at your own risk and responsibility.</p>
+                <p><strong>7. Copyright:</strong> All content, logos, and materials are protected by intellectual property rights. Unauthorized copy or reproduction is strictly prohibited.</p>
+                <p><strong>8. Limitation of Liability:</strong> PIXIgo, its owners, developers, or management shall not be held liable for any loss, damage, or technical issues arising from platform use.</p>
+                <p><strong>9. Jurisdiction:</strong> Any dispute or legal proceeding shall be subject exclusively to the jurisdiction of Chittorgarh, Rajasthan, India.</p>
+                <p><strong>10. Right to Modify:</strong> We reserve the right to modify or update this Disclaimer and Terms at any time without prior notice.</p>
+              </div>
+            </div>
+
+            <div className="developer-footer" style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid var(--color-border)', display: 'flex', gap: '12px' }}>
+              <a
+                href="/PIXIgo_Terms_and_Disclaimer.pdf"
+                download="PIXIgo_Terms_and_Disclaimer.pdf"
+                className="neon-btn developer-cta-btn"
+                style={{ flex: 1, textDecoration: 'none', padding: '10px', fontSize: '13px', background: 'var(--color-primary)', color: '#ffffff' }}
+              >
+                <Download size={16} />
+                <span>Download Policy PDF</span>
+              </a>
+              <button
+                className="secondary-btn"
+                onClick={() => setIsTermsModalOpen(false)}
+                style={{ padding: '10px 20px', fontSize: '13px' }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
