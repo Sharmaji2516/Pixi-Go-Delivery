@@ -6156,15 +6156,16 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  display: flex;
-  justify-content: center;
+  display: block;
 }
 
 .custom-brand-banner-img {
   width: 100%;
+  max-width: 100%;
   height: auto;
   border-radius: 20px;
   display: block;
+  margin: 0 auto;
   box-shadow: 0 8px 24px rgba(31, 78, 61, 0.08);
   transition: max-width 0.3s ease;
 }
