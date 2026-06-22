@@ -11,7 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
-import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee } from './distanceUtils';
+import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight } from './distanceUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -354,6 +354,7 @@ function App() {
   const [bankAccount, setBankAccount] = useState('SBI - A/C 98127391238 (IFSC: SBIN0007204)');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState('item'); // item | shop
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [cart, setCart] = useState([]);
   const [couponCode, setCouponCode] = useState('');
@@ -2510,7 +2511,9 @@ function App() {
 
     const { customerCharge, riderPayout: riderPayoutVal } = calculateDeliveryRates(distanceVal);
     const activeDeliveryPromos = coupons.filter(c => c.isDeliveryPromo && c.isActive);
-    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, activeDeliveryPromos);
+    const cartWeight = getCartTotalWeight(cart);
+    const heavySurcharge = cartWeight > 10 ? (cartWeight - 10) * 2 : 0;
+    const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, activeDeliveryPromos) + heavySurcharge;
 
     const total = cartSubtotal + delCharge - appliedDiscount;
     const comm = Math.round(cartSubtotal * (commissionPercent / 100));
@@ -3869,6 +3872,16 @@ function App() {
     return [...new Set(approved.map(p => p.store))].sort();
   };
 
+  const getSuggestions = () => {
+    const list = searchMode === 'item' ? getUniqueProductNames() : getUniqueStoreNames();
+    if (!searchQuery.trim()) {
+      // Show top recommendations when query is empty
+      return list.slice(0, 8);
+    }
+    const queryLower = searchQuery.toLowerCase();
+    return list.filter(name => name.toLowerCase().includes(queryLower));
+  };
+
   // Filter products by search, mode, category, and veg/non-veg type
   const filteredProducts = products.filter(p => {
     if (p.approved === false) return false;
@@ -3876,9 +3889,9 @@ function App() {
     if (searchQuery.trim() !== '') {
       const queryLower = searchQuery.toLowerCase();
       if (searchMode === 'shop') {
-        matchQuery = p.store.toLowerCase() === queryLower;
+        matchQuery = p.store.toLowerCase().includes(queryLower);
       } else if (searchMode === 'item') {
-        matchQuery = p.name.toLowerCase() === queryLower;
+        matchQuery = p.name.toLowerCase().includes(queryLower);
       } else {
         matchQuery = p.name.toLowerCase().includes(queryLower) ||
           p.store.toLowerCase().includes(queryLower);
@@ -4172,7 +4185,7 @@ function App() {
                 <Bike size={20} className="banner-icon" />
               </div>
               <div className="banner-text-wrap">
-                <div className="banner-title">Delivery in 10 minutes</div>
+                <div className="banner-title">Delivery in few minutes</div>
                 <div className="banner-subtitle">
                   Shipment of {cart.reduce((acc, item) => acc + item.quantity, 0)} item{cart.reduce((acc, item) => acc + item.quantity, 0) > 1 ? 's' : ''}
                 </div>
@@ -4303,6 +4316,8 @@ function App() {
               let originalFee = 33;
 
               const activeDeliveryPromos = coupons.filter(c => c.isDeliveryPromo && c.isActive);
+              const cartWeight = getCartTotalWeight(cart);
+              const heavySurcharge = cartWeight > 10 ? (cartWeight - 10) * 2 : 0;
 
               if (dist !== null) {
                 distanceText = isDistanceLoading
@@ -4310,9 +4325,9 @@ function App() {
                   : ` (${dist.toFixed(2)} km)`;
                 const rates = calculateDeliveryRates(dist);
                 originalFee = rates.customerCharge;
-                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee, activeDeliveryPromos);
+                fee = getPromotionalDeliveryFee(subtotal, cart, originalFee, activeDeliveryPromos) + heavySurcharge;
               } else {
-                fee = getPromotionalDeliveryFee(subtotal, cart, 33, activeDeliveryPromos);
+                fee = getPromotionalDeliveryFee(subtotal, cart, 33, activeDeliveryPromos) + heavySurcharge;
               }
 
               // Check which delivery promo is applied
@@ -4383,6 +4398,22 @@ function App() {
                       </span>
                       <span className="bill-value">{formatINR(subtotal)}</span>
                     </div>
+
+                    <div className="bill-row">
+                      <span className="bill-label">
+                        <span className="bill-label-icon">⚖️</span> Total Weight
+                      </span>
+                      <span className="bill-value" style={{ fontWeight: '600', color: 'var(--color-text-main)' }}>{cartWeight.toFixed(2)} kg</span>
+                    </div>
+
+                    {cartWeight > 10 && (
+                      <div className="bill-row" style={{ color: 'var(--color-accent-yellow-dark)' }}>
+                        <span className="bill-label" style={{ color: 'inherit', fontWeight: '600' }}>
+                          <span className="bill-label-icon">⚠️</span> Heavy load fee (&gt;10kg)
+                        </span>
+                        <span className="bill-value" style={{ fontWeight: 'bold' }}>+{formatINR(heavySurcharge)}</span>
+                      </div>
+                    )}
 
                     <div className="bill-row">
                       <span className="bill-label">
@@ -5157,7 +5188,7 @@ function App() {
           <div className="header-logo">
             <div className="logo-text">
               <div className="logo-brand-name">
-                <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
+                <span className="brand-logo-highlight">PIXI</span><span className="brand-logo-light">go</span>
                 {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
                 {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Manager Console</span>}
                 {activeTab === 'merchant' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Merchant Shop Console</span>}
@@ -5498,35 +5529,52 @@ function App() {
                     </select>
                   </div>
                   <div className="search-input-divider"></div>
-                  <div className="search-input-wrap" style={{ flex: 1 }}>
+                  <div className="search-input-wrap" style={{ flex: 1, position: 'relative' }}>
                     <Search size={18} className="search-bar-icon" />
-                    {searchMode === 'item' ? (
-                      <select
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="search-input custom-select-dropdown"
-                        style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', cursor: 'pointer' }}
-                      >
-                        <option value="" style={{ background: '#121212', color: '#888' }}>-- Select Product --</option>
-                        {getUniqueProductNames().map(name => (
-                          <option key={name} value={name} style={{ background: '#121212', color: '#fff' }}>{name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <select
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="search-input custom-select-dropdown"
-                        style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', cursor: 'pointer' }}
-                      >
-                        <option value="" style={{ background: '#121212', color: '#888' }}>-- Select Shop --</option>
-                        {getUniqueStoreNames().map(store => (
-                          <option key={store} value={store} style={{ background: '#121212', color: '#fff' }}>{store}</option>
-                        ))}
-                      </select>
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setSuggestionsOpen(true);
+                      }}
+                      onFocus={() => setSuggestionsOpen(true)}
+                      onBlur={() => {
+                        // Delay hiding the suggestions so click event on suggestion can be processed
+                        setTimeout(() => setSuggestionsOpen(false), 200);
+                      }}
+                      placeholder={searchMode === 'item' ? "Type to search products..." : "Type to search shops..."}
+                      className="search-input"
+                      style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', padding: '8px 0' }}
+                    />
+                    {suggestionsOpen && (
+                      <div className="search-suggestions-dropdown">
+                        <div className="search-suggestions-header">
+                          {searchQuery.trim() ? "Suggestions" : "Recommended for you"}
+                        </div>
+                        {getSuggestions().length > 0 ? (
+                          getSuggestions().map((suggestion) => (
+                            <div
+                              key={suggestion}
+                              onMouseDown={() => {
+                                setSearchQuery(suggestion);
+                                setSuggestionsOpen(false);
+                              }}
+                              className="search-suggestion-item"
+                            >
+                              <span style={{ opacity: 0.7 }}>🔍</span>
+                              <span>{suggestion}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: '12px 16px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                            No recommendations found
+                          </div>
+                        )}
+                      </div>
                     )}
                     {searchQuery && (
-                      <button className="search-clear-btn" onClick={() => setSearchQuery('')}>
+                      <button className="search-clear-btn" onClick={() => setSearchQuery('')} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
                         <X size={16} />
                       </button>
                     )}
@@ -5664,9 +5712,9 @@ function App() {
                             <span className="eta-countdown-sidebar">
                               {trackedOrder.status === 'COMPLETED' ? 'Delivered successfully!' :
                                 trackedOrder.status?.startsWith('CANCELLED') ? 'Order Cancelled' :
-                                  ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in ~10 mins' :
+                                  ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in few minutes' :
                                     trackedOrder.status === 'READY_FOR_PICKUP' ? 'Prepared, ready for pickup!' :
-                                      trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
+                                      trackedOrder.status === 'ACCEPTED' ? 'Preparing... (few minutes)' :
                                         'Awaiting Confirmation'}
                             </span>
                           </div>
@@ -10312,11 +10360,9 @@ function App() {
       {isMobileMenuOpen && (
         <div className="drawer-backdrop mobile-menu-backdrop fade-in" onClick={() => setIsMobileMenuOpen(false)}>
           <div className="mobile-menu-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="mobile-menu-header">
-              <div className="mobile-menu-logo">
-                <span className="brand-highlight">PIXI</span><span className="brand-light">go</span>
-              </div>
-              <button className="close-drawer-btn" onClick={() => setIsMobileMenuOpen(false)}>
+            <div className="mobile-menu-header" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative', width: '100%', paddingBottom: '8px' }}>
+              <img src="/logo.jpg" alt="PIXIgo Logo" style={{ height: '75px', width: 'auto', borderRadius: '12px', border: '1px solid rgba(0, 0, 0, 0.08)', boxShadow: '0 4px 15px rgba(0,0,0,0.08)' }} />
+              <button className="close-drawer-btn" onClick={() => setIsMobileMenuOpen(false)} style={{ position: 'absolute', right: '0', top: '0' }}>
                 <X size={20} />
               </button>
             </div>
@@ -10483,9 +10529,9 @@ function App() {
                         trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
                           trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
                             trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
-                              ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in ~10 mins' :
+                              ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in few minutes' :
                                 trackedOrder.status === 'READY_FOR_PICKUP' ? 'Prepared, ready for pickup!' :
-                                  trackedOrder.status === 'ACCEPTED' ? 'Preparing... ~10 mins' :
+                                  trackedOrder.status === 'ACCEPTED' ? 'Preparing... (few minutes)' :
                                     'Awaiting Confirmation'}
                     </span>
                   </div>

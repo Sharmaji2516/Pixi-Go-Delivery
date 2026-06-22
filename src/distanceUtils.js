@@ -144,3 +144,64 @@ export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee, 
   return finalFee;
 };
 
+/**
+ * Parses the weight of a product from its name string.
+ * Supports kg, g, L, ml, grams, capsules, etc.
+ * Defaults to 0.5 kg if no weight is found.
+ * 
+ * @param {string} name Product name
+ * @returns {number} Weight in kilograms
+ */
+export const getProductWeight = (name) => {
+  if (!name) return 0.5;
+  
+  // Regex to look for patterns like (5kg), (200g), (1L), (500ml), (Pack of 4)
+  const regex = /(\d+(?:\.\d+)?)\s*(kg|g|l|ml|litre|liters|grams|caps|capsules|pcs|pack)\b/i;
+  const match = name.match(regex);
+  
+  if (match) {
+    const val = parseFloat(match[1]);
+    const unit = match[2].toLowerCase();
+    
+    if (unit === 'kg' || unit === 'l' || unit === 'litre' || unit === 'liters') {
+      return val;
+    }
+    if (unit === 'g' || unit === 'ml' || unit === 'grams') {
+      return val / 1000;
+    }
+    if (unit === 'pack' || unit === 'pcs') {
+      return val * 0.15; // Assume 150g per pc/pack
+    }
+    if (unit === 'caps' || unit === 'capsules') {
+      return val * 0.005; // 5g per capsule
+    }
+  }
+  
+  // Fallbacks for known items without explicit weight in name:
+  const lowerName = name.toLowerCase();
+  if (lowerName.includes('cake')) return 1.0;
+  if (lowerName.includes('pizza')) return 0.5;
+  if (lowerName.includes('burger')) return 0.25;
+  if (lowerName.includes('waffle')) return 0.3;
+  if (lowerName.includes('paneer')) return 0.2;
+  if (lowerName.includes('butter')) return 0.1;
+  if (lowerName.includes('noodles')) return 0.28; // Pack of 4 -> 280g
+  
+  return 0.5; // Default fallback
+};
+
+/**
+ * Calculates the total weight of all items in the cart in kg.
+ * 
+ * @param {Array} cart Cart items
+ * @returns {number} Total weight in kilograms
+ */
+export const getCartTotalWeight = (cart) => {
+  if (!cart || !Array.isArray(cart)) return 0;
+  return cart.reduce((total, item) => {
+    const weight = getProductWeight(item.name);
+    return total + (weight * item.quantity);
+  }, 0);
+};
+
+
