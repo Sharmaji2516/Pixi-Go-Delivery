@@ -374,6 +374,8 @@ function App() {
   const [customPurposeClass, setCustomPurposeClass] = useState('standard'); // 'standard' | 'delivery'
   const [newDeliveryPromoType, setNewDeliveryPromoType] = useState('discount_delivery_percent'); // 'discount_delivery_percent' | ... | 'custom'
   const [customDeliveryPromoTypeText, setCustomDeliveryPromoTypeText] = useState('');
+  const [customCouponTypeText, setCustomCouponTypeText] = useState('');
+  const [customCouponDiscountType, setCustomCouponDiscountType] = useState('flat'); // 'flat' | 'percentage'
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponDiscount, setNewCouponDiscount] = useState('');
   const [newCouponMinCart, setNewCouponMinCart] = useState('');
@@ -1539,9 +1541,9 @@ function App() {
         const minCartVal = Number(coupon.minCart) || 0;
         if (cartSubtotal >= minCartVal) {
           let discountAmt = 0;
-          if (coupon.type === 'flat') {
+          if (coupon.type === 'flat' || coupon.discountType === 'flat') {
             discountAmt = Number(coupon.discount) || 0;
-          } else if (coupon.type === 'percentage') {
+          } else if (coupon.type === 'percentage' || coupon.discountType === 'percentage') {
             const pct = Number(coupon.discount) || 0;
             const calculated = Math.round(cartSubtotal * (pct / 100));
             const maxLimit = Number(coupon.maxDiscount) || Infinity;
@@ -2383,9 +2385,9 @@ function App() {
     }
     
     let discountAmt = 0;
-    if (coupon.type === 'flat') {
+    if (coupon.type === 'flat' || coupon.discountType === 'flat') {
       discountAmt = Number(coupon.discount) || 0;
-    } else if (coupon.type === 'percentage') {
+    } else if (coupon.type === 'percentage' || coupon.discountType === 'percentage') {
       const pct = Number(coupon.discount) || 0;
       const calculated = Math.round(cartSubtotal * (pct / 100));
       const maxLimit = Number(coupon.maxDiscount) || Infinity;
@@ -3291,12 +3293,16 @@ function App() {
         alert('Please specify the discount value for the standard coupon.');
         return;
       }
+      const typeVal = newCouponType === 'custom' ? (customCouponTypeText.trim() || 'custom_discount') : newCouponType;
+      const discountTypeVal = newCouponType === 'custom' ? customCouponDiscountType : newCouponType;
+      
       couponData = {
         code: codeUpper,
         discount: Number(newCouponDiscount),
-        type: newCouponType,
+        type: typeVal,
+        discountType: discountTypeVal,
         minCart: Number(newCouponMinCart) || 0,
-        maxDiscount: newCouponType === 'percentage' && newCouponMaxDiscount ? Number(newCouponMaxDiscount) : null,
+        maxDiscount: (discountTypeVal === 'percentage' && newCouponMaxDiscount) ? Number(newCouponMaxDiscount) : null,
         isActive: true,
         isDeliveryPromo: false,
         purpose: purposeVal,
@@ -3332,6 +3338,8 @@ function App() {
       setNewCouponType('flat');
       setCustomPurposeText('');
       setCustomDeliveryPromoTypeText('');
+      setCustomCouponTypeText('');
+      setCustomCouponDiscountType('flat');
       setNewCouponPurpose('standard');
     } catch (err) {
       console.error("Error adding coupon:", err);
@@ -8034,9 +8042,38 @@ function App() {
                   </h3>
                   
                   {(() => {
-                    const isDeliveryOption = newCouponPurpose === 'delivery' || (newCouponPurpose === 'custom' && customPurposeClass === 'delivery');
-                    const isStandardOption = newCouponPurpose === 'standard' || (newCouponPurpose === 'custom' && customPurposeClass === 'standard');
+                    const customPurposesFromDb = Array.from(new Set(
+                      coupons
+                        .map(c => c.purpose)
+                        .filter(p => p && p !== 'standard' && p !== 'delivery')
+                    ));
+
+                    const customTypesFromDb = Array.from(new Set(
+                      coupons
+                        .filter(c => !c.isDeliveryPromo)
+                        .map(c => c.type)
+                        .filter(t => t && t !== 'flat' && t !== 'percentage')
+                    ));
+
+                    const customDeliveryPromoTypesFromDb = Array.from(new Set(
+                      coupons
+                        .filter(c => c.isDeliveryPromo)
+                        .map(c => c.deliveryPromoType)
+                        .filter(dt => dt && dt !== 'discount_delivery_percent' && dt !== 'free_delivery_food' && dt !== 'free_delivery_grocery')
+                    ));
+
+                    const isDeliveryOption = newCouponPurpose === 'delivery' || 
+                      (newCouponPurpose === 'custom' && customPurposeClass === 'delivery') ||
+                      (newCouponPurpose !== 'standard' && coupons.some(c => c.purpose === newCouponPurpose && c.isDeliveryPromo));
                     
+                    const isStandardOption = newCouponPurpose === 'standard' || 
+                      (newCouponPurpose === 'custom' && customPurposeClass === 'standard') ||
+                      (newCouponPurpose !== 'delivery' && coupons.some(c => c.purpose === newCouponPurpose && !c.isDeliveryPromo));
+
+                    const isPercentageCalc = newCouponType === 'percentage' || 
+                      (newCouponType === 'custom' && customCouponDiscountType === 'percentage') ||
+                      (newCouponType !== 'flat' && coupons.some(c => c.type === newCouponType && c.discountType === 'percentage'));
+
                     return (
                       <form onSubmit={handleAddCoupon} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -8057,8 +8094,13 @@ function App() {
                                 setNewCouponCode('');
                                 setNewCouponMinCart('');
                                 setNewCouponDiscount('');
+                              } else if (val !== 'custom') {
+                                // Selected a dynamically saved custom purpose
+                                setNewCouponCode('');
+                                setNewCouponMinCart('');
+                                setNewCouponDiscount('');
                               } else {
-                                // custom purpose
+                                // Selecting new custom purpose
                                 setNewCouponCode('');
                                 setNewCouponMinCart('');
                                 setNewCouponDiscount('');
@@ -8070,6 +8112,9 @@ function App() {
                           >
                             <option value="standard">Standard Discount Coupon</option>
                             <option value="delivery">Delivery Promotion Rule</option>
+                            {customPurposesFromDb.map(p => (
+                              <option key={p} value={p}>{p} (Saved Custom Purpose)</option>
+                            ))}
                             <option value="custom">Custom Purpose...</option>
                           </select>
                         </div>
@@ -8134,8 +8179,14 @@ function App() {
                                   setNewCouponCode('DELIVERYGROCERY');
                                   setNewCouponMinCart('1999');
                                   setNewCouponDiscount('100');
+                                } else if (ruleType !== 'custom') {
+                                  // Selected a saved custom delivery promo type from list
+                                  const matchingC = coupons.find(c => c.isDeliveryPromo && c.deliveryPromoType === ruleType);
+                                  setNewCouponCode(matchingC ? matchingC.code : '');
+                                  setNewCouponMinCart(matchingC ? String(matchingC.minCart) : '');
+                                  setNewCouponDiscount(matchingC ? String(matchingC.discount) : '');
                                 } else {
-                                  // Custom Delivery Rule Type
+                                  // Custom Delivery Rule Type text input
                                   setNewCouponCode('');
                                   setNewCouponMinCart('');
                                   setNewCouponDiscount('');
@@ -8148,6 +8199,9 @@ function App() {
                               <option value="discount_delivery_percent">Percentage Delivery Discount</option>
                               <option value="free_delivery_food">FREE Delivery on Food categories</option>
                               <option value="free_delivery_grocery">FREE Delivery on Grocery categories</option>
+                              {customDeliveryPromoTypesFromDb.map(dt => (
+                                <option key={dt} value={dt}>{dt} (Saved Custom Delivery Rule)</option>
+                              ))}
                               <option value="custom">Custom Delivery Rule Type...</option>
                             </select>
                           </div>
@@ -8186,14 +8240,57 @@ function App() {
                             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
                             <select
                               value={newCouponType}
-                              onChange={(e) => setNewCouponType(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewCouponType(val);
+                                if (val !== 'custom') {
+                                  setCustomCouponTypeText('');
+                                } else {
+                                  setCustomCouponTypeText('');
+                                  setCustomCouponDiscountType('flat');
+                                }
+                              }}
                               className="custom-input"
                               style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
                             >
                               <option value="flat">Flat Discount (₹)</option>
                               <option value="percentage">Percentage Discount (%)</option>
+                              {customTypesFromDb.map(t => (
+                                <option key={t} value={t}>{t} (Saved Custom Type)</option>
+                              ))}
+                              <option value="custom">Custom Coupon Type...</option>
                             </select>
                           </div>
+                        )}
+
+                        {isStandardOption && newCouponType === 'custom' && (
+                          <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Custom Type Name</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. COINS_DISCOUNT"
+                                value={customCouponTypeText}
+                                onChange={(e) => setCustomCouponTypeText(e.target.value.toUpperCase())}
+                                className="custom-input"
+                                style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                                required
+                              />
+                            </div>
+
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Calculation Class</label>
+                              <select
+                                value={customCouponDiscountType}
+                                onChange={(e) => setCustomCouponDiscountType(e.target.value)}
+                                className="custom-input"
+                                style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                              >
+                                <option value="flat">Flat Discount (₹)</option>
+                                <option value="percentage">Percentage Discount (%)</option>
+                              </select>
+                            </div>
+                          </>
                         )}
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -8229,7 +8326,7 @@ function App() {
                           />
                         </div>
 
-                        {isStandardOption && newCouponType === 'percentage' && (
+                        {isStandardOption && isPercentageCalc && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Max Discount Limit (₹)</label>
                             <input
