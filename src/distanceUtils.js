@@ -38,25 +38,13 @@ export const calculateDeliveryRates = (distance) => {
     return { customerCharge: 0, riderPayout: 0 };
   }
   
-  // Rule 1: Up to 1 km
-  if (distance <= 1.0) {
-    return { customerCharge: 28, riderPayout: 20 }; // Fixed fare (using middle of sheet ranges ₹26-29 / ₹19-20)
-  }
+  const customerCharge = Math.max(22.0, 15.0 + distance * 7.0);
+  const riderPayout = Math.max(17.0, 10.0 + distance * 7.0);
   
-  // Rule 2: Up to 2 km (1.0 km to 2.0 km)
-  if (distance <= 2.0) {
-    return { customerCharge: 33, riderPayout: 27 }; // Standard Fixed Fare
-  }
-  
-  // Rule 3: Long Distance Rule (More than 2 km)
-  // Base rate Setup: ₹30 (Customer) / ₹25 (Rider)
-  // Scaling: Multiplier = Math.max(1.0, distance - 2.0). Every 0.5 km is scaled by ₹11 (Customer) / ₹8 (Rider) per 1.0 km equivalent.
-  const multiplier = Math.max(1.0, distance - 2.0);
-  
-  const customerCharge = Math.round(30 + multiplier * 11);
-  const riderPayout = Math.round(25 + multiplier * 8);
-  
-  return { customerCharge, riderPayout };
+  return {
+    customerCharge: parseFloat(customerCharge.toFixed(1)),
+    riderPayout: parseFloat(riderPayout.toFixed(1))
+  };
 };
 
 /**

@@ -8612,43 +8612,66 @@ function App() {
                       <p>No available delivery runs in the pool at the moment.</p>
                     </div>
                   ) : (
-                    availablePoolJobs.map(o => (
-                      <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px', border: '1px solid var(--color-primary-glow-strong)' }}>
-                        <div className="job-header">
-                          <div style={{ textAlign: 'left' }}>
-                            <h3 style={{ margin: 0 }}>Order {o.id}</h3>
-                            <span className="badge badge-success" style={{ marginTop: '4px', display: 'inline-block' }}>READY FOR PICKUP</span>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
-                            <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
-                              {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
+                    availablePoolJobs.map(o => {
+                      const matchedShop = shops.find(s => s.name === o.merchantName || s.storeName === o.merchantName);
+                      const shopLat = matchedShop?.lat || 24.8887;
+                      const shopLng = matchedShop?.lng || 74.6269;
+                      const shopAddress = matchedShop?.address || 'Collectorate Road, Chittorgarh';
+                      const shopMapsUrl = matchedShop?.lat && matchedShop?.lng 
+                        ? `https://www.google.com/maps/dir/?api=1&destination=${shopLat},${shopLng}`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(shopAddress)}`;
+
+                      const custCoords = parseCoords(o.customerLocation);
+                      const custMapsUrl = custCoords
+                        ? `https://www.google.com/maps/dir/?api=1&destination=${custCoords.lat},${custCoords.lng}`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(o.customerLocation)}`;
+
+                      return (
+                        <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px', border: '1px solid var(--color-primary-glow-strong)' }}>
+                          <div className="job-header">
+                            <div style={{ textAlign: 'left' }}>
+                              <h3 style={{ margin: 0 }}>Order {o.id}</h3>
+                              <span className="badge badge-success" style={{ marginTop: '4px', display: 'inline-block' }}>READY FOR PICKUP</span>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
+                              <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--color-primary)' }}>
+                                {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="job-info-grid">
-                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
-                            <h4>🏪 Merchant Pickup</h4>
-                            <p><strong>Shop:</strong> {o.merchantName || o.items[0]?.store}</p>
-                            <p><strong>Location:</strong> Vaishali Market Area, Jaipur</p>
-                          </div>
+                          <div className="job-info-grid">
+                            <div className="job-meta-box" style={{ textAlign: 'left' }}>
+                              <h4>🏪 Merchant Pickup</h4>
+                              <p><strong>Shop:</strong> {o.merchantName || o.items[0]?.store}</p>
+                              <p><strong>Location:</strong> {shopAddress}</p>
+                              <a
+                                href={shopMapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="maps-link-btn"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
+                              >
+                                📍 View on Google Maps
+                              </a>
+                            </div>
 
-                          <div className="job-meta-box" style={{ textAlign: 'left' }}>
-                            <h4>🏠 Customer Delivery</h4>
-                            <p><strong>Address:</strong> {o.customerLocation}</p>
-                            <a
-                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="maps-link-btn"
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
-                            >
-                              📍 View on Google Maps
-                            </a>
-                            <p><strong>Payment Method:</strong> {o.paymentMethod} {o.paymentMethod === 'COD' ? `(${formatINR(o.totalAmount)} to collect)` : '(Paid Online)'}</p>
+                            <div className="job-meta-box" style={{ textAlign: 'left' }}>
+                              <h4>🏠 Customer Delivery</h4>
+                              <p><strong>Address:</strong> {o.customerLocation}</p>
+                              <a
+                                href={custMapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="maps-link-btn"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
+                              >
+                                📍 View on Google Maps
+                              </a>
+                              <p><strong>Payment Method:</strong> {o.paymentMethod} {o.paymentMethod === 'COD' ? `(${formatINR(o.totalAmount)} to collect)` : '(Paid Online)'}</p>
+                            </div>
                           </div>
-                        </div>
 
                         <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
                           <button
@@ -8660,7 +8683,8 @@ function App() {
                           </button>
                         </div>
                       </div>
-                    ))
+                    );
+                  })
                   )}
                 </div>
 
@@ -8675,6 +8699,18 @@ function App() {
                   ) : (
                     activeJobs.map(o => {
                       const matchedShop = shops.find(s => s.name === o.merchantName || s.storeName === o.merchantName);
+                      const shopLat = matchedShop?.lat || 24.8887;
+                      const shopLng = matchedShop?.lng || 74.6269;
+                      const shopAddress = matchedShop?.address || 'Collectorate Road, Chittorgarh';
+                      const shopMapsUrl = matchedShop?.lat && matchedShop?.lng 
+                        ? `https://www.google.com/maps/dir/?api=1&destination=${shopLat},${shopLng}`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(shopAddress)}`;
+
+                      const custCoords = parseCoords(o.customerLocation);
+                      const custMapsUrl = custCoords
+                        ? `https://www.google.com/maps/dir/?api=1&destination=${custCoords.lat},${custCoords.lng}`
+                        : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(o.customerLocation)}`;
+
                       return (
                         <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px' }}>
                           <div className="job-header">
@@ -8697,7 +8733,16 @@ function App() {
                               <p><strong>Shop Name:</strong> {o.merchantName || o.items[0]?.store}</p>
                               <p><strong>Merchant Name:</strong> {matchedShop?.name || matchedShop?.storeName || 'Store Owner'}</p>
                               <p><strong>Contact Number:</strong> {matchedShop?.phone || '9251054064'}</p>
-                              <p><strong>Shop Address:</strong> {matchedShop?.address || 'Collectorate Road, Chittorgarh'}</p>
+                              <p><strong>Shop Address:</strong> {shopAddress}</p>
+                              <a
+                                href={shopMapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="maps-link-btn"
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', margin: '4px 0 8px 0', fontSize: '11px', color: 'var(--color-primary)', textDecoration: 'none' }}
+                              >
+                                📍 View on Google Maps
+                              </a>
                               <a href={`tel:${matchedShop?.phone || '9251054064'}`} className="phone-link-btn" style={{ marginTop: '8px', display: 'inline-flex' }}>
                                 <Phone size={14} style={{ marginRight: '6px' }} /> Call Shop Owner
                               </a>
@@ -8710,7 +8755,7 @@ function App() {
                               <p><strong>Contact Number:</strong> {o.customerPhone || '9251054064'}</p>
                               <p><strong>Address:</strong> {o.customerLocation}</p>
                               <a
-                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(o.customerLocation)}`}
+                                href={custMapsUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="maps-link-btn"
