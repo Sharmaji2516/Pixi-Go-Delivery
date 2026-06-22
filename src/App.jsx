@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag,
-  MessageCircle, AlertCircle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
+  MessageCircle, AlertCircle, AlertTriangle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
   Mail, Settings, ChevronDown, Users, Info, Code
 } from 'lucide-react';
 import './App.css';
@@ -376,6 +376,7 @@ function App() {
   const [customDeliveryPromoTypeText, setCustomDeliveryPromoTypeText] = useState('');
   const [customCouponTypeText, setCustomCouponTypeText] = useState('');
   const [customCouponDiscountType, setCustomCouponDiscountType] = useState('flat'); // 'flat' | 'percentage'
+  const [shopSwitchModal, setShopSwitchModal] = useState({ isOpen: false, pendingProduct: null, pendingVariant: null });
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponDiscount, setNewCouponDiscount] = useState('');
   const [newCouponMinCart, setNewCouponMinCart] = useState('');
@@ -2296,16 +2297,8 @@ function App() {
   const handleAddToCart = (product, selectedVariant = null) => {
     const currentStore = cart.length > 0 ? cart[0].store : null;
     if (currentStore && currentStore !== product.store) {
-      const confirmSwitch = window.confirm(
-        `At present, we don't allow the user to order from two different shops. Would you like to clear your cart and start shopping from "${product.store}" instead?`
-      );
-      if (confirmSwitch) {
-        setCart([]);
-        setCouponCode('');
-        setAppliedDiscount(0);
-      } else {
-        return;
-      }
+      setShopSwitchModal({ isOpen: true, pendingProduct: product, pendingVariant: selectedVariant });
+      return;
     }
 
     const variants = parseProductVariants(product);
@@ -2348,6 +2341,31 @@ function App() {
   // Remove Item from Cart
   const handleRemoveItem = (id) => {
     setCart(cart.filter(i => !(i.cartItemId === id || i.id === id)));
+  };
+
+  // Confirm shop switch, clear cart, and insert the pending item (fixes async React state overwrite bug)
+  const handleConfirmShopSwitch = () => {
+    const { pendingProduct, pendingVariant } = shopSwitchModal;
+    if (!pendingProduct) return;
+
+    const variants = parseProductVariants(pendingProduct);
+    let variant = pendingVariant;
+    const cartItemId = variant ? `${pendingProduct.id}_${variant.specs}` : pendingProduct.id;
+
+    const cartItem = {
+      ...pendingProduct,
+      cartItemId: cartItemId,
+      specs: variant ? variant.specs : pendingProduct.specs,
+      price: variant ? variant.price : pendingProduct.price,
+      originalPrice: variant ? variant.originalPrice : (pendingProduct.originalPrice || 0),
+      quantity: 1
+    };
+
+    setCart([cartItem]);
+    setCouponCode('');
+    setAppliedDiscount(0);
+    showToast(`${pendingProduct.name}${variant ? ` (${variant.specs})` : ''} added to cart!`, 'success');
+    setShopSwitchModal({ isOpen: false, pendingProduct: null, pendingVariant: null });
   };
 
   // Apply Discount Coupon Code (Dynamic from Firestore with minCart, single-use, and type validation)
@@ -10067,6 +10085,72 @@ function App() {
                 onClick={() => setIsCouponsModalOpen(false)}
               >
                 Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Shop Switch Confirmation Modal */}
+      {shopSwitchModal.isOpen && (
+        <div className="modal-backdrop fade-in" style={{ zIndex: 11000 }} onClick={() => setShopSwitchModal({ isOpen: false, pendingProduct: null, pendingVariant: null })}>
+          <div className="past-orders-modal-card glass-panel border-glow" style={{ maxWidth: '420px', padding: '28px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setShopSwitchModal({ isOpen: false, pendingProduct: null, pendingVariant: null })}>
+              <X size={20} />
+            </button>
+
+            <div className="modal-header-premium" style={{ marginBottom: '20px' }}>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '60px',
+                height: '60px',
+                borderRadius: '50%',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '2px solid #ef4444',
+                boxShadow: '0 0 15px rgba(239, 68, 68, 0.3)',
+                color: '#ef4444',
+                marginBottom: '16px'
+              }}>
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="section-title-premium" style={{ margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Shop Switch Conflict
+              </h3>
+            </div>
+
+            <div style={{ marginBottom: '24px', fontSize: '14px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.85)' }}>
+              At present, we don't allow the user to order from two different shops.
+              <br /><br />
+              Would you like to clear your cart and start shopping from <strong style={{ color: 'var(--color-primary)' }}>"{shopSwitchModal.pendingProduct?.store}"</strong> instead?
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                className="neon-btn"
+                style={{
+                  flex: 1,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  borderColor: 'rgba(255, 255, 255, 0.2)',
+                  color: 'rgba(255, 255, 255, 0.7)'
+                }}
+                onClick={() => setShopSwitchModal({ isOpen: false, pendingProduct: null, pendingVariant: null })}
+              >
+                Keep Existing
+              </button>
+              <button
+                className="neon-btn"
+                style={{
+                  flex: 1,
+                  background: '#ef4444',
+                  borderColor: '#ef4444',
+                  boxShadow: '0 0 10px rgba(239, 68, 68, 0.4)',
+                  color: '#ffffff'
+                }}
+                onClick={handleConfirmShopSwitch}
+              >
+                Discard & Shop New
               </button>
             </div>
           </div>
