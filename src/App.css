@@ -4893,30 +4893,33 @@
 
 /* Blinkit-style Bill Details Card */
 .blinkit-bill-details {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
-  margin: 16px 0;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(31, 78, 61, 0.08);
+  border-radius: 16px;
+  padding: 18px;
+  margin: 20px 0;
   text-align: left;
+  box-shadow: 0 4px 20px rgba(31, 78, 61, 0.03);
 }
 
 .bill-details-header {
   font-size: 13px;
-  font-weight: 700;
-  color: #475569;
-  margin: 0 0 14px 0;
+  font-weight: 800;
+  color: var(--color-primary);
+  margin: 0 0 16px 0;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  opacity: 0.9;
+  letter-spacing: 0.8px;
+  border-left: 3px solid var(--color-primary);
+  padding-left: 8px;
 }
 
 .bill-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
-  font-size: 13px;
+  margin-bottom: 12px;
+  font-size: 13.5px;
+  padding: 2px 0;
 }
 
 .bill-label {
@@ -4950,7 +4953,7 @@
 }
 
 .bill-value {
-  color: #0f172a;
+  color: var(--color-text-main);
   font-weight: 600;
 }
 
@@ -4960,24 +4963,29 @@
 
 .bill-divider {
   height: 1px;
-  border-top: 1px dashed #cbd5e1;
+  border-top: 1px dashed rgba(31, 78, 61, 0.15);
   margin: 12px 0;
 }
 
 .bill-row.grand-total-row {
-  margin-bottom: 0;
-  font-weight: 700;
-  font-size: 14.5px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: rgba(31, 78, 61, 0.04);
+  border: 1px dashed rgba(31, 78, 61, 0.15);
+  border-radius: 10px;
+  font-weight: 800;
+  font-size: 15px;
 }
 
 .bill-row.grand-total-row .bill-label {
-  color: #0f172a;
-  font-weight: 700;
+  color: var(--color-text-main);
+  font-weight: 800;
 }
 
 .bill-row.grand-total-row .bill-value {
-  color: #15803d;
-  font-size: 15px;
+  color: var(--color-success);
+  font-size: 16px;
+  font-weight: 800;
 }
 
 /* Blinkit Cancellation Policy Card */

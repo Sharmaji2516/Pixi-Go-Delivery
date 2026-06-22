@@ -5444,6 +5444,88 @@ function App() {
 
               {/* Storefront Layout */}
               <div className="catalog-section">
+                {/* Search Bar */}
+                <div className="search-container border-glow">
+                  <div className="search-mode-select-wrap">
+                    <select
+                      value={searchMode}
+                      onChange={(e) => {
+                        setSearchMode(e.target.value);
+                        setSearchQuery('');
+                      }}
+                      className="search-mode-select"
+                    >
+                      <option value="item">By Product</option>
+                      <option value="shop">By Shop</option>
+                    </select>
+                  </div>
+                  <div className="search-input-divider"></div>
+                  <div className="search-input-wrap" style={{ flex: 1, position: 'relative' }}>
+                    <Search size={18} className="search-bar-icon" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setSuggestionsOpen(true);
+                      }}
+                      onFocus={() => setSuggestionsOpen(true)}
+                      onBlur={() => {
+                        // Delay hiding the suggestions so click event on suggestion can be processed
+                        setTimeout(() => setSuggestionsOpen(false), 200);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setSuggestionsOpen(false);
+                          e.target.blur();
+                        }
+                      }}
+                      placeholder={searchMode === 'item' ? "Type to search products..." : "Type to search shops..."}
+                      className="search-input"
+                      style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', padding: '8px 0' }}
+                    />
+                    {suggestionsOpen && (
+                      <div className="search-suggestions-dropdown">
+                        <div className="search-suggestions-header">
+                          {searchQuery.trim() ? "Suggestions" : "Recommended for you"}
+                        </div>
+                        {getSuggestions().length > 0 ? (
+                          getSuggestions().map((suggestion) => (
+                            <div
+                              key={suggestion}
+                              onMouseDown={() => {
+                                setSearchQuery(suggestion);
+                                setSuggestionsOpen(false);
+                              }}
+                              className="search-suggestion-item"
+                            >
+                              <span style={{ opacity: 0.7 }}>🔍</span>
+                              <span>{suggestion}</span>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ padding: '12px 16px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
+                            No recommendations found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {(searchQuery || suggestionsOpen) && (
+                      <button 
+                        className="search-clear-btn" 
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setSearchQuery('');
+                          setSuggestionsOpen(false);
+                        }} 
+                        style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
                 {/* Premium Category Cards Grid */}
                 <div className="custom-category-section">
                   <h3 className="custom-category-title">Explore Categories</h3>
@@ -5512,74 +5594,6 @@ function App() {
                     </div>
                   </div>
                 )}
-
-                {/* Search Bar */}
-                <div className="search-container border-glow">
-                  <div className="search-mode-select-wrap">
-                    <select
-                      value={searchMode}
-                      onChange={(e) => {
-                        setSearchMode(e.target.value);
-                        setSearchQuery('');
-                      }}
-                      className="search-mode-select"
-                    >
-                      <option value="item">By Product</option>
-                      <option value="shop">By Shop</option>
-                    </select>
-                  </div>
-                  <div className="search-input-divider"></div>
-                  <div className="search-input-wrap" style={{ flex: 1, position: 'relative' }}>
-                    <Search size={18} className="search-bar-icon" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setSuggestionsOpen(true);
-                      }}
-                      onFocus={() => setSuggestionsOpen(true)}
-                      onBlur={() => {
-                        // Delay hiding the suggestions so click event on suggestion can be processed
-                        setTimeout(() => setSuggestionsOpen(false), 200);
-                      }}
-                      placeholder={searchMode === 'item' ? "Type to search products..." : "Type to search shops..."}
-                      className="search-input"
-                      style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', padding: '8px 0' }}
-                    />
-                    {suggestionsOpen && (
-                      <div className="search-suggestions-dropdown">
-                        <div className="search-suggestions-header">
-                          {searchQuery.trim() ? "Suggestions" : "Recommended for you"}
-                        </div>
-                        {getSuggestions().length > 0 ? (
-                          getSuggestions().map((suggestion) => (
-                            <div
-                              key={suggestion}
-                              onMouseDown={() => {
-                                setSearchQuery(suggestion);
-                                setSuggestionsOpen(false);
-                              }}
-                              className="search-suggestion-item"
-                            >
-                              <span style={{ opacity: 0.7 }}>🔍</span>
-                              <span>{suggestion}</span>
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ padding: '12px 16px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-                            No recommendations found
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {searchQuery && (
-                      <button className="search-clear-btn" onClick={() => setSearchQuery('')} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}>
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
 
                 {/* Veg/Non-Veg Filter Chips Row */}
                 <div className="filter-chips-row">
