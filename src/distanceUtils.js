@@ -145,19 +145,18 @@ export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee, 
 };
 
 /**
- * Parses the weight of a product from its name string.
+ * Parses the weight of a product from its name or specs string.
  * Supports kg, g, L, ml, grams, capsules, etc.
- * Defaults to 0.5 kg if no weight is found.
  * 
- * @param {string} name Product name
- * @returns {number} Weight in kilograms
+ * @param {string} text Input text
+ * @returns {number|null} Weight in kilograms, or null if no weight found
  */
-export const getProductWeight = (name) => {
-  if (!name) return 0.5;
+export const getProductWeight = (text) => {
+  if (!text) return null;
   
-  // Regex to look for patterns like (5kg), (200g), (1L), (500ml), (Pack of 4)
+  // Regex to look for patterns like 5kg, 200g, 1L, 500ml, Pack of 4
   const regex = /(\d+(?:\.\d+)?)\s*(kg|g|l|ml|litre|liters|grams|caps|capsules|pcs|pack)\b/i;
-  const match = name.match(regex);
+  const match = text.match(regex);
   
   if (match) {
     const val = parseFloat(match[1]);
@@ -178,16 +177,16 @@ export const getProductWeight = (name) => {
   }
   
   // Fallbacks for known items without explicit weight in name:
-  const lowerName = name.toLowerCase();
-  if (lowerName.includes('cake')) return 1.0;
-  if (lowerName.includes('pizza')) return 0.5;
-  if (lowerName.includes('burger')) return 0.25;
-  if (lowerName.includes('waffle')) return 0.3;
-  if (lowerName.includes('paneer')) return 0.2;
-  if (lowerName.includes('butter')) return 0.1;
-  if (lowerName.includes('noodles')) return 0.28; // Pack of 4 -> 280g
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes('cake')) return 1.0;
+  if (lowerText.includes('pizza')) return 0.5;
+  if (lowerText.includes('burger')) return 0.25;
+  if (lowerText.includes('waffle')) return 0.3;
+  if (lowerText.includes('paneer')) return 0.2;
+  if (lowerText.includes('butter')) return 0.1;
+  if (lowerText.includes('noodles')) return 0.28; // Pack of 4 -> 280g
   
-  return 0.5; // Default fallback
+  return null; // Return null if no matches found
 };
 
 /**
@@ -199,7 +198,13 @@ export const getProductWeight = (name) => {
 export const getCartTotalWeight = (cart) => {
   if (!cart || !Array.isArray(cart)) return 0;
   return cart.reduce((total, item) => {
-    const weight = getProductWeight(item.name);
+    let weight = getProductWeight(item.specs); // Check variant specs first (e.g. "2L", "500ml")
+    if (weight === null) {
+      weight = getProductWeight(item.name); // Fallback to product name
+    }
+    if (weight === null) {
+      weight = 0.5; // Final default fallback (0.5 kg)
+    }
     return total + (weight * item.quantity);
   }, 0);
 };
