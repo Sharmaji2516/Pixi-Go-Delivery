@@ -3,7 +3,7 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag,
   MessageCircle, AlertCircle, AlertTriangle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown, Users, Info, Code
+  Mail, Settings, ChevronDown, Users, Info, Code, Edit
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
@@ -441,6 +441,18 @@ function App() {
   const [merchantShopSelect, setMerchantShopSelect] = useState('Bake House');
   const [vegFilter, setVegFilter] = useState('All'); // 'All' | 'Veg' | 'NonVeg'
   const [newProductIsVeg, setNewProductIsVeg] = useState(true);
+  const [newProductDescription, setNewProductDescription] = useState('');
+  const [newProductSpecs, setNewProductSpecs] = useState('');
+
+  // Merchant edit product states
+  const [isMerchantEditModalOpen, setIsMerchantEditModalOpen] = useState(false);
+  const [merchantEditingProduct, setMerchantEditingProduct] = useState(null);
+  const [merchantEditProductName, setMerchantEditProductName] = useState('');
+  const [merchantEditProductDescription, setMerchantEditProductDescription] = useState('');
+  const [merchantEditProductPrice, setMerchantEditProductPrice] = useState('');
+  const [merchantEditProductSpecs, setMerchantEditProductSpecs] = useState('');
+  const [merchantEditProductCategory, setMerchantEditProductCategory] = useState('General Store');
+  const [merchantEditProductIsVeg, setMerchantEditProductIsVeg] = useState(true);
 
   // Admin catalog additions state variables
   const [adminNewProductName, setAdminNewProductName] = useState('');
@@ -3831,12 +3843,17 @@ function App() {
       image: '🍔',
       approved: false,
       isVeg: newProductIsVeg,
+      description: newProductDescription.trim(),
+      specs: newProductSpecs.trim(),
+      isOutOfStock: false,
       createdAt: new Date().toISOString()
     };
     try {
       await addDoc(collection(db, "products"), newProd);
       setNewProductName('');
       setNewProductPrice('');
+      setNewProductDescription('');
+      setNewProductSpecs('');
       setNewProductIsVeg(true);
       alert('Product added to listing catalog!');
     } catch (e) {
@@ -3859,6 +3876,77 @@ function App() {
       }
     } else {
       setProducts(products.filter(p => p.id !== id));
+    }
+  };
+
+  // Merchant stock and edit handlers
+  const handleToggleProductStock = async (product) => {
+    const newStatus = !product.isOutOfStock;
+    try {
+      if (product.firestoreId) {
+        await updateDoc(doc(db, "products", product.firestoreId), {
+          isOutOfStock: newStatus
+        });
+      } else {
+        const newDoc = {
+          ...product,
+          isOutOfStock: newStatus
+        };
+        delete newDoc.firestoreId;
+        await addDoc(collection(db, "products"), newDoc);
+      }
+      showToast(`${product.name} is now ${newStatus ? 'Out of Stock' : 'In Stock'}`, 'info');
+    } catch (err) {
+      console.error("Error toggling product stock:", err);
+      alert("Failed to update stock status: " + err.message);
+    }
+  };
+
+  const handleOpenMerchantEditModal = (p) => {
+    setMerchantEditingProduct(p);
+    setMerchantEditProductName(p.name || '');
+    setMerchantEditProductDescription(p.description || '');
+    setMerchantEditProductPrice(p.price || '');
+    setMerchantEditProductSpecs(p.specs || '');
+    setMerchantEditProductCategory(p.category || 'General Store');
+    setMerchantEditProductIsVeg(p.isVeg !== false);
+    setIsMerchantEditModalOpen(true);
+  };
+
+  const handleMerchantUpdateProduct = async (e) => {
+    if (e) e.preventDefault();
+    if (!merchantEditingProduct) return;
+    if (!merchantEditProductName || !merchantEditProductPrice) {
+      alert('Please fill in product name and price!');
+      return;
+    }
+    const updatedFields = {
+      name: merchantEditProductName,
+      description: merchantEditProductDescription.trim(),
+      price: parseFloat(merchantEditProductPrice),
+      specs: merchantEditProductSpecs.trim(),
+      category: merchantEditProductCategory,
+      isVeg: merchantEditProductIsVeg,
+      approved: merchantEditingProduct.approved ?? false
+    };
+
+    try {
+      if (merchantEditingProduct.firestoreId) {
+        await updateDoc(doc(db, "products", merchantEditingProduct.firestoreId), updatedFields);
+      } else {
+        const newDoc = {
+          ...merchantEditingProduct,
+          ...updatedFields
+        };
+        delete newDoc.firestoreId;
+        await addDoc(collection(db, "products"), newDoc);
+      }
+      showToast(`${merchantEditProductName} successfully updated!`, 'success');
+      setIsMerchantEditModalOpen(false);
+      setMerchantEditingProduct(null);
+    } catch (err) {
+      console.error("Error updating merchant product in Firestore:", err);
+      alert("Failed to update product: " + err.message);
     }
   };
 
@@ -5002,9 +5090,15 @@ function App() {
     const displayInfo = getProductDisplayInfo(p);
 
     return (
-      <div key={p.id} className="product-card glass-panel" style={{ position: 'relative' }}>
-        <div className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} style={{ position: 'relative' }}>
-          {p.offerText && (
+      <div key={p.id} className="product-card glass-panel" style={{ position: 'relative', opacity: p.isOutOfStock ? 0.8 : 1 }}>
+        <div 
+          className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} 
+          style={{ position: 'relative', filter: p.isOutOfStock ? 'grayscale(60%) opacity(0.8)' : 'none' }}
+        >
+          {p.isOutOfStock && (
+            <span className="prod-img-badge" style={{ background: 'var(--color-danger)', top: '10px', left: '10px', fontSize: '9px', fontWeight: 'bold' }}>SOLD OUT</span>
+          )}
+          {p.offerText && !p.isOutOfStock && (
             <span className="prod-img-badge">{p.offerText}</span>
           )}
           {p.image && p.image.startsWith('http') ? (
@@ -5023,6 +5117,12 @@ function App() {
             </span>
           </div>
           
+          {p.description && (
+            <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '4px 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3', textAlign: 'left' }}>
+              {p.description}
+            </p>
+          )}
+
           {displayInfo.specs && (
             <div className="prod-specs-text">{displayInfo.specs}</div>
           )}
@@ -5072,6 +5172,29 @@ function App() {
               )}
             </div>
             {(() => {
+              if (p.isOutOfStock) {
+                return (
+                  <button
+                    className="circular-add-btn disabled-add-btn"
+                    disabled
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      borderColor: 'rgba(239, 68, 68, 0.3)',
+                      color: '#ef4444',
+                      cursor: 'not-allowed',
+                      fontSize: '11px',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      width: 'auto',
+                      height: 'auto',
+                      fontWeight: 'bold',
+                      boxShadow: 'none'
+                    }}
+                  >
+                    Sold Out
+                  </button>
+                );
+              }
               const variants = parseProductVariants(p);
               if (variants && variants.length > 0) {
                 const variantsInCart = cart.filter(item => item.id === p.id);
@@ -9375,6 +9498,27 @@ function App() {
                       />
                     </div>
                     <div className="form-group">
+                      <label>Weight/Volume (Specs)</label>
+                      <input
+                        type="text"
+                        value={newProductSpecs}
+                        onChange={(e) => setNewProductSpecs(e.target.value)}
+                        className="custom-input"
+                        placeholder="e.g. 500g, 1L, or variants like 250ml:30, 500ml:55"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Product Description</label>
+                      <textarea
+                        value={newProductDescription}
+                        onChange={(e) => setNewProductDescription(e.target.value)}
+                        className="custom-input"
+                        placeholder="Enter description of the product..."
+                        rows={3}
+                        style={{ height: 'auto', resize: 'vertical', width: '100%', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                      />
+                    </div>
+                    <div className="form-group">
                       <label>Product Category</label>
                       <select
                         value={newProductCategory}
@@ -9414,30 +9558,75 @@ function App() {
 
                   {/* Listed Products */}
                   <div className="listed-products">
-                    <h2 style={{ textAlign: 'left' }}>My Listed Products ({products.filter(p => p.store === merchantShopSelect).length})</h2>
+                    <h2 style={{ textAlign: 'left' }}>My Listed Products ({products.filter(p => p.store === currentMerchantShopName).length})</h2>
                     <div className="listed-items-container">
-                      {products.filter(p => p.store === merchantShopSelect).map(p => (
-                        <div key={p.id} className="listed-item-row">
-                          <div className="item-details">
+                      {products.filter(p => p.store === currentMerchantShopName).map(p => (
+                        <div key={p.id} className="listed-item-row" style={{ opacity: p.isOutOfStock ? 0.7 : 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div className="item-details" style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                             {p.image && p.image.startsWith('http') ? (
-                              <img src={p.image} alt={p.name} style={{ width: '24px', height: '24px', borderRadius: '4px', objectFit: 'cover' }} />
+                              <img src={p.image} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', marginTop: '2px' }} />
                             ) : (
-                              <span className="item-emoji">{p.image || p.emoji || '📦'}</span>
+                              <span className="item-emoji" style={{ fontSize: '24px', marginTop: '2px', display: 'inline-block' }}>{p.image || p.emoji || '📦'}</span>
                             )}
                             <div>
-                              <h4>{p.name}</h4>
-                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px' }}>
+                              <h4 style={{ textDecoration: p.isOutOfStock ? 'line-through' : 'none', margin: 0, fontSize: '14px', fontWeight: '600' }}>{p.name}</h4>
+                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
                                 <span className="badge badge-info">{p.category}</span>
+                                {p.specs && <span style={{ fontSize: '11px', color: 'var(--color-primary)', background: 'rgba(0, 255, 242, 0.08)', padding: '1px 6px', borderRadius: '4px' }}>{p.specs}</span>}
+                                {p.isVeg !== false ? (
+                                  <span style={{ fontSize: '11px', color: '#68a600' }}>🟢 Veg</span>
+                                ) : (
+                                  <span style={{ fontSize: '11px', color: '#ef4444' }}>🔴 Non-Veg</span>
+                                )}
                                 {p.approved === false && <span className="badge badge-warning" style={{ textTransform: 'uppercase', fontSize: '9px', padding: '2px 4px' }}>Pending Approval</span>}
                                 {p.approved === true && <span className="badge badge-success" style={{ textTransform: 'uppercase', fontSize: '9px', padding: '2px 4px' }}>Approved</span>}
                               </div>
+                              {p.description && (
+                                <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '6px 0 0 0', lineHeight: '1.4' }}>{p.description}</p>
+                              )}
                             </div>
                           </div>
-                          <div className="item-price-delete">
-                            <span>{formatINR(p.price)}</span>
-                            <button className="delete-btn-link" onClick={() => handleMerchantDeleteProduct(p.id)}>
-                              <Trash2 size={16} />
+                          <div className="item-price-delete" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <button
+                              onClick={() => handleToggleProductStock(p)}
+                              style={{
+                                padding: '4px 8px',
+                                borderRadius: '12px',
+                                fontSize: '11px',
+                                fontWeight: 'bold',
+                                border: 'none',
+                                cursor: 'pointer',
+                                background: p.isOutOfStock ? 'rgba(239, 68, 68, 0.15)' : 'rgba(104, 166, 0, 0.15)',
+                                color: p.isOutOfStock ? '#ef4444' : '#68a600',
+                                border: `1px solid ${p.isOutOfStock ? 'rgba(239, 68, 68, 0.3)' : 'rgba(104, 166, 0, 0.3)'}`,
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
+                              {p.isOutOfStock ? '🔴 Out of Stock' : '🟢 In Stock'}
                             </button>
+                            <span style={{ fontSize: '14px', fontWeight: 'bold', minWidth: '60px', textAlign: 'right' }}>{formatINR(p.price)}</span>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                              <button
+                                className="delete-btn-link"
+                                onClick={() => handleOpenMerchantEditModal(p)}
+                                style={{ color: 'var(--color-primary)', cursor: 'pointer', padding: '4px', background: 'transparent', border: 'none' }}
+                                title="Edit Product"
+                              >
+                                <Edit size={16} />
+                              </button>
+                              <button
+                                className="delete-btn-link"
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete ${p.name}?`)) {
+                                    handleMerchantDeleteProduct(p.id);
+                                  }
+                                }}
+                                style={{ color: 'var(--color-danger)', cursor: 'pointer', padding: '4px', background: 'transparent', border: 'none' }}
+                                title="Delete Product"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -11412,6 +11601,108 @@ function App() {
               </div>
               <button type="submit" className="neon-btn save-profile-btn-premium" style={{ marginTop: '10px', padding: '12px', width: '100%' }}>
                 Save & Approve Product
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal (Merchant) */}
+      {isMerchantEditModalOpen && merchantEditingProduct && (
+        <div className="modal-backdrop fade-in" onClick={() => { setIsMerchantEditModalOpen(false); setMerchantEditingProduct(null); }}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => { setIsMerchantEditModalOpen(false); setMerchantEditingProduct(null); }}>
+              <X size={20} />
+            </button>
+            <div className="profile-avatar-section">
+              <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
+                <Store size={40} style={{ color: 'rgba(0, 255, 242, 1)' }} />
+              </div>
+              <h3 className="section-title-premium" style={{ fontSize: '20px', fontWeight: 'bold' }}>Edit Product</h3>
+              <p className="profile-sub" style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Store: <strong>{merchantEditingProduct.store}</strong></p>
+            </div>
+
+            <form onSubmit={handleMerchantUpdateProduct} className="profile-edit-form" style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Product Name</label>
+                <input
+                  type="text"
+                  value={merchantEditProductName}
+                  onChange={(e) => setMerchantEditProductName(e.target.value)}
+                  className="custom-input-premium"
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                />
+              </div>
+
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Price (₹)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={merchantEditProductPrice}
+                  onChange={(e) => setMerchantEditProductPrice(e.target.value)}
+                  className="custom-input-premium"
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                />
+              </div>
+
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Weight/Volume (Specs)</label>
+                <input
+                  type="text"
+                  value={merchantEditProductSpecs}
+                  onChange={(e) => setMerchantEditProductSpecs(e.target.value)}
+                  className="custom-input-premium"
+                  placeholder="e.g. 500g, 1L, or variants like 250ml:30, 500ml:55"
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                />
+              </div>
+
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Product Description</label>
+                <textarea
+                  value={merchantEditProductDescription}
+                  onChange={(e) => setMerchantEditProductDescription(e.target.value)}
+                  className="custom-input-premium"
+                  placeholder="Enter details about this product..."
+                  rows={3}
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)', height: 'auto', resize: 'vertical' }}
+                />
+              </div>
+
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Category</label>
+                <select
+                  value={merchantEditProductCategory}
+                  onChange={(e) => setMerchantEditProductCategory(e.target.value)}
+                  className="custom-input-premium"
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                >
+                  {categories.slice(1).map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Dietary Type</label>
+                <select
+                  value={merchantEditProductIsVeg ? 'veg' : 'nonveg'}
+                  onChange={(e) => setMerchantEditProductIsVeg(e.target.value === 'veg')}
+                  className="custom-input-premium"
+                  required
+                  style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                >
+                  <option value="veg">🟢 Vegetarian</option>
+                  <option value="nonveg">🔴 Non-Vegetarian</option>
+                </select>
+              </div>
+
+              <button type="submit" className="neon-btn save-profile-btn-premium" style={{ marginTop: '10px', padding: '12px', width: '100%' }}>
+                Save Product Changes
               </button>
             </form>
           </div>
