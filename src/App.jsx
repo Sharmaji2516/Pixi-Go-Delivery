@@ -5300,7 +5300,7 @@ function App() {
     <div className="app-container">
       {/* Header Banner */}
       {!(activeTab !== 'customer' && !user) && (
-        <header className={`app-header glass-panel ${activeTab === 'admin' ? 'admin-header-black' : ''}`}>
+        <header className={`app-header ${activeTab === 'admin' ? 'admin-header-black' : ''}`}>
           {/* Mobile menu trigger - placed first so it sits on the left on mobile */}
           {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
             <button className="cart-header-icon-btn mobile-menu-trigger-btn" onClick={() => setIsMobileMenuOpen(true)} title="Open Menu">
