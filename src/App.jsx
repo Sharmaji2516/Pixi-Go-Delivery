@@ -393,6 +393,7 @@ function App() {
   const [newCouponMinCart, setNewCouponMinCart] = useState('');
   const [newCouponType, setNewCouponType] = useState('flat'); // 'flat' | 'percentage'
   const [newCouponMaxDiscount, setNewCouponMaxDiscount] = useState('');
+  const [newCouponSponsor, setNewCouponSponsor] = useState('merchant'); // 'merchant' | 'pixigo'
   const [isCouponsModalOpen, setIsCouponsModalOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(null);
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('pixigo_customerName') || 'Raj Malhotra');
@@ -445,6 +446,7 @@ function App() {
   const [isMerchantApprovalsOpen, setIsMerchantApprovalsOpen] = useState(false);
   const [isRiderApprovalsOpen, setIsRiderApprovalsOpen] = useState(false);
   const [newShopEmail, setNewShopEmail] = useState('');
+  const [newShopCommission, setNewShopCommission] = useState('');
   const [newProductName, setNewProductName] = useState('');
   const [newProductPrice, setNewProductPrice] = useState('');
   const [newProductCategory, setNewProductCategory] = useState('Bakery');
@@ -453,6 +455,7 @@ function App() {
   const [newProductIsVeg, setNewProductIsVeg] = useState(true);
   const [newProductDescription, setNewProductDescription] = useState('');
   const [newProductSpecs, setNewProductSpecs] = useState('');
+  const [proposedCommissionInput, setProposedCommissionInput] = useState('');
 
   // Merchant edit product states
   const [isMerchantEditModalOpen, setIsMerchantEditModalOpen] = useState(false);
@@ -552,6 +555,7 @@ function App() {
   const [shopDocFssai, setShopDocFssai] = useState(false);
   const [shopDocLat, setShopDocLat] = useState('');
   const [shopDocLng, setShopDocLng] = useState('');
+  const [shopDocCommission, setShopDocCommission] = useState('');
 
   // --- HELPER FUNCTIONS ---
   const isUserOrder = (o) => {
@@ -641,6 +645,13 @@ function App() {
       placedCount: todayOrders.length,
       completedCount: todayOrders.filter(o => o.status === 'COMPLETED').length,
       cancelledCount: todayOrders.filter(o => o.status?.startsWith('CANCELLED')).length,
+      netProfit: todayOrders.reduce((acc, o) => {
+        const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
+        if (isCancelled) return acc;
+        const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
+        const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
+        return acc + ((o.commissionAmount || 0) - riderPayout - discountPixigo);
+      }, 0)
     };
 
     const allTimeStats = {
@@ -1485,6 +1496,7 @@ function App() {
             minCart: 200,
             isActive: true,
             isDeliveryPromo: false,
+            sponsor: 'pixigo',
             createdAt: new Date().toISOString()
           },
           {
@@ -1495,6 +1507,7 @@ function App() {
             minCart: 150,
             isActive: true,
             isDeliveryPromo: false,
+            sponsor: 'pixigo',
             createdAt: new Date().toISOString()
           },
           {
@@ -1504,6 +1517,7 @@ function App() {
             minCart: 100,
             isActive: true,
             isDeliveryPromo: false,
+            sponsor: 'merchant',
             createdAt: new Date().toISOString()
           },
           {
@@ -1514,6 +1528,7 @@ function App() {
             isActive: true,
             isDeliveryPromo: true,
             deliveryPromoType: 'discount_delivery_percent',
+            sponsor: 'pixigo',
             createdAt: new Date().toISOString()
           },
           {
@@ -1524,6 +1539,7 @@ function App() {
             isActive: true,
             isDeliveryPromo: true,
             deliveryPromoType: 'free_delivery_food',
+            sponsor: 'pixigo',
             createdAt: new Date().toISOString()
           },
           {
@@ -1534,6 +1550,7 @@ function App() {
             isActive: true,
             isDeliveryPromo: true,
             deliveryPromoType: 'free_delivery_grocery',
+            sponsor: 'pixigo',
             createdAt: new Date().toISOString()
           }
         ];
@@ -2082,9 +2099,12 @@ function App() {
     totalDiscounts: orders.reduce((acc, o) => acc + o.discountAmount, 0),
     totalDeliveryFee: orders.reduce((acc, o) => acc + o.deliveryCharge, 0),
     netProfit: orders.reduce((acc, o) => {
-      // Net Profit = Total Commission - Total Delivery Boy Payouts
+      const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
+      if (isCancelled) return acc;
+      // Net Profit = Total Commission - Total Delivery Boy Payouts - PixiGo Sponsored discounts
       const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
-      return acc + (o.commissionAmount - riderPayout);
+      const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
+      return acc + (o.commissionAmount - riderPayout - discountPixigo);
     }, 0)
   };
 
@@ -2538,7 +2558,26 @@ function App() {
     const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, activeDeliveryPromos) + heavySurcharge;
 
     const total = cartSubtotal + delCharge - appliedDiscount;
-    const comm = Math.round(cartSubtotal * (commissionPercent / 100));
+    
+    const shopCommissionPercent = (cartShop && cartShop.commissionPercent !== undefined) ? cartShop.commissionPercent : commissionPercent;
+    const comm = Math.round(cartSubtotal * (shopCommissionPercent / 100));
+
+    // Determine coupon sponsor and calculate merchant payout based on Hybrid Model
+    const appliedCouponObj = appliedDiscount > 0 ? coupons.find(c => c.code?.toUpperCase() === couponCode.trim().toUpperCase()) : null;
+    const couponSponsor = appliedCouponObj?.sponsor || 'merchant';
+
+    let netMerchantEarningVal = 0;
+    if (appliedDiscount > 0) {
+      if (couponSponsor === 'pixigo') {
+        // Option B: Sponsored by PixiGo
+        netMerchantEarningVal = cartSubtotal - comm;
+      } else {
+        // Option A: Sponsored by Merchant (default)
+        netMerchantEarningVal = cartSubtotal - appliedDiscount - comm;
+      }
+    } else {
+      netMerchantEarningVal = cartSubtotal - comm;
+    }
 
     const merchantId = 'merch_' + storeName.replace(/\s+/g, '_').toLowerCase();
 
@@ -2560,8 +2599,9 @@ function App() {
       distance: distanceVal,
       discountAmount: appliedDiscount,
       couponCode: appliedDiscount > 0 ? couponCode.trim().toUpperCase() : '',
+      couponSponsor: appliedDiscount > 0 ? couponSponsor : '',
       commissionAmount: comm,
-      netMerchantEarning: total - comm,
+      netMerchantEarning: netMerchantEarningVal,
       paymentMethod: selectedPayment,
       paymentStatus: selectedPayment === 'ONLINE' ? 'PAID' : 'PENDING',
       status: 'PLACED',
@@ -2735,6 +2775,32 @@ function App() {
       }
     }
     showToast(`Store is now ${newStatus ? 'OPEN' : 'CLOSED'}`);
+  };
+
+  // Merchant: Request custom commission change
+  const handleRequestCommissionChange = async (matchedShop) => {
+    if (!proposedCommissionInput || isNaN(proposedCommissionInput) || parseFloat(proposedCommissionInput) < 0 || parseFloat(proposedCommissionInput) > 100) {
+      alert("Please enter a valid percentage between 0 and 100.");
+      return;
+    }
+
+    if (!matchedShop || !matchedShop.firestoreId) {
+      alert("Error: Shop profile not found in database.");
+      return;
+    }
+
+    try {
+      const docRef = doc(db, "merchants", matchedShop.firestoreId);
+      await updateDoc(docRef, {
+        pendingCommissionPercent: parseFloat(proposedCommissionInput),
+        commissionRequestStatus: 'pending'
+      });
+      showToast("Commission rate change request submitted to Admin successfully!");
+      setProposedCommissionInput('');
+    } catch (err) {
+      console.error("Error submitting commission rate request:", err);
+      alert(`Failed to submit request: ${err.message}`);
+    }
   };
 
   // Merchant: Accept / Confirm Order
@@ -3082,6 +3148,7 @@ function App() {
 
     const newShopId = `merch_${newShopName.trim().replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
     const tempShopName = newShopName.trim();
+    const parsedCommission = newShopCommission.trim() !== '' ? parseFloat(newShopCommission) : null;
     try {
       const merchantDocRef = doc(db, "merchants", newShopId);
       await setDoc(merchantDocRef, {
@@ -3093,6 +3160,7 @@ function App() {
         email: newShopEmail.trim().toLowerCase(),
         verified: true, // Directly verified
         status: 'active',
+        commissionPercent: parsedCommission,
         createdAt: new Date().toISOString()
       });
 
@@ -3101,6 +3169,7 @@ function App() {
       setNewShopPhone('');
       setNewShopAddress('');
       setNewShopEmail('');
+      setNewShopCommission('');
 
       alert(`Shop "${tempShopName}" registered & authorized successfully!`);
     } catch (error) {
@@ -3260,6 +3329,7 @@ function App() {
     setShopDocFssai(shop.hasFssai || false);
     setShopDocLat(shop.lat !== undefined ? shop.lat.toString() : '');
     setShopDocLng(shop.lng !== undefined ? shop.lng.toString() : '');
+    setShopDocCommission(shop.commissionPercent !== undefined ? shop.commissionPercent.toString() : '');
     setTempAuthEmail(shop.email || '');
     setTempAuthPassword('');
     setIsShopModalOpen(true);
@@ -3270,6 +3340,7 @@ function App() {
 
     const parsedLat = shopDocLat.trim() !== '' ? parseFloat(shopDocLat) : null;
     const parsedLng = shopDocLng.trim() !== '' ? parseFloat(shopDocLng) : null;
+    const parsedCommission = shopDocCommission.trim() !== '' ? parseFloat(shopDocCommission) : null;
 
     try {
       if (selectedShopDetails.firestoreId) {
@@ -3279,7 +3350,8 @@ function App() {
           hasPan: shopDocPan,
           hasFssai: shopDocFssai,
           lat: parsedLat,
-          lng: parsedLng
+          lng: parsedLng,
+          commissionPercent: parsedCommission
         });
       }
       // Update local shops state
@@ -3289,9 +3361,10 @@ function App() {
         hasPan: shopDocPan,
         hasFssai: shopDocFssai,
         lat: parsedLat !== null ? parsedLat : undefined,
-        lng: parsedLng !== null ? parsedLng : undefined
+        lng: parsedLng !== null ? parsedLng : undefined,
+        commissionPercent: parsedCommission !== null ? parsedCommission : undefined
       } : s));
-      showToast('Shop details and coordinates updated successfully!');
+      showToast('Shop details, coordinates, and commission updated successfully!');
       setIsShopModalOpen(false);
       setSelectedShopDetails(null);
     } catch (err) {
@@ -3378,6 +3451,7 @@ function App() {
         isActive: true,
         isDeliveryPromo: false,
         purpose: purposeVal,
+        sponsor: newCouponSponsor,
         createdAt: new Date().toISOString()
       };
     } else {
@@ -3395,6 +3469,7 @@ function App() {
         isDeliveryPromo: true,
         purpose: purposeVal,
         deliveryPromoType: promoTypeVal,
+        sponsor: 'pixigo',
         createdAt: new Date().toISOString()
       };
     }
@@ -3408,6 +3483,7 @@ function App() {
       setNewCouponMinCart('');
       setNewCouponMaxDiscount('');
       setNewCouponType('flat');
+      setNewCouponSponsor('merchant');
       setCustomPurposeText('');
       setCustomDeliveryPromoTypeText('');
       setCustomCouponTypeText('');
@@ -3483,6 +3559,31 @@ function App() {
           showToast("Rider onboarding request rejected.");
         }
       }
+    }
+  };
+
+  // Admin: Approve or Reject custom commission rate request
+  const handleAdminVerifyCommissionChange = async (shop, approve) => {
+    if (!shop || !shop.firestoreId) return;
+    try {
+      const docRef = doc(db, "merchants", shop.firestoreId);
+      if (approve) {
+        await updateDoc(docRef, {
+          commissionPercent: Number(shop.pendingCommissionPercent),
+          commissionRequestStatus: 'approved',
+          pendingCommissionPercent: null
+        });
+        showToast(`Commission change request for "${shop.name}" approved at ${shop.pendingCommissionPercent}%!`);
+      } else {
+        await updateDoc(docRef, {
+          commissionRequestStatus: 'rejected',
+          pendingCommissionPercent: null
+        });
+        showToast(`Commission change request for "${shop.name}" rejected.`);
+      }
+    } catch (err) {
+      console.error("Error approving/rejecting commission request:", err);
+      alert("Failed to update request: " + err.message);
     }
   };
 
@@ -6223,6 +6324,15 @@ function App() {
                         </div>
                       </div>
 
+                      {/* Today's Net Profit */}
+                      <div className="analytics-card card-grad-warning" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
+                        <div className="analytics-card-title">Today's Net Profit</div>
+                        <div className="analytics-card-value">₹{analytics.todayStats.netProfit || 0}</div>
+                        <div className="analytics-card-footer">
+                          <span>Successful Earnings Summary</span>
+                        </div>
+                      </div>
+
                       {/* All-Time Sales */}
                       <div className="analytics-card card-grad-profit" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">All-Time Gross Sales</div>
@@ -7429,6 +7539,18 @@ function App() {
                           style={{ width: '100%' }}
                         />
                       </div>
+                      
+                      <div className="form-group" style={{ margin: 0 }}>
+                        <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Commission Rate (%) (Optional - Fallback to Default)</label>
+                        <input
+                          type="number"
+                          placeholder={`Default (${commissionPercent}%)`}
+                          value={newShopCommission}
+                          onChange={(e) => setNewShopCommission(e.target.value)}
+                          className="custom-input"
+                          style={{ width: '100%' }}
+                        />
+                      </div>
 
                       <button type="submit" className="neon-btn" style={{ marginTop: '8px', padding: '10px', width: '100%' }}>
                         Add & Onboard Shop
@@ -7482,6 +7604,42 @@ function App() {
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Pending Merchant Commission Requests */}
+                <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Pending Commission Rate Requests ({shops.filter(s => s.commissionRequestStatus === 'pending').length})</h2>
+                  </div>
+                  <div className="approval-list fade-in">
+                    {shops.filter(s => s.commissionRequestStatus === 'pending').length === 0 ? (
+                      <p style={{ color: 'var(--color-text-muted)', margin: 0, padding: '12px 0', fontSize: '13px' }}>
+                        No pending commission rate change requests.
+                      </p>
+                    ) : (
+                      shops.filter(s => s.commissionRequestStatus === 'pending').map(s => {
+                        const currentComm = s.commissionPercent !== undefined ? s.commissionPercent : commissionPercent;
+                        return (
+                          <div key={s.id} className="approval-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', marginBottom: '8px' }}>
+                            <div className="approval-meta" style={{ textAlign: 'left' }}>
+                              <h4 style={{ margin: 0, color: 'var(--color-text-main)' }}>{s.name}</h4>
+                              <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                                Current Commission: <strong>{currentComm}%</strong> | Requested Commission: <strong style={{ color: 'var(--color-primary)' }}>{s.pendingCommissionPercent}%</strong>
+                              </p>
+                            </div>
+                            <div className="approval-actions" style={{ display: 'flex', gap: '8px' }}>
+                              <button className="approve-btn" onClick={() => handleAdminVerifyCommissionChange(s, true)} style={{ background: 'var(--color-success)', borderColor: 'var(--color-success)', color: '#fff', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer', border: 'none' }}>
+                                <Check size={14} /> Approve
+                              </button>
+                              <button className="reject-btn" onClick={() => handleAdminVerifyCommissionChange(s, false)} style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: '#fff', padding: '4px 8px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer', border: 'none' }}>
+                                <X size={14} /> Reject
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
 
                 {/* Pending Product Catalog Requests */}
@@ -7790,48 +7948,7 @@ function App() {
                         />
                       </div>
 
-                      <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid var(--color-border)' }}></div>
 
-                      <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', color: 'var(--color-primary)' }}>Promotional Delivery Rules</h4>
-                      
-                      <div className="form-group" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <input
-                          type="checkbox"
-                          id="promo-delivery-30-chk"
-                          checked={promoDelivery30Enabled}
-                          onChange={() => handleTogglePromoRule('promoDelivery30', promoDelivery30Enabled)}
-                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        <label htmlFor="promo-delivery-30-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
-                          Enable 30% Delivery Discount (Orders &gt; ₹599)
-                        </label>
-                      </div>
-
-                      <div className="form-group" style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <input
-                          type="checkbox"
-                          id="promo-food-free-chk"
-                          checked={promoFoodFreeEnabled}
-                          onChange={() => handleTogglePromoRule('promoFoodFree', promoFoodFreeEnabled)}
-                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        <label htmlFor="promo-food-free-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
-                          Enable FREE Food Delivery (Orders &gt; ₹999 + Food items)
-                        </label>
-                      </div>
-
-                      <div className="form-group" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <input
-                          type="checkbox"
-                          id="promo-grocery-free-chk"
-                          checked={promoGroceryFreeEnabled}
-                          onChange={() => handleTogglePromoRule('promoGroceryFree', promoGroceryFreeEnabled)}
-                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
-                        <label htmlFor="promo-grocery-free-chk" style={{ fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer', userSelect: 'none', fontWeight: '500' }}>
-                          Enable FREE Grocery Delivery (Orders &gt; ₹1999 + Grocery items)
-                        </label>
-                      </div>
 
                       <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid var(--color-border)' }}></div>
 
@@ -8524,6 +8641,21 @@ function App() {
                         
                         {isStandardOption && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Sponsor</label>
+                            <select
+                              value={newCouponSponsor}
+                              onChange={(e) => setNewCouponSponsor(e.target.value)}
+                              className="custom-input"
+                              style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                            >
+                              <option value="merchant">Sponsored by Merchant (Option A)</option>
+                              <option value="pixigo">Sponsored by PixiGo/Company (Option B)</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {isStandardOption && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
                             <select
                               value={newCouponType}
@@ -8648,6 +8780,7 @@ function App() {
                         <th>Discount</th>
                         <th>Min Cart</th>
                         <th>Max Limit</th>
+                        <th>Sponsor</th>
                         <th>Status</th>
                         <th style={{ textAlign: 'right' }}>Actions</th>
                       </tr>
@@ -8655,7 +8788,7 @@ function App() {
                     <tbody>
                       {coupons.length === 0 ? (
                         <tr>
-                          <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="8" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                             No coupon codes configured yet.
                           </td>
                         </tr>
@@ -8682,6 +8815,11 @@ function App() {
                               <td>{c.type === 'flat' ? `₹${c.discount}` : `${c.discount}%`}</td>
                               <td>₹{c.minCart || 0}</td>
                               <td>{(!c.isDeliveryPromo && c.type === 'percentage' && c.maxDiscount) ? `₹${c.maxDiscount}` : 'None'}</td>
+                              <td>
+                                <span className={`badge ${c.sponsor === 'pixigo' ? 'badge-primary' : 'badge-warning'}`} style={{ textTransform: 'capitalize' }}>
+                                  {c.sponsor === 'pixigo' ? 'PixiGo/Company' : 'Merchant'}
+                                </span>
+                              </td>
                               <td>
                                 <span className={`badge ${c.isActive ? 'badge-success' : 'badge-danger'}`}>
                                   {c.isActive ? 'Active' : 'Inactive'}
@@ -9308,15 +9446,20 @@ function App() {
                   <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
                     Welcome, {currentMerchantShopName || 'Merchant Shop'}
                   </h2>
-                  {loggedInMerchantShop ? (
-                    <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                      Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong>
-                    </p>
-                  ) : (
-                    <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                      Logged in as: <strong>{user?.email}</strong>. If your shop is not linked, please contact the Administrator.
-                    </p>
-                  )}
+                  {(() => {
+                    const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
+                    const activeShopCommission = (matchedShop && matchedShop.commissionPercent !== undefined) ? matchedShop.commissionPercent : commissionPercent;
+                    
+                    return loggedInMerchantShop ? (
+                      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                        Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong> | Commission Rate: <strong>{activeShopCommission}%</strong>
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                        Logged in as: <strong>{user?.email}</strong> | Active Commission Rate: <strong>{activeShopCommission}%</strong>. If your shop is not linked, please contact the Administrator.
+                      </p>
+                    );
+                  })()}
                   {(() => {
                     const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                     if (!matchedShop) return null;
@@ -9523,6 +9666,66 @@ function App() {
                 </div>
 
                 <div className="divider" style={{ margin: '32px 0' }}></div>
+
+                {/* Commission Rate Settings Request Form */}
+                {(() => {
+                  const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
+                  if (!matchedShop) return null;
+                  
+                  const activeShopCommission = matchedShop.commissionPercent !== undefined ? matchedShop.commissionPercent : commissionPercent;
+                  const isPendingRequest = matchedShop.commissionRequestStatus === 'pending';
+                  
+                  return (
+                    <>
+                      <div className="merchant-onboarding" style={{ marginTop: '24px' }}>
+                        <h2 style={{ textAlign: 'left' }}>Commission Rate Request</h2>
+                        <p style={{ fontSize: '13.5px', color: 'var(--color-text-muted)', marginBottom: '16px', textAlign: 'left' }}>
+                          Your current active commission rate is <strong>{activeShopCommission}%</strong>. You can request the Admin to change your commission rate below.
+                        </p>
+                        
+                        {isPendingRequest && (
+                          <div style={{
+                            background: 'rgba(245, 158, 11, 0.1)',
+                            border: '1px solid rgba(245, 158, 11, 0.3)',
+                            padding: '12px',
+                            borderRadius: '8px',
+                            color: '#fbbf24',
+                            fontSize: '13px',
+                            marginBottom: '16px',
+                            textAlign: 'left'
+                          }}>
+                            ⏳ You have a pending request to change your commission rate to <strong>{matchedShop.pendingCommissionPercent}%</strong>. Please wait for Admin approval.
+                          </div>
+                        )}
+                        
+                        <div style={{ display: 'flex', gap: '12px', alignItems: 'end', flexWrap: 'wrap', maxWidth: '400px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, textAlign: 'left' }}>
+                            <label style={{ fontSize: '12.5px', fontWeight: '600' }}>Proposed Commission Rate (%)</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="e.g. 15"
+                              value={proposedCommissionInput}
+                              onChange={(e) => setProposedCommissionInput(e.target.value)}
+                              className="custom-input"
+                              disabled={isPendingRequest}
+                            />
+                          </div>
+                          <button
+                            onClick={() => handleRequestCommissionChange(matchedShop)}
+                            className="neon-btn"
+                            disabled={isPendingRequest}
+                            style={{ height: '38px', padding: '0 16px', fontWeight: 'bold' }}
+                          >
+                            Submit Request
+                          </button>
+                        </div>
+                      </div>
+                      <div className="divider" style={{ margin: '32px 0' }}></div>
+                    </>
+                  );
+                })()}
 
                 <div className="merchant-management-grid">
                   {/* Catalog Creator */}
@@ -11950,6 +12153,20 @@ function App() {
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
                 <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Address:</span>
                 <span>{selectedShopDetails.address || 'Vaishali Market, Jaipur (RJ)'}</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Commission Rate (%):</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  placeholder={`Default (${commissionPercent}%)`}
+                  value={shopDocCommission}
+                  onChange={(e) => setShopDocCommission(e.target.value)}
+                  className="custom-input-premium"
+                  style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%', maxWidth: '200px' }}
+                />
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
