@@ -6047,31 +6047,23 @@ function App() {
               <div className="footer-columns">
                 {/* Brand & Recognitions Column */}
                 <div className="footer-col">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
-                    <div style={{
-                      background: '#ffffff',
-                      padding: '5px',
-                      borderRadius: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)'
-                    }}>
-                      <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" style={{ height: '36px', width: 'auto' }} />
-                    </div>
-                    <span style={{ fontSize: '22px', fontWeight: '800', fontFamily: 'var(--font-heading)', color: '#ffffff', letterSpacing: '-0.5px' }}>ChittorTech</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span style={{ fontFamily: 'var(--font-heading)', fontSize: '26px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px' }}>
+                      <span className="brand-logo-highlight" style={{ color: '#3cd070' }}>PIXI</span>
+                      <span className="brand-logo-light" style={{ fontStyle: 'italic', color: 'transparent', WebkitTextStroke: '0.8px #ffffff' }}>go</span>
+                    </span>
                   </div>
-                  <p style={{ marginBottom: '20px', fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.65)' }}>
-                    Empowering local merchants and delivery partners in Chittorgarh with cutting-edge hyper-local delivery solutions.
+                  <p style={{ marginBottom: '20px', fontSize: '13.5px', color: 'rgba(255, 255, 255, 0.7)', lineHeight: '1.6' }}>
+                    Your Ultimate Instant Neighborhood Marketplace. PixiGo connects you with your favorite local neighborhood stores, delivering fresh essentials straight to your doorstep with lightning speed.
                   </p>
-                  <div className="trust-badges-container">
+                  <div className="trust-badges-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <div className="trust-badge-pill">
-                      <Check size={13} className="trust-badge-icon" />
-                      <span>iStart Rajasthan Recognized</span>
+                      <Check size={13} className="trust-badge-icon" style={{ color: '#3cd070' }} />
+                      <span>100% Fresh & Handpicked Quality</span>
                     </div>
                     <div className="trust-badge-pill">
-                      <Check size={13} className="trust-badge-icon" />
-                      <span>Registered MSME | Startup India</span>
+                      <Check size={13} className="trust-badge-icon" style={{ color: '#3cd070' }} />
+                      <span>Hassle-Free Return Policy</span>
                     </div>
                   </div>
                 </div>
@@ -6119,7 +6111,7 @@ function App() {
                 </span>
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
                   <span className="footer-bottom-text">
-                    © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <span style={{ color: '#ffffff', fontWeight: '600' }}>ChittorTech</span>.
+                    © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <a href="https://chittortech.online" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', fontWeight: '600', textDecoration: 'underline', cursor: 'pointer' }}>ChittorTech</a>.
                   </span>
                   <div className="footer-socials">
                     <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>
