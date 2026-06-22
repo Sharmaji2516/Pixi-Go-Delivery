@@ -369,8 +369,11 @@ function App() {
   const promoFoodFreeEnabled = !!(promoFoodFreeCoupon ? promoFoodFreeCoupon.isActive : false);
   const promoGroceryFreeEnabled = !!(promoGroceryFreeCoupon ? promoGroceryFreeCoupon.isActive : false);
 
-  const [newCouponPurpose, setNewCouponPurpose] = useState('standard'); // 'standard' | 'delivery'
-  const [newDeliveryPromoType, setNewDeliveryPromoType] = useState('discount_delivery_percent');
+  const [newCouponPurpose, setNewCouponPurpose] = useState('standard'); // 'standard' | 'delivery' | 'custom'
+  const [customPurposeText, setCustomPurposeText] = useState('');
+  const [customPurposeClass, setCustomPurposeClass] = useState('standard'); // 'standard' | 'delivery'
+  const [newDeliveryPromoType, setNewDeliveryPromoType] = useState('discount_delivery_percent'); // 'discount_delivery_percent' | ... | 'custom'
+  const [customDeliveryPromoTypeText, setCustomDeliveryPromoTypeText] = useState('');
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponDiscount, setNewCouponDiscount] = useState('');
   const [newCouponMinCart, setNewCouponMinCart] = useState('');
@@ -3280,7 +3283,10 @@ function App() {
     }
 
     let couponData = {};
-    if (newCouponPurpose === 'standard') {
+    const purposeVal = newCouponPurpose === 'custom' ? (customPurposeText.trim() || 'custom') : newCouponPurpose;
+    const isDelivery = purposeVal === 'delivery' || (newCouponPurpose === 'custom' && customPurposeClass === 'delivery');
+
+    if (!isDelivery) {
       if (!newCouponDiscount) {
         alert('Please specify the discount value for the standard coupon.');
         return;
@@ -3293,12 +3299,14 @@ function App() {
         maxDiscount: newCouponType === 'percentage' && newCouponMaxDiscount ? Number(newCouponMaxDiscount) : null,
         isActive: true,
         isDeliveryPromo: false,
+        purpose: purposeVal,
         createdAt: new Date().toISOString()
       };
     } else {
       // Delivery Promotion Rule
-      const discountVal = newDeliveryPromoType === 'discount_delivery_percent' ? (Number(newCouponDiscount) || 30) : 100;
-      const minCartVal = Number(newCouponMinCart) || (newDeliveryPromoType === 'discount_delivery_percent' ? 599 : newDeliveryPromoType === 'free_delivery_food' ? 999 : 1999);
+      const promoTypeVal = newDeliveryPromoType === 'custom' ? (customDeliveryPromoTypeText.trim() || 'custom_delivery_promo') : newDeliveryPromoType;
+      const discountVal = promoTypeVal === 'discount_delivery_percent' ? (Number(newCouponDiscount) || 30) : 100;
+      const minCartVal = Number(newCouponMinCart) || (promoTypeVal === 'discount_delivery_percent' ? 599 : promoTypeVal === 'free_delivery_food' ? 999 : 1999);
       
       couponData = {
         code: codeUpper,
@@ -3307,7 +3315,8 @@ function App() {
         minCart: minCartVal,
         isActive: true,
         isDeliveryPromo: true,
-        deliveryPromoType: newDeliveryPromoType,
+        purpose: purposeVal,
+        deliveryPromoType: promoTypeVal,
         createdAt: new Date().toISOString()
       };
     }
@@ -3321,6 +3330,9 @@ function App() {
       setNewCouponMinCart('');
       setNewCouponMaxDiscount('');
       setNewCouponType('flat');
+      setCustomPurposeText('');
+      setCustomDeliveryPromoTypeText('');
+      setNewCouponPurpose('standard');
     } catch (err) {
       console.error("Error adding coupon:", err);
       alert(`Failed to create coupon: ${err.message}`);
@@ -4261,6 +4273,21 @@ function App() {
                 promoNotification = `🎉 Delivery is FREE because your cart is above ₹${groceryRule.minCart ?? 1999} and contains Grocery items!`;
               } else if (discountRule && subtotal > (discountRule.minCart ?? 599) && originalFee > 0) {
                 promoNotification = `🎉 You saved ${discountRule.discount ?? 30}% on delivery because your cart value is above ₹${discountRule.minCart ?? 599}!`;
+              } else if (originalFee > 0) {
+                const customAppliedRule = activeDeliveryPromos.find(c => 
+                  c.deliveryPromoType !== 'free_delivery_food' && 
+                  c.deliveryPromoType !== 'free_delivery_grocery' && 
+                  c.deliveryPromoType !== 'discount_delivery_percent' &&
+                  subtotal > (c.minCart ?? 0)
+                );
+                if (customAppliedRule) {
+                  const discountPct = customAppliedRule.discount ?? 0;
+                  if (discountPct === 100) {
+                    promoNotification = `🎉 Delivery is FREE because of coupon rule ${customAppliedRule.code}!`;
+                  } else {
+                    promoNotification = `🎉 You saved ${discountPct}% on delivery because of coupon rule ${customAppliedRule.code}!`;
+                  }
+                }
               }
 
               const totalAmount = subtotal + fee - appliedDiscount;
@@ -8006,148 +8033,225 @@ function App() {
                     ➕ Create New Promo Coupon
                   </h3>
                   
-                  <form onSubmit={handleAddCoupon} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Purpose</label>
-                      <select
-                        value={newCouponPurpose}
-                        onChange={(e) => {
-                          setNewCouponPurpose(e.target.value);
-                          if (e.target.value === 'delivery') {
-                            setNewCouponType('percentage');
-                            // Prepopulate default delivery promo fields
-                            setNewDeliveryPromoType('discount_delivery_percent');
-                            setNewCouponCode('DELIVERY30');
-                            setNewCouponMinCart('599');
-                            setNewCouponDiscount('30');
-                          } else {
-                            setNewCouponCode('');
-                            setNewCouponMinCart('');
-                            setNewCouponDiscount('');
-                          }
-                        }}
-                        className="custom-input"
-                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                      >
-                        <option value="standard">Standard Discount Coupon</option>
-                        <option value="delivery">Delivery Promotion Rule</option>
-                      </select>
-                    </div>
-
-                    {newCouponPurpose === 'delivery' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Delivery Rule Type</label>
-                        <select
-                          value={newDeliveryPromoType}
-                          onChange={(e) => {
-                            const ruleType = e.target.value;
-                            setNewDeliveryPromoType(ruleType);
-                            if (ruleType === 'discount_delivery_percent') {
-                              setNewCouponCode('DELIVERY30');
-                              setNewCouponMinCart('599');
-                              setNewCouponDiscount('30');
-                            } else if (ruleType === 'free_delivery_food') {
-                              setNewCouponCode('DELIVERYFOOD');
-                              setNewCouponMinCart('999');
-                              setNewCouponDiscount('100');
-                            } else if (ruleType === 'free_delivery_grocery') {
-                              setNewCouponCode('DELIVERYGROCERY');
-                              setNewCouponMinCart('1999');
-                              setNewCouponDiscount('100');
-                            }
-                          }}
-                          className="custom-input"
-                          style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                        >
-                          <option value="discount_delivery_percent">Percentage Delivery Discount</option>
-                          <option value="free_delivery_food">FREE Delivery on Food categories</option>
-                          <option value="free_delivery_grocery">FREE Delivery on Grocery categories</option>
-                        </select>
-                      </div>
-                    )}
-
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Code</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. SAVE20"
-                        value={newCouponCode}
-                        onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
-                        className="custom-input"
-                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                        required
-                      />
-                    </div>
+                  {(() => {
+                    const isDeliveryOption = newCouponPurpose === 'delivery' || (newCouponPurpose === 'custom' && customPurposeClass === 'delivery');
+                    const isStandardOption = newCouponPurpose === 'standard' || (newCouponPurpose === 'custom' && customPurposeClass === 'standard');
                     
-                    {newCouponPurpose === 'standard' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
-                        <select
-                          value={newCouponType}
-                          onChange={(e) => setNewCouponType(e.target.value)}
-                          className="custom-input"
-                          style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                        >
-                          <option value="flat">Flat Discount (₹)</option>
-                          <option value="percentage">Percentage Discount (%)</option>
-                        </select>
-                      </div>
-                    )}
+                    return (
+                      <form onSubmit={handleAddCoupon} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', alignItems: 'end' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Purpose</label>
+                          <select
+                            value={newCouponPurpose}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setNewCouponPurpose(val);
+                              if (val === 'delivery') {
+                                setNewCouponType('percentage');
+                                // Prepopulate default delivery promo fields
+                                setNewDeliveryPromoType('discount_delivery_percent');
+                                setNewCouponCode('DELIVERY30');
+                                setNewCouponMinCart('599');
+                                setNewCouponDiscount('30');
+                              } else if (val === 'standard') {
+                                setNewCouponCode('');
+                                setNewCouponMinCart('');
+                                setNewCouponDiscount('');
+                              } else {
+                                // custom purpose
+                                setNewCouponCode('');
+                                setNewCouponMinCart('');
+                                setNewCouponDiscount('');
+                                setCustomPurposeText('');
+                              }
+                            }}
+                            className="custom-input"
+                            style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                          >
+                            <option value="standard">Standard Discount Coupon</option>
+                            <option value="delivery">Delivery Promotion Rule</option>
+                            <option value="custom">Custom Purpose...</option>
+                          </select>
+                        </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>
-                        {newCouponPurpose === 'delivery' 
-                          ? (newDeliveryPromoType === 'discount_delivery_percent' ? 'Delivery Discount (%)' : 'Delivery Discount (%) [Free = 100]') 
-                          : `Discount ${newCouponType === 'flat' ? 'Value (₹)' : 'Rate (%)'}`}
-                      </label>
-                      <input
-                        type="number"
-                        placeholder={newCouponPurpose === 'delivery' ? '100' : (newCouponType === 'flat' ? 'e.g. 100' : 'e.g. 10')}
-                        value={newCouponDiscount}
-                        onChange={(e) => setNewCouponDiscount(e.target.value)}
-                        className="custom-input"
-                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                        min="1"
-                        max="100"
-                        disabled={newCouponPurpose === 'delivery' && newDeliveryPromoType !== 'discount_delivery_percent'}
-                        required
-                      />
-                    </div>
+                        {newCouponPurpose === 'custom' && (
+                          <>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Custom Purpose Name</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. BIRTHDAY_PROMO"
+                                value={customPurposeText}
+                                onChange={(e) => setCustomPurposeText(e.target.value.toUpperCase())}
+                                className="custom-input"
+                                style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                                required
+                              />
+                            </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Min Cart Subtotal (₹)</label>
-                      <input
-                        type="number"
-                        placeholder="e.g. 150"
-                        value={newCouponMinCart}
-                        onChange={(e) => setNewCouponMinCart(e.target.value)}
-                        className="custom-input"
-                        style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                        min="0"
-                      />
-                    </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Class</label>
+                              <select
+                                value={customPurposeClass}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setCustomPurposeClass(val);
+                                  if (val === 'delivery') {
+                                    setNewCouponType('percentage');
+                                    setNewDeliveryPromoType('discount_delivery_percent');
+                                    setNewCouponDiscount('30');
+                                  } else {
+                                    setNewCouponDiscount('');
+                                  }
+                                }}
+                                className="custom-input"
+                                style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                              >
+                                <option value="standard">Standard Discount Coupon</option>
+                                <option value="delivery">Delivery Promotion Rule</option>
+                              </select>
+                            </div>
+                          </>
+                        )}
 
-                    {newCouponPurpose === 'standard' && newCouponType === 'percentage' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Max Discount Limit (₹)</label>
-                        <input
-                          type="number"
-                          placeholder="e.g. 50 (Optional)"
-                          value={newCouponMaxDiscount}
-                          onChange={(e) => setNewCouponMaxDiscount(e.target.value)}
-                          className="custom-input"
-                          style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
-                          min="1"
-                        />
-                      </div>
-                    )}
+                        {isDeliveryOption && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Delivery Rule Type</label>
+                            <select
+                              value={newDeliveryPromoType}
+                              onChange={(e) => {
+                                const ruleType = e.target.value;
+                                setNewDeliveryPromoType(ruleType);
+                                if (ruleType === 'discount_delivery_percent') {
+                                  setNewCouponCode('DELIVERY30');
+                                  setNewCouponMinCart('599');
+                                  setNewCouponDiscount('30');
+                                } else if (ruleType === 'free_delivery_food') {
+                                  setNewCouponCode('DELIVERYFOOD');
+                                  setNewCouponMinCart('999');
+                                  setNewCouponDiscount('100');
+                                } else if (ruleType === 'free_delivery_grocery') {
+                                  setNewCouponCode('DELIVERYGROCERY');
+                                  setNewCouponMinCart('1999');
+                                  setNewCouponDiscount('100');
+                                } else {
+                                  // Custom Delivery Rule Type
+                                  setNewCouponCode('');
+                                  setNewCouponMinCart('');
+                                  setNewCouponDiscount('');
+                                  setCustomDeliveryPromoTypeText('');
+                                }
+                              }}
+                              className="custom-input"
+                              style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                            >
+                              <option value="discount_delivery_percent">Percentage Delivery Discount</option>
+                              <option value="free_delivery_food">FREE Delivery on Food categories</option>
+                              <option value="free_delivery_grocery">FREE Delivery on Grocery categories</option>
+                              <option value="custom">Custom Delivery Rule Type...</option>
+                            </select>
+                          </div>
+                        )}
 
-                    <div>
-                      <button type="submit" className="neon-btn" style={{ width: '100%', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        <Plus size={16} /> Create Coupon
-                      </button>
-                    </div>
-                  </form>
+                        {isDeliveryOption && newDeliveryPromoType === 'custom' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Custom Rule Type Name</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. free_drinks_delivery"
+                              value={customDeliveryPromoTypeText}
+                              onChange={(e) => setCustomDeliveryPromoTypeText(e.target.value.toLowerCase())}
+                              className="custom-input"
+                              style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                              required
+                            />
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Code</label>
+                          <input
+                            type="text"
+                            placeholder="e.g. SAVE20"
+                            value={newCouponCode}
+                            onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                            className="custom-input"
+                            style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                            required
+                          />
+                        </div>
+                        
+                        {isStandardOption && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Coupon Type</label>
+                            <select
+                              value={newCouponType}
+                              onChange={(e) => setNewCouponType(e.target.value)}
+                              className="custom-input"
+                              style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                            >
+                              <option value="flat">Flat Discount (₹)</option>
+                              <option value="percentage">Percentage Discount (%)</option>
+                            </select>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>
+                            {isDeliveryOption 
+                              ? (newDeliveryPromoType === 'discount_delivery_percent' || newDeliveryPromoType === 'custom' ? 'Delivery Discount (%)' : 'Delivery Discount (%) [Free = 100]') 
+                              : `Discount ${newCouponType === 'flat' ? 'Value (₹)' : 'Rate (%)'}`}
+                          </label>
+                          <input
+                            type="number"
+                            placeholder={isDeliveryOption ? '100' : (newCouponType === 'flat' ? 'e.g. 100' : 'e.g. 10')}
+                            value={newCouponDiscount}
+                            onChange={(e) => setNewCouponDiscount(e.target.value)}
+                            className="custom-input"
+                            style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                            min="1"
+                            max="100"
+                            disabled={isDeliveryOption && newDeliveryPromoType !== 'discount_delivery_percent' && newDeliveryPromoType !== 'custom'}
+                            required
+                          />
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Min Cart Subtotal (₹)</label>
+                          <input
+                            type="number"
+                            placeholder="e.g. 150"
+                            value={newCouponMinCart}
+                            onChange={(e) => setNewCouponMinCart(e.target.value)}
+                            className="custom-input"
+                            style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                            min="0"
+                          />
+                        </div>
+
+                        {isStandardOption && newCouponType === 'percentage' && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Max Discount Limit (₹)</label>
+                            <input
+                              type="number"
+                              placeholder="e.g. 50 (Optional)"
+                              value={newCouponMaxDiscount}
+                              onChange={(e) => setNewCouponMaxDiscount(e.target.value)}
+                              className="custom-input"
+                              style={{ padding: '8px 12px', background: 'rgba(15, 23, 42, 0.2)' }}
+                              min="1"
+                            />
+                          </div>
+                        )}
+
+                        <div>
+                          <button type="submit" className="neon-btn" style={{ width: '100%', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <Plus size={16} /> Create Coupon
+                          </button>
+                        </div>
+                      </form>
+                    );
+                  })()}
                 </div>
 
                 {/* Table list of Coupons */}

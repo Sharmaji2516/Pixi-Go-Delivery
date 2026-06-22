@@ -106,58 +106,53 @@ export const fetchRoadDistance = async (shopLat, shopLng, customerLat, customerL
 export const getPromotionalDeliveryFee = (subtotal, cartItems, baseDeliveryFee, activeDeliveryPromos = []) => {
   if (baseDeliveryFee <= 0) return 0;
 
-  let foodRule = null;
-  let groceryRule = null;
-  let discountRule = null;
-
+  // If the parameter is the old options object, map it to rules array format for unified processing
+  let rules = [];
   if (Array.isArray(activeDeliveryPromos)) {
-    foodRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'free_delivery_food');
-    groceryRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'free_delivery_grocery');
-    discountRule = activeDeliveryPromos.find(p => p.deliveryPromoType === 'discount_delivery_percent');
+    rules = activeDeliveryPromos;
   } else if (activeDeliveryPromos && typeof activeDeliveryPromos === 'object') {
-    // Fallback support for old options object parameter format
     if (activeDeliveryPromos.promoFoodFreeEnabled) {
-      foodRule = { minCart: 999 };
+      rules.push({ deliveryPromoType: 'free_delivery_food', minCart: 999 });
     }
     if (activeDeliveryPromos.promoGroceryFreeEnabled) {
-      groceryRule = { minCart: 1999 };
+      rules.push({ deliveryPromoType: 'free_delivery_grocery', minCart: 1999 });
     }
     if (activeDeliveryPromos.promoDelivery30Enabled) {
-      discountRule = { minCart: 599, discount: 30 };
+      rules.push({ deliveryPromoType: 'discount_delivery_percent', minCart: 599, discount: 30 });
     }
   }
 
-  // 1. FREE Food Delivery: Order Value Above threshold & contains Food items
-  if (foodRule) {
-    const hasFoodItems = cartItems.some(item => 
-      ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
-    );
-    const minCartVal = foodRule.minCart ?? 999;
-    if (subtotal > minCartVal && hasFoodItems) {
-      return 0;
+  let finalFee = baseDeliveryFee;
+
+  // Process all rules and find the one that gives the lowest delivery fee
+  for (const rule of rules) {
+    const minCartVal = rule.minCart ?? 0;
+    if (subtotal <= minCartVal) continue;
+
+    if (rule.deliveryPromoType === 'free_delivery_food') {
+      const hasFoodItems = cartItems.some(item => 
+        ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
+      );
+      if (hasFoodItems) {
+        finalFee = 0;
+      }
+    } else if (rule.deliveryPromoType === 'free_delivery_grocery') {
+      const hasGroceryItems = cartItems.some(item => 
+        ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
+      );
+      if (hasGroceryItems) {
+        finalFee = 0;
+      }
+    } else {
+      // General or custom percentage delivery discount
+      const pct = rule.discount ?? 0;
+      const computed = Math.max(0, Math.round(baseDeliveryFee * (1 - pct / 100)));
+      if (computed < finalFee) {
+        finalFee = computed;
+      }
     }
   }
 
-  // 2. FREE Grocery Delivery: Order Value Above threshold & contains Grocery items
-  if (groceryRule) {
-    const hasGroceryItems = cartItems.some(item => 
-      ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
-    );
-    const minCartVal = groceryRule.minCart ?? 1999;
-    if (subtotal > minCartVal && hasGroceryItems) {
-      return 0;
-    }
-  }
-
-  // 3. Percentage Discount on Delivery Fee: Order Value Above threshold
-  if (discountRule) {
-    const minCartVal = discountRule.minCart ?? 599;
-    if (subtotal > minCartVal) {
-      const pct = discountRule.discount ?? 30;
-      return Math.round(baseDeliveryFee * (1 - pct / 100));
-    }
-  }
-
-  return baseDeliveryFee;
+  return finalFee;
 };
 
