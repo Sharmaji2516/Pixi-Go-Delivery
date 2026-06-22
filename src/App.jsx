@@ -6047,20 +6047,19 @@ function App() {
               <div className="footer-columns">
                 {/* Brand & Recognitions Column */}
                 <div className="footer-col">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
-                    <div style={{
-                      background: '#ffffff',
-                      padding: '5px',
-                      borderRadius: '10px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                      width: '45px',
-                      height: '45px'
-                    }}>
-                      <img src="/logo.jpg" alt="PIXIgo Logo" style={{ height: '100%', width: '100%', borderRadius: '6px', objectFit: 'contain' }} />
-                    </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '16px', marginBottom: '20px' }}>
+                    <img 
+                      src="/logo.jpg" 
+                      alt="PIXIgo Logo" 
+                      style={{ 
+                        height: '60px', 
+                        width: '60px', 
+                        borderRadius: '16px', 
+                        boxShadow: '0 4px 20px rgba(60, 208, 112, 0.25)',
+                        border: '1px solid rgba(60, 208, 112, 0.3)',
+                        objectFit: 'cover'
+                      }} 
+                    />
                     <span style={{ fontFamily: 'var(--font-heading)', fontSize: '26px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px' }}>
                       <span className="brand-logo-highlight" style={{ color: '#3cd070' }}>PIXI</span>
                       <span className="brand-logo-light" style={{ fontStyle: 'italic', color: 'transparent', WebkitTextStroke: '0.8px #ffffff' }}>go</span>
