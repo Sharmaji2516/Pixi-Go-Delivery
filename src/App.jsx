@@ -2294,10 +2294,18 @@ function App() {
 
   // Add Item to Cart
   const handleAddToCart = (product, selectedVariant = null) => {
-    const hasDifferentStore = cart.some(item => item.store !== product.store);
-    if (hasDifferentStore) {
-      alert("Dear user, you have to order from another because we deliver a category product");
-      return;
+    const currentStore = cart.length > 0 ? cart[0].store : null;
+    if (currentStore && currentStore !== product.store) {
+      const confirmSwitch = window.confirm(
+        `At present, we don't allow the user to order from two different shops. Would you like to clear your cart and start shopping from "${product.store}" instead?`
+      );
+      if (confirmSwitch) {
+        setCart([]);
+        setCouponCode('');
+        setAppliedDiscount(0);
+      } else {
+        return;
+      }
     }
 
     const variants = parseProductVariants(product);
@@ -5038,7 +5046,7 @@ function App() {
                   className="circular-add-btn"
                   onClick={() => {
                     if (isClosed) {
-                      showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                      showToast(`The store is closed.`, 'warning');
                       return;
                     }
                     if (isOutOfRange) {
@@ -9735,7 +9743,7 @@ function App() {
                               }
                               
                               if (isClosed) {
-                                showToast(`We do not deliver at your location. Store is closed.`, 'warning');
+                                showToast(`The store is closed.`, 'warning');
                                 return;
                               }
                               if (isOutOfRange) {
