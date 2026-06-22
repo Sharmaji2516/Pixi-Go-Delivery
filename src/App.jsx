@@ -377,6 +377,7 @@ function App() {
   const [customCouponTypeText, setCustomCouponTypeText] = useState('');
   const [customCouponDiscountType, setCustomCouponDiscountType] = useState('flat'); // 'flat' | 'percentage'
   const [shopSwitchModal, setShopSwitchModal] = useState({ isOpen: false, pendingProduct: null, pendingVariant: null });
+  const [warningModal, setWarningModal] = useState({ isOpen: false, title: '', message: '', iconType: '' });
   const [newCouponCode, setNewCouponCode] = useState('');
   const [newCouponDiscount, setNewCouponDiscount] = useState('');
   const [newCouponMinCart, setNewCouponMinCart] = useState('');
@@ -2371,7 +2372,7 @@ function App() {
   // Apply Discount Coupon Code (Dynamic from Firestore with minCart, single-use, and type validation)
   const handleApplyCoupon = () => {
     if (!couponCode.trim()) {
-      alert('Please enter a coupon code.');
+      setWarningModal({ isOpen: true, title: "Coupon Required", message: "Please enter a coupon code.", iconType: "coupon" });
       return;
     }
     
@@ -2379,19 +2380,19 @@ function App() {
     const coupon = coupons.find(c => c.code?.toUpperCase() === codeUpper);
     
     if (!coupon) {
-      alert('Invalid coupon code!');
+      setWarningModal({ isOpen: true, title: "Invalid Coupon", message: "Invalid coupon code!", iconType: "coupon" });
       return;
     }
     
     if (!coupon.isActive) {
-      alert('This coupon is no longer active!');
+      setWarningModal({ isOpen: true, title: "Inactive Coupon", message: "This coupon is no longer active!", iconType: "coupon" });
       return;
     }
     
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
     const minCartVal = Number(coupon.minCart) || 0;
     if (cartSubtotal < minCartVal) {
-      alert(`Min cart value of ₹${minCartVal} required to apply this coupon. Your subtotal is ₹${cartSubtotal}.`);
+      setWarningModal({ isOpen: true, title: "Minimum Threshold Required", message: `Min cart value of ₹${minCartVal} required to apply this coupon. Your subtotal is ₹${cartSubtotal}.`, iconType: "coupon" });
       return;
     }
     
@@ -2406,7 +2407,7 @@ function App() {
     });
     
     if (isAlreadyUsed) {
-      alert('You have already used this coupon code on a prior order.');
+      setWarningModal({ isOpen: true, title: "Coupon Already Used", message: "You have already used this coupon code on a prior order.", iconType: "coupon" });
       return;
     }
     
@@ -2424,7 +2425,7 @@ function App() {
     discountAmt = Math.min(discountAmt, cartSubtotal);
     
     setAppliedDiscount(discountAmt);
-    alert(`Coupon "${codeUpper}" applied successfully! Discount: ₹${discountAmt}`);
+    setWarningModal({ isOpen: true, title: "Coupon Applied", message: `Coupon "${codeUpper}" applied successfully! Discount: ₹${discountAmt}`, iconType: "coupon_success" });
   };
 
   // Checkout and Order Placement
@@ -2434,7 +2435,10 @@ function App() {
       setIsAuthModalOpen(true);
       return;
     }
-    if (cart.length === 0) return alert('Your cart is empty!');
+    if (cart.length === 0) {
+      setWarningModal({ isOpen: true, title: "Empty Cart", message: "Your cart is empty!", iconType: "cart" });
+      return;
+    }
 
     // Check store-specific operating hours and manual toggle status
     const storeName = cart[0]?.store || 'Store';
@@ -2442,14 +2446,17 @@ function App() {
     const shopStatus = getShopOpenStatus(cartShop);
     if (!shopStatus.isOpen) {
       if (shopStatus.reason === 'OUTSIDE_HOURS') {
-        alert(`Sorry! ${storeName} is currently closed. Operating hours are ${cartShop?.openTime || '09:00'} to ${cartShop?.closeTime || '22:00'}.`);
+        setWarningModal({ isOpen: true, title: "Store Closed", message: `Sorry! ${storeName} is currently closed. Operating hours are ${cartShop?.openTime || '09:00'} to ${cartShop?.closeTime || '22:00'}.`, iconType: "store" });
       } else {
-        alert(`Sorry! ${storeName} is currently not accepting orders.`);
+        setWarningModal({ isOpen: true, title: "Store Offline", message: `Sorry! ${storeName} is currently not accepting orders.`, iconType: "store" });
       }
       return;
     }
 
-    if (!customerAddress) return alert('Please input your delivery coordinates / address!');
+    if (!customerAddress) {
+      setWarningModal({ isOpen: true, title: "Address Required", message: "Please input your delivery coordinates / address!", iconType: "range" });
+      return;
+    }
 
     // Check if customer already has an active order in progress
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
@@ -2459,14 +2466,14 @@ function App() {
       !o.status?.toUpperCase().startsWith('CANCEL')
     );
     if (hasActiveOrder) {
-      alert("You already have an active order in progress! Please wait for it to be completed or cancelled before placing a new one.");
+      setWarningModal({ isOpen: true, title: "Active Order Progress", message: "You already have an active order in progress! Please wait for it to be completed or cancelled before placing a new one.", iconType: "cart" });
       return;
     }
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
 
     if (cartSubtotal < 149) {
-      alert(`Minimum order value of ₹149 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`);
+      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹149 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
       return;
     }
 
@@ -2483,7 +2490,7 @@ function App() {
     }
 
     if (distanceVal > MAX_DELIVERY_RADIUS_KM) {
-      alert(`Cannot place order. The store (${storeName}) is ${distanceVal.toFixed(2)} km away, which exceeds our maximum delivery radius of ${MAX_DELIVERY_RADIUS_KM} km.`);
+      setWarningModal({ isOpen: true, title: "Out of Delivery Range", message: `Cannot place order. The store (${storeName}) is ${distanceVal.toFixed(2)} km away, which exceeds our maximum delivery radius of ${MAX_DELIVERY_RADIUS_KM} km.`, iconType: "range" });
       return;
     }
 
@@ -2566,9 +2573,9 @@ function App() {
       setAppliedDiscount(0);
       setCurrentOrderTracking(newOrder.id);
       setIsTrackingDrawerOpen(true);
-      alert(`Order Placed Successfully! Order ID: ${newOrder.id}. Saved to Firebase Database.`);
+      setWarningModal({ isOpen: true, title: "Order Placed Successfully", message: `Order Placed Successfully! Order ID: ${newOrder.id}. Saved to Firebase Database.`, iconType: "success" });
     } catch (error) {
-      alert(`Failed to save order to Database: ${error.message}`);
+      setWarningModal({ isOpen: true, title: "Checkout Error", message: `Failed to save order to Database: ${error.message}`, iconType: "error" });
     }
   };
 
@@ -5064,11 +5071,11 @@ function App() {
                   className="circular-add-btn"
                   onClick={() => {
                     if (isClosed) {
-                      showToast(`The store is closed.`, 'warning');
+                      setWarningModal({ isOpen: true, title: "Store Closed", message: "The store is closed.", iconType: "store" });
                       return;
                     }
                     if (isOutOfRange) {
-                      showToast(`We do not deliver at your location.`, 'warning');
+                      setWarningModal({ isOpen: true, title: "Out of Delivery Range", message: "We do not deliver at your location.", iconType: "range" });
                       return;
                     }
                     handleAddToCart(p);
@@ -9761,11 +9768,11 @@ function App() {
                               }
                               
                               if (isClosed) {
-                                showToast(`The store is closed.`, 'warning');
+                                setWarningModal({ isOpen: true, title: "Store Closed", message: "The store is closed.", iconType: "store" });
                                 return;
                               }
                               if (isOutOfRange) {
-                                showToast(`We do not deliver at your location.`, 'warning');
+                                setWarningModal({ isOpen: true, title: "Out of Delivery Range", message: "We do not deliver at your location.", iconType: "range" });
                                 return;
                               }
                               handleAddToCart(selectedVariantProduct, variant);
@@ -10156,6 +10163,85 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Custom Warning / Success Modal (Closed Stores / Out of Range / Coupons / Orders) */}
+      {warningModal.isOpen && (() => {
+        const isSuccessType = warningModal.iconType === 'success' || warningModal.iconType === 'coupon_success';
+        const themeColor = isSuccessType ? 'var(--color-primary)' : '#ef4444';
+        const themeBg = isSuccessType ? 'rgba(0, 255, 242, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+        const themeBoxShadow = isSuccessType ? '0 0 15px rgba(0, 255, 242, 0.3)' : '0 0 15px rgba(239, 68, 68, 0.3)';
+
+        const renderWarningIcon = () => {
+          switch (warningModal.iconType) {
+            case 'store':
+              return <Store size={32} />;
+            case 'range':
+              return <MapPin size={32} />;
+            case 'coupon':
+            case 'coupon_success':
+              return <Tag size={32} />;
+            case 'cart':
+              return <ShoppingCart size={32} />;
+            case 'success':
+              return <Check size={32} />;
+            case 'error':
+            default:
+              return <AlertTriangle size={32} />;
+          }
+        };
+
+        return (
+          <div className="modal-backdrop fade-in" style={{ zIndex: 11000 }} onClick={() => setWarningModal({ isOpen: false, title: '', message: '', iconType: '' })}>
+            <div className="past-orders-modal-card glass-panel border-glow" style={{ maxWidth: '400px', padding: '28px', textAlign: 'center', borderColor: themeColor }} onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => setWarningModal({ isOpen: false, title: '', message: '', iconType: '' })}>
+                <X size={20} />
+              </button>
+
+              <div className="modal-header-premium" style={{ marginBottom: '20px' }}>
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '50%',
+                  background: themeBg,
+                  border: `2px solid ${themeColor}`,
+                  boxShadow: themeBoxShadow,
+                  color: themeColor,
+                  marginBottom: '16px'
+                }}>
+                  {renderWarningIcon()}
+                </div>
+                <h3 className="section-title-premium" style={{ margin: 0, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {warningModal.title}
+                </h3>
+              </div>
+
+              <div style={{ marginBottom: '24px', fontSize: '14.5px', lineHeight: '1.6', color: 'rgba(255, 255, 255, 0.85)' }}>
+                {warningModal.message}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  className="neon-btn"
+                  style={{
+                    width: '120px',
+                    background: themeColor,
+                    borderColor: themeColor,
+                    boxShadow: `0 0 10px ${isSuccessType ? 'rgba(0, 255, 242, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                    color: isSuccessType ? '#000000' : '#ffffff',
+                    fontWeight: '800'
+                  }}
+                  onClick={() => setWarningModal({ isOpen: false, title: '', message: '', iconType: '' })}
+                >
+                  OK
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Mobile Sidebar Navigation Menu */}
       {isMobileMenuOpen && (
