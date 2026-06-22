@@ -427,6 +427,7 @@ function App() {
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
   const [isAboutUsOpen, setIsAboutUsOpen] = useState(false);
+  const [aboutUsActiveTab, setAboutUsActiveTab] = useState('company'); // 'company' | 'founder'
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isMerchantTermsOpen, setIsMerchantTermsOpen] = useState(false);
   const [isRiderTermsOpen, setIsRiderTermsOpen] = useState(false);
@@ -11116,95 +11117,218 @@ function App() {
               </p>
             </div>
 
+            {/* Tab Selection */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '12px', marginBottom: '16px' }}>
+              <button 
+                onClick={() => setAboutUsActiveTab('company')}
+                style={{
+                  flex: 1,
+                  background: aboutUsActiveTab === 'company' ? 'rgba(60, 208, 112, 0.12)' : 'transparent',
+                  border: 'none',
+                  color: aboutUsActiveTab === 'company' ? '#3cd070' : '#b2c4ba',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  transition: 'all 0.2s ease',
+                  border: aboutUsActiveTab === 'company' ? '1px solid rgba(60, 208, 112, 0.25)' : '1px solid transparent'
+                }}
+              >
+                🏢 Company Profile
+              </button>
+              <button 
+                onClick={() => setAboutUsActiveTab('founder')}
+                style={{
+                  flex: 1,
+                  background: aboutUsActiveTab === 'founder' ? 'rgba(60, 208, 112, 0.12)' : 'transparent',
+                  border: 'none',
+                  color: aboutUsActiveTab === 'founder' ? '#3cd070' : '#b2c4ba',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  transition: 'all 0.2s ease',
+                  border: aboutUsActiveTab === 'founder' ? '1px solid rgba(60, 208, 112, 0.25)' : '1px solid transparent'
+                }}
+              >
+                👨 Meet Our Founder
+              </button>
+            </div>
+
             <div className="about-us-scroll-content">
-              <div>
-                <p style={{ fontSize: '15px', lineHeight: '1.7', color: '#ffffff', margin: 0, fontWeight: '600' }}>
-                  Welcome to <span style={{ color: '#3cd070' }}>PixiGo</span> – Your Ultimate Instant Neighborhood Marketplace!
-                </p>
-                <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', marginTop: '10px', marginBottom: 0 }}>
-                  PixiGo is a modern, high-speed delivery service designed to bring your everyday essentials straight to your doorstep completely fresh and with lightning speed. We are not just another delivery platform; we are the trusted bridge connecting you with your favorite local neighborhood stores.
-                </p>
-              </div>
+              {aboutUsActiveTab === 'company' ? (
+                <>
+                  <div>
+                    <p style={{ fontSize: '15px', lineHeight: '1.7', color: '#ffffff', margin: 0, fontWeight: '600' }}>
+                      Welcome to <span style={{ color: '#3cd070' }}>PixiGo</span> – Your Ultimate Instant Neighborhood Marketplace!
+                    </p>
+                    <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', marginTop: '10px', marginBottom: 0 }}>
+                      PixiGo is a modern, high-speed delivery service designed to bring your everyday essentials straight to your doorstep completely fresh and with lightning speed. We are not just another delivery platform; we are the trusted bridge connecting you with your favorite local neighborhood stores.
+                    </p>
+                  </div>
 
-              <div style={{ background: 'rgba(31, 78, 61, 0.15)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(60, 208, 112, 0.2)' }}>
-                <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#3cd070', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 10px 0' }}>
-                  <span>🌱</span> Our Journey (How We Started & Who Founded It)
-                </h4>
-                <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0 }}>
-                  PixiGo was born out of a simple yet powerful mission: to transform the way neighborhoods shop and to save people’s most valuable asset—time. We realized that in today’s fast-paced world, spending hours buying fresh vegetables, grocery shopping, or visiting the bakery takes away precious time from families.
-                </p>
-                <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', marginTop: '10px', margin: 0 }}>
-                  To solve this everyday hassle, <strong style={{ color: '#ffffff' }}>Shakti Singh Rathor</strong> envisioned a smarter way to connect communities with local markets. Driven by a single-minded vision to bring unmatched convenience to your doorstep, he founded PixiGo. By empowering local vendors and neighborhood shops with advanced technology, we ensure that everything you ever need is just a single tap away on your phone.
-                </p>
-              </div>
+                  <div style={{ background: 'rgba(31, 78, 61, 0.15)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(60, 208, 112, 0.2)' }}>
+                    <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#3cd070', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 10px 0' }}>
+                      <span>🌱</span> Our Journey (How We Started & Who Founded It)
+                    </h4>
+                    <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0 }}>
+                      PixiGo was born out of a simple yet powerful mission: to transform the way neighborhoods shop and to save people’s most valuable asset—time. We realized that in today’s fast-paced world, spending hours buying fresh vegetables, grocery shopping, or visiting the bakery takes away precious time from families.
+                    </p>
+                    <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', marginTop: '10px', margin: 0 }}>
+                      To solve this everyday hassle, <strong style={{ color: '#ffffff' }}>Shakti Singh Rathor</strong> envisioned a smarter way to connect communities with local markets. Driven by a single-minded vision to bring unmatched convenience to your doorstep, he founded PixiGo. By empowering local vendors and neighborhood shops with advanced technology, we ensure that everything you ever need is just a single tap away on your phone.
+                    </p>
+                  </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-                  <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>🎯</span> Our Mission
-                  </h5>
-                  <p style={{ fontSize: '12px', lineHeight: '1.6', color: '#b2c4ba', margin: 0 }}>
-                    To transform every neighborhood and town into a superfast, smart marketplace where no household ever has to wait for their daily essentials.
-                  </p>
-                </div>
-                <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-                  <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span>👁️</span> Our Vision
-                  </h5>
-                  <p style={{ fontSize: '12px', lineHeight: '1.6', color: '#b2c4ba', margin: 0 }}>
-                    To create a thriving ecosystem where trusted local shopkeepers can grow digitally while customers enjoy a fresher, smarter, and faster delivery experience.
-                  </p>
-                </div>
-              </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                      <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>🎯</span> Our Mission
+                      </h5>
+                      <p style={{ fontSize: '12px', lineHeight: '1.6', color: '#b2c4ba', margin: 0 }}>
+                        To transform every neighborhood and town into a superfast, smart marketplace where no household ever has to wait for their daily essentials.
+                      </p>
+                    </div>
+                    <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                      <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>👁️</span> Our Vision
+                      </h5>
+                      <p style={{ fontSize: '12px', lineHeight: '1.6', color: '#b2c4ba', margin: 0 }}>
+                        To create a thriving ecosystem where trusted local shopkeepers can grow digitally while customers enjoy a fresher, smarter, and faster delivery experience.
+                      </p>
+                    </div>
+                  </div>
 
-              <div>
-                <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#3cd070', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px', marginBottom: '16px' }}>
-                  🌟 Why Choose PixiGo?
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '20px', lineHeight: '1' }}>⏱️</div>
-                    <div>
-                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Superfast 10-Minute Delivery</h6>
-                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>We value your time. Ordering on PixiGo means experiencing lightning-fast delivery that reaches your doorstep within minutes.</p>
+                  <div>
+                    <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#3cd070', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px', marginBottom: '16px' }}>
+                      🌟 Why Choose PixiGo?
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: '20px', lineHeight: '1' }}>⏱️</div>
+                        <div>
+                          <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Superfast 10-Minute Delivery</h6>
+                          <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>We value your time. Ordering on PixiGo means experiencing lightning-fast delivery that reaches your doorstep within minutes.</p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: '20px', lineHeight: '1' }}>🍏</div>
+                        <div>
+                          <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>100% Fresh & Handpicked Quality</h6>
+                          <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Whether it is fresh fruits or green vegetables, our dedicated team carefully inspects every item. We only deliver what we would proudly choose for our own homes.</p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: '20px', lineHeight: '1' }}>🤝</div>
+                        <div>
+                          <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Trust of Local Stores</h6>
+                          <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>We partner with the best local general stores, grocery vendors, and bakeries in your city to make sure you never compromise on quality.</p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: '20px', lineHeight: '1' }}>🔄</div>
+                        <div>
+                          <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>No-Questions-Asked Return Policy</h6>
+                          <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>If you are not fully satisfied with the quality of any product, our hassle-free return policy allows you to get an instant replacement or refund.</p>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                        <div style={{ fontSize: '20px', lineHeight: '1' }}>💳</div>
+                        <div>
+                          <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Safe & Flexible Payments</h6>
+                          <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Enjoy absolute convenience by choosing Cash on Delivery (COD) or complete your checkout safely using instant online UPI options like PhonePe, Google Pay, or Paytm.</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '20px', lineHeight: '1' }}>🍏</div>
-                    <div>
-                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>100% Fresh & Handpicked Quality</h6>
-                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Whether it is fresh fruits or green vegetables, our dedicated team carefully inspects every item. We only deliver what we would proudly choose for our own homes.</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '20px', lineHeight: '1' }}>🤝</div>
-                    <div>
-                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Trust of Local Stores</h6>
-                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>We partner with the best local general stores, grocery vendors, and bakeries in your city to make sure you never compromise on quality.</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '20px', lineHeight: '1' }}>🔄</div>
-                    <div>
-                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>No-Questions-Asked Return Policy</h6>
-                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>If you are not fully satisfied with the quality of any product, our hassle-free return policy allows you to get an instant replacement or refund.</p>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '20px', lineHeight: '1' }}>💳</div>
-                    <div>
-                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Safe & Flexible Payments</h6>
-                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Enjoy absolute convenience by choosing Cash on Delivery (COD) or complete your checkout safely using instant online UPI options like PhonePe, Google Pay, or Paytm.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px', textAlign: 'center', marginTop: '8px' }}>
-                <p style={{ fontSize: '13px', fontStyle: 'italic', color: '#3cd070', fontWeight: '600', margin: 0 }}>
-                  "At PixiGo, customer satisfaction and your absolute trust are our biggest commitments."
-                </p>
-              </div>
+                  <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px', textAlign: 'center', marginTop: '8px' }}>
+                    <p style={{ fontSize: '13px', fontStyle: 'italic', color: '#3cd070', fontWeight: '600', margin: 0 }}>
+                      "At PixiGo, customer satisfaction and your absolute trust are our biggest commitments."
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', gap: '20px', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '16px' }}>
+                    <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #3cd070', boxShadow: '0 0 10px rgba(60, 208, 112, 0.3)', flexShrink: 0 }}>
+                      <img 
+                        src="/founder.jpg" 
+                        alt="Shakti Singh Rathor" 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                    </div>
+                    <div>
+                      <h4 style={{ fontSize: '18px', fontWeight: '800', color: '#ffffff', margin: 0 }}>Shakti Singh Rathor</h4>
+                      <p style={{ fontSize: '13px', color: '#3cd070', margin: '4px 0 0 0', fontWeight: '600' }}>The Visionary Behind PIXIgo</p>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderLeft: '3px solid #3cd070', padding: '12px 16px', borderRadius: '4px 12px 12px 4px', fontStyle: 'italic', color: '#ffffff', fontSize: '13px', lineHeight: '1.6' }}>
+                    "Our customers are not just users; they are our extended family. PixiGo is built to revive the invaluable trust of neighborhood commerce, bridging the physical gap with seamless digital connections."
+                  </div>
+
+                  <div>
+                    <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0' }}>About The Founder</h5>
+                    <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0 }}>
+                      Hailing from the historic land of Mewar in the small village of Narela (Tehsil Narela, Chittorgarh, Rajasthan), Shakti Singh Rathor is a 24-year-old dynamic entrepreneur fueled by an immense passion for breakthrough innovations. Coming from a focused Science-Biology educational background, Shakti chose an unconventional professional path driven purely by out-of-the-box thinking and an undeniable courage to launch and scale game-changing ideas single-handedly.
+                    </p>
+                  </div>
+
+                  <div>
+                    <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 10px 0' }}>Mindset & Professional Expertise</h5>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', padding: '12px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <h6 style={{ fontSize: '13px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>💳 Financial & Banking Acumen</h6>
+                        <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>He possesses an advanced understanding of CSC banking frameworks and modern micro-finance infrastructure.</p>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', padding: '12px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <h6 style={{ fontSize: '13px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>📈 Market Analytics & Trading</h6>
+                        <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Armed with over 4 years of real-world stock market trading experience, he brings strong analytical proficiency, patience, and risk assessment strategies to modern business operations.</p>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '10px', padding: '12px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                        <h6 style={{ fontSize: '13px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>🧠 Natural Problem Solver</h6>
+                        <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Shakti holds a distinctive habit of hunting complex real-world market deficiencies and structuring scalable technological frameworks to solve them.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(31, 78, 61, 0.15)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(60, 208, 112, 0.2)' }}>
+                    <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      🗺️ The Grand Vision (2 to 5 Year Roadmap)
+                    </h5>
+                    <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0 }}>
+                      Shakti’s aspirations are fundamentally disruptive. PixiGo is engineered to act as a scalable vehicle that repairs the growing distance between traditional local traders and modern tech-reliant consumers. His blueprint involves scaling PixiGo from local roots to a massive state-wide operation, eventually breaking out as a primary national startup ecosystem across India within the next 2 to 5 years.
+                    </p>
+                  </div>
+
+                  <div>
+                    <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0' }}>Founder's Message to the World</h5>
+                    <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0, fontStyle: 'italic' }}>
+                      "True innovation doesn't always come from the glitz of tech capitals; it sparks when you understand grassroots challenges. I started PixiGo with a big dream and the sheer grit to transform traditional trade landscapes alone. To our customers, I promise uncompromised authenticity. We are restoring your connection to the merchants you've known for generations—making local trading superfast, reliable, and deeply digital."
+                    </p>
+                  </div>
+
+                  <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '20px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 12px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '6px' }}>
+                      📞 Professional Contact Data
+                    </h5>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#b2c4ba' }}>Age:</span> <span style={{ color: '#ffffff', fontWeight: '600' }}>24 Years</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#b2c4ba' }}>Direct Line:</span> <span style={{ color: '#ffffff', fontWeight: '600' }}>+91 9251054064</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#b2c4ba' }}>Official Email:</span> <span style={{ color: '#ffffff', fontWeight: '600' }}>shaktisinghnarela150@gmail.com</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}><span style={{ color: '#b2c4ba' }}>Origin:</span> <span style={{ color: '#ffffff', fontWeight: '600' }}>Narela (Chittorgarh, Mewar, Rajasthan)</span></div>
+                    </div>
+                  </div>
+
+                  <div style={{ textAlign: 'center', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px', marginTop: '8px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: '700', color: '#3cd070', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>
+                      Empowering Local Trade, Digitizing Global Dreams.
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
