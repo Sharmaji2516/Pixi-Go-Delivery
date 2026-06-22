@@ -6047,7 +6047,20 @@ function App() {
               <div className="footer-columns">
                 {/* Brand & Recognitions Column */}
                 <div className="footer-col">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '12px', marginBottom: '20px' }}>
+                    <div style={{
+                      background: '#ffffff',
+                      padding: '5px',
+                      borderRadius: '10px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                      width: '45px',
+                      height: '45px'
+                    }}>
+                      <img src="/logo.jpg" alt="PIXIgo Logo" style={{ height: '100%', width: '100%', borderRadius: '6px', objectFit: 'contain' }} />
+                    </div>
                     <span style={{ fontFamily: 'var(--font-heading)', fontSize: '26px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px' }}>
                       <span className="brand-logo-highlight" style={{ color: '#3cd070' }}>PIXI</span>
                       <span className="brand-logo-light" style={{ fontStyle: 'italic', color: 'transparent', WebkitTextStroke: '0.8px #ffffff' }}>go</span>
@@ -6109,13 +6122,15 @@ function App() {
                 <span style={{ fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)', textAlign: 'center', lineHeight: '1.5' }}>
                   By accessing or using this website, you agree to be bound by our <span style={{ color: 'var(--color-accent-yellow)', cursor: 'pointer', textDecoration: 'underline', fontWeight: '600' }} onClick={() => setIsTermsModalOpen(true)}>Privacy Policy & Terms of Service</span>.
                 </span>
-                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                  <span className="footer-bottom-text">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '100%', marginTop: '8px' }}>
+                  <span className="footer-bottom-text" style={{ textAlign: 'center' }}>
                     © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <a href="https://chittortech.online" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', fontWeight: '600', textDecoration: 'underline', cursor: 'pointer' }}>ChittorTech</a>.
                   </span>
-                  <div className="footer-socials">
-                    <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')}>
-                      <MessageCircle size={18} />
+                  <div className="footer-socials" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                    <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')} style={{ background: '#25d366', color: '#ffffff' }}>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.724-1.466L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.289 1.97 13.82 .948 12.006.948c-5.437 0-9.863 4.373-9.867 9.801-.001 1.73.461 3.42 1.337 4.908l-1.082 3.95 4.093-1.077zm11.385-6.24c-.3-.15-1.772-.875-2.046-.975-.276-.1-.476-.15-.676.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.467-2.41-1.485-.89-.794-1.49-1.775-1.665-2.075-.175-.3-.019-.463.13-.612.135-.133.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.676-1.625-.926-2.225-.244-.589-.493-.51-.676-.51-.172-.008-.371-.01-.571-.01-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.07 2.9 1.219 3.1c.15.2 2.105 3.212 5.099 4.502.713.308 1.27.491 1.704.63.716.227 1.368.195 1.884.118.576-.085 1.772-.725 2.022-1.425.25-.7.25-1.3 0-1.425-.075-.125-.275-.2-.575-.35z"/>
+                      </svg>
                     </span>
                     <span className="social-badge" title="Call Team" onClick={() => window.open('tel:+919251054064', '_blank')}>
                       <Phone size={18} />
