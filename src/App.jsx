@@ -5382,7 +5382,7 @@ function App() {
             {/* Custom PIXIgo Brand Banner */}
             <div className="custom-brand-banner-wrap">
               <img 
-                src="/pixigo_banner.png" 
+                src="/pixigo_banner.png?v=2.1" 
                 alt="PIXIgo Delivery Banner" 
                 className="custom-brand-banner-img"
               />
