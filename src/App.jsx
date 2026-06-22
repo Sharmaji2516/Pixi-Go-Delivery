@@ -356,6 +356,15 @@ function App() {
   const [searchMode, setSearchMode] = useState('item'); // item | shop
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const handleSelectCategory = (cat) => {
+    setSelectedCategory(cat);
+    setTimeout(() => {
+      const catalog = document.querySelector('.catalog-section');
+      if (catalog) {
+        catalog.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
+  };
   const [cart, setCart] = useState([]);
   const [couponCode, setCouponCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
@@ -5554,7 +5563,7 @@ function App() {
                       <button
                         key={cat}
                         className={`category-sidebar-item ${selectedCategory === cat ? 'active' : ''}`}
-                        onClick={() => setSelectedCategory(cat)}
+                        onClick={() => handleSelectCategory(cat)}
                       >
                         <span className="category-item-icon">{emoji}</span>
                         <span className="category-item-name">{cat}</span>
@@ -5660,7 +5669,7 @@ function App() {
                         <div
                           key={cat}
                           className={`custom-category-card ${selectedCategory === cat ? 'active' : ''}`}
-                          onClick={() => setSelectedCategory(cat)}
+                          onClick={() => handleSelectCategory(cat)}
                         >
                           <div className={`custom-category-icon-wrap ${bgClass}`}>
                             {emoji}
@@ -5808,7 +5817,7 @@ function App() {
                               <h2 className="category-section-title">{categoryName}</h2>
                               <button
                                 className="category-section-view-all"
-                                onClick={() => setSelectedCategory(categoryName)}
+                                onClick={() => handleSelectCategory(categoryName)}
                               >
                                 View All <ArrowRight size={14} />
                               </button>
