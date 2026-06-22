@@ -9413,8 +9413,9 @@ function App() {
                               <strong>Items:</strong> {o.items.map(i => `${i.name}${i.specs ? ` (${i.specs})` : ''} (${i.quantity})`).join(', ')}
                             </div>
                           </div>
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                            <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{formatINR(o.totalAmount)}</div>
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Net Earning</div>
+                            <div style={{ fontWeight: 'bold', color: 'var(--color-success)', fontSize: '16px' }}>{formatINR(o.netMerchantEarning || (o.totalAmount - (o.deliveryCharge || 0)))}</div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <button
                                 className="neon-btn small-btn"
@@ -9461,9 +9462,10 @@ function App() {
                               <span className="badge badge-warning">{o.status}</span>
                             </div>
                           </div>
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                            <div style={{ fontWeight: 'bold', color: 'var(--color-success)' }}>{formatINR(o.totalAmount)}</div>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{o.paymentMethod}</div>
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-end' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Net Earning</div>
+                            <div style={{ fontWeight: 'bold', color: 'var(--color-success)', fontSize: '16px' }}>{formatINR(o.netMerchantEarning || (o.totalAmount - (o.deliveryCharge || 0)))}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '4px' }}>{o.paymentMethod}</div>
                             {o.status === 'ACCEPTED' && (
                               <button
                                 className="neon-btn small-btn"
