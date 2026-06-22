@@ -6171,7 +6171,7 @@
 
 @media (min-width: 768px) {
   .custom-brand-banner-img {
-    max-width: 850px;
+    max-width: 500px;
     height: auto;
     margin: 0 auto;
   }
