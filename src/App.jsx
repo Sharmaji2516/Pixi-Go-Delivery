@@ -1565,7 +1565,7 @@ function App() {
     }
   }, [cart, coupons]);
 
-  // Watch for tracked order cancellation and notify user / close panel
+  // Watch for tracked order cancellation or completion and notify user / close panel
   useEffect(() => {
     if (currentOrderTracking) {
       const trackedOrder = orders.find(o => o.id === currentOrderTracking);
@@ -1583,7 +1583,21 @@ function App() {
 
           setCurrentOrderTracking(null);
           setIsTrackingDrawerOpen(false);
-          alert(msg);
+          setWarningModal({
+            isOpen: true,
+            title: "Order Cancelled",
+            message: msg,
+            iconType: "error"
+          });
+        } else if (statusUpper === 'COMPLETED' || statusUpper === 'DELIVERED') {
+          setCurrentOrderTracking(null);
+          setIsTrackingDrawerOpen(false);
+          setWarningModal({
+            isOpen: true,
+            title: "Order Delivered",
+            message: `Your order ${trackedOrder.id} has been delivered successfully! Thank you for ordering from PIXIgo.`,
+            iconType: "success"
+          });
         }
       }
     }
@@ -3457,8 +3471,14 @@ function App() {
     if (!order) return;
 
     if (riderInputOTP.trim().toString() !== (order.otp || '').toString().trim()) {
-      console.log("OTP mismatch! Entered:", riderInputOTP.trim(), "Expected:", (order.otp || '').toString().trim());
-      return alert(`Invalid OTP Code! Entered: "${riderInputOTP}", but Order OTP is: "${order.otp || 'None'}". Please confirm with the customer.`);
+      console.log("OTP mismatch! Entered:", riderInputOTP.trim());
+      setWarningModal({
+        isOpen: true,
+        title: "Invalid OTP",
+        message: "Invalid OTP Code! Please verify the correct OTP with the customer.",
+        iconType: "error"
+      });
+      return;
     }
 
     // Stop Live GPS Tracking and clean up database
