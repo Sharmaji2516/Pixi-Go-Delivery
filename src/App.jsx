@@ -426,7 +426,7 @@ function App() {
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
   const [isContactOpen, setIsContactOpen] = useState(false);
-  const [isAboutDeveloperOpen, setIsAboutDeveloperOpen] = useState(false);
+  const [isAboutUsOpen, setIsAboutUsOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isMerchantTermsOpen, setIsMerchantTermsOpen] = useState(false);
   const [isRiderTermsOpen, setIsRiderTermsOpen] = useState(false);
@@ -5469,10 +5469,12 @@ function App() {
             )}
 
             {activeTab === 'customer' && (
-              <button className="cart-header-icon-btn" onClick={() => setIsAboutDeveloperOpen(true)} title="About Developer">
-                <Code size={20} />
+              <button className="cart-header-icon-btn" onClick={() => setIsAboutUsOpen(true)} title="About Us">
+                <Store size={20} />
               </button>
             )}
+
+
 
             {user ? (
               <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
@@ -5543,7 +5545,7 @@ function App() {
             )}
 
             {/* Custom PIXIgo Brand Banner */}
-            {selectedCategory === 'All' && (
+            {selectedCategory === 'All' && searchQuery.trim() === '' && (
               <div className="custom-brand-banner-wrap">
                 <img 
                   src="/pixigo_banner.png?v=4.0" 
@@ -5594,8 +5596,7 @@ function App() {
                     </select>
                   </div>
                   <div className="search-input-divider"></div>
-                  <div className="search-input-wrap" style={{ flex: 1, position: 'relative' }}>
-                    <Search size={18} className="search-bar-icon" />
+                  <div className="search-input-wrap" style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       type="text"
                       value={searchQuery}
@@ -5616,7 +5617,7 @@ function App() {
                       }}
                       placeholder={searchMode === 'item' ? "Type to search products..." : "Type to search shops..."}
                       className="search-input"
-                      style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', padding: '8px 0' }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--color-text-main)', outline: 'none', width: '100%', padding: '8px 48px 8px 12px' }}
                     />
                     {suggestionsOpen && (
                       <div className="search-suggestions-dropdown">
@@ -5644,24 +5645,27 @@ function App() {
                         )}
                       </div>
                     )}
-                    {(searchQuery || suggestionsOpen) && (
-                      <button 
-                        className="search-clear-btn" 
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setSearchQuery('');
-                          setSuggestionsOpen(false);
-                        }} 
-                        style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
+                    <div style={{ position: 'absolute', right: '12px', display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
+                      {searchQuery && (
+                        <button 
+                          className="search-clear-btn" 
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setSearchQuery('');
+                            setSuggestionsOpen(false);
+                          }} 
+                          style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                      <Search size={18} style={{ color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center' }} />
+                    </div>
                   </div>
                 </div>
 
                 {/* Premium Category Cards Grid */}
-                {selectedCategory === 'All' && (
+                {selectedCategory === 'All' && searchQuery.trim() === '' && (
                   <div className="custom-category-section">
                     <h3 className="custom-category-title">Explore Categories</h3>
                     <div className="custom-category-grid">
@@ -10698,11 +10702,13 @@ function App() {
 
               <button
                 className="mobile-menu-link"
-                onClick={() => { setIsAboutDeveloperOpen(true); setIsMobileMenuOpen(false); }}
+                onClick={() => { setIsAboutUsOpen(true); setIsMobileMenuOpen(false); }}
               >
-                <Code size={18} className="text-neon" />
-                <span>About Developer</span>
+                <Store size={18} className="text-neon" />
+                <span>About Us</span>
               </button>
+
+
 
               <button
                 className="mobile-menu-link"
@@ -11090,86 +11096,121 @@ function App() {
         </div>
       )}
 
-      {/* About Developer Modal */}
-      {isAboutDeveloperOpen && (
-        <div className="modal-backdrop fade-in" onClick={() => setIsAboutDeveloperOpen(false)}>
-          <div className="developer-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => setIsAboutDeveloperOpen(false)}>
+      {/* About Us Modal */}
+      {isAboutUsOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsAboutUsOpen(false)}>
+          <div className="about-us-modal-card glass-panel" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setIsAboutUsOpen(false)} style={{ color: '#ffffff', background: 'rgba(255,255,255,0.05)' }}>
               <X size={20} />
             </button>
 
-            <div className="developer-modal-header">
-              <div className="developer-logo-wrap">
-                <img src="/chittortech_logo_1775884354186.png" alt="ChittorTech Logo" className="developer-logo-img" />
+            <div className="about-us-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '20px', marginBottom: '20px', textAlign: 'center' }}>
+              <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.06)', width: '70px', height: '70px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
+                <Store size={36} style={{ color: 'var(--color-primary)' }} />
               </div>
-              <h3 className="section-title-premium" style={{ marginBottom: '4px' }}>ChittorTech</h3>
-              <p className="developer-subtitle" style={{ margin: 0, fontSize: '14px', color: 'var(--color-text-muted)', fontWeight: '500' }}>
-                Premium IT Solutions & Web Agency
+              <h3 style={{ fontSize: '24px', fontWeight: '800', margin: '12px 0 4px 0', color: '#ffffff' }}>
+                About PixiGo
+              </h3>
+              <p style={{ fontSize: '13px', color: '#a2c4b7', marginTop: '4px', margin: 0, fontWeight: '500', letterSpacing: '0.5px' }}>
+                Your Ultimate Instant Neighborhood Marketplace
               </p>
-
-              <div className="developer-badges" style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '12px' }}>
-                <span className="badge badge-success">MSME Registered</span>
-                <span className="badge badge-primary">iStart Startup</span>
-              </div>
             </div>
 
-            <div className="developer-content" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <p className="developer-desc" style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--color-text-muted)', textAlign: 'center', margin: 0 }}>
-                ChittorTech is an iStart Rajasthan recognized startup and registered MSME company specializing in high-performance custom software, responsive web apps, and digital growth systems.
-              </p>
+            <div className="about-us-scroll-content">
+              <div>
+                <p style={{ fontSize: '15px', lineHeight: '1.7', color: '#ffffff', margin: 0, fontWeight: '600' }}>
+                  Welcome to <span style={{ color: '#3cd070' }}>PixiGo</span> – Your Ultimate Instant Neighborhood Marketplace!
+                </p>
+                <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', marginTop: '10px', marginBottom: 0 }}>
+                  PixiGo is a modern, high-speed delivery service designed to bring your everyday essentials straight to your doorstep completely fresh and with lightning speed. We are not just another delivery platform; we are the trusted bridge connecting you with your favorite local neighborhood stores.
+                </p>
+              </div>
 
-              <div className="developer-services-section">
-                <h4 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px', borderBottom: '1px solid var(--color-border)', paddingBottom: '6px' }}>
-                  Our Technical Specialties
+              <div style={{ background: 'rgba(31, 78, 61, 0.15)', borderRadius: '16px', padding: '20px', border: '1px solid rgba(60, 208, 112, 0.2)' }}>
+                <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#3cd070', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 10px 0' }}>
+                  <span>🌱</span> Our Journey (How We Started & Who Founded It)
                 </h4>
-                <div className="developer-services-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <div className="service-bullet" style={{ fontSize: '16px' }}>🚀</div>
-                    <div className="service-info" style={{ textAlign: 'left' }}>
-                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>Custom Web Apps</h5>
-                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>CRMs, SaaS portals, and APIs.</p>
+                <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0 }}>
+                  PixiGo was born out of a simple yet powerful mission: to transform the way neighborhoods shop and to save people’s most valuable asset—time. We realized that in today’s fast-paced world, spending hours buying fresh vegetables, grocery shopping, or visiting the bakery takes away precious time from families.
+                </p>
+                <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', marginTop: '10px', margin: 0 }}>
+                  To solve this everyday hassle, <strong style={{ color: '#ffffff' }}>Shakti Singh Rathor</strong> envisioned a smarter way to connect communities with local markets. Driven by a single-minded vision to bring unmatched convenience to your doorstep, he founded PixiGo. By empowering local vendors and neighborhood shops with advanced technology, we ensure that everything you ever need is just a single tap away on your phone.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>🎯</span> Our Mission
+                  </h5>
+                  <p style={{ fontSize: '12px', lineHeight: '1.6', color: '#b2c4ba', margin: 0 }}>
+                    To transform every neighborhood and town into a superfast, smart marketplace where no household ever has to wait for their daily essentials.
+                  </p>
+                </div>
+                <div style={{ background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', padding: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                  <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>👁️</span> Our Vision
+                  </h5>
+                  <p style={{ fontSize: '12px', lineHeight: '1.6', color: '#b2c4ba', margin: 0 }}>
+                    To create a thriving ecosystem where trusted local shopkeepers can grow digitally while customers enjoy a fresher, smarter, and faster delivery experience.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <h4 style={{ fontSize: '15px', fontWeight: '800', color: '#3cd070', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '8px', marginBottom: '16px' }}>
+                  🌟 Why Choose PixiGo?
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '20px', lineHeight: '1' }}>⏱️</div>
+                    <div>
+                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Superfast 10-Minute Delivery</h6>
+                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>We value your time. Ordering on PixiGo means experiencing lightning-fast delivery that reaches your doorstep within minutes.</p>
                     </div>
                   </div>
-                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <div className="service-bullet" style={{ fontSize: '16px' }}>📱</div>
-                    <div className="service-info" style={{ textAlign: 'left' }}>
-                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>Mobile Apps</h5>
-                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>iOS & Android via React Native.</p>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '20px', lineHeight: '1' }}>🍏</div>
+                    <div>
+                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>100% Fresh & Handpicked Quality</h6>
+                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Whether it is fresh fruits or green vegetables, our dedicated team carefully inspects every item. We only deliver what we would proudly choose for our own homes.</p>
                     </div>
                   </div>
-                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <div className="service-bullet" style={{ fontSize: '16px' }}>🛒</div>
-                    <div className="service-info" style={{ textAlign: 'left' }}>
-                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>E-Commerce</h5>
-                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>Digital stores & payment portals.</p>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '20px', lineHeight: '1' }}>🤝</div>
+                    <div>
+                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Trust of Local Stores</h6>
+                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>We partner with the best local general stores, grocery vendors, and bakeries in your city to make sure you never compromise on quality.</p>
                     </div>
                   </div>
-                  <div className="developer-service-item" style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <div className="service-bullet" style={{ fontSize: '16px' }}>📈</div>
-                    <div className="service-info" style={{ textAlign: 'left' }}>
-                      <h5 style={{ margin: 0, fontSize: '12px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>SEO & Growth</h5>
-                      <p style={{ margin: '2px 0 0 0', fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: '1.4' }}>Organic rank & ad conversions.</p>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '20px', lineHeight: '1' }}>🔄</div>
+                    <div>
+                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>No-Questions-Asked Return Policy</h6>
+                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>If you are not fully satisfied with the quality of any product, our hassle-free return policy allows you to get an instant replacement or refund.</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '20px', lineHeight: '1' }}>💳</div>
+                    <div>
+                      <h6 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 4px 0' }}>Safe & Flexible Payments</h6>
+                      <p style={{ fontSize: '12px', color: '#b2c4ba', margin: 0, lineHeight: '1.5' }}>Enjoy absolute convenience by choosing Cash on Delivery (COD) or complete your checkout safely using instant online UPI options like PhonePe, Google Pay, or Paytm.</p>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="developer-footer" style={{ marginTop: '8px', display: 'flex', justifyContent: 'center' }}>
-              <a
-                href="https://chittortech.online"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="neon-btn developer-cta-btn"
-                style={{ width: '100%', textDecoration: 'none', padding: '12px' }}
-              >
-                <Code size={18} />
-                <span>Visit chittortech.online</span>
-              </a>
+              <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '16px', textAlign: 'center', marginTop: '8px' }}>
+                <p style={{ fontSize: '13px', fontStyle: 'italic', color: '#3cd070', fontWeight: '600', margin: 0 }}>
+                  "At PixiGo, customer satisfaction and your absolute trust are our biggest commitments."
+                </p>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+
 
       {/* Terms & Disclaimer Modal */}
       {isTermsModalOpen && (
