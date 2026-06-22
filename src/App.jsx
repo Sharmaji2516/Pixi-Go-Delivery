@@ -5543,13 +5543,15 @@ function App() {
             )}
 
             {/* Custom PIXIgo Brand Banner */}
-            <div className="custom-brand-banner-wrap">
-              <img 
-                src="/pixigo_banner.png?v=4.0" 
-                alt="PIXIgo Delivery Banner" 
-                className="custom-brand-banner-img"
-              />
-            </div>
+            {selectedCategory === 'All' && (
+              <div className="custom-brand-banner-wrap">
+                <img 
+                  src="/pixigo_banner.png?v=4.0" 
+                  alt="PIXIgo Delivery Banner" 
+                  className="custom-brand-banner-img"
+                />
+              </div>
+            )}
 
             <div className="customer-grid">
               {/* Left Categories Sidebar (Desktop only) */}
@@ -5659,30 +5661,32 @@ function App() {
                 </div>
 
                 {/* Premium Category Cards Grid */}
-                <div className="custom-category-section">
-                  <h3 className="custom-category-title">Explore Categories</h3>
-                  <div className="custom-category-grid">
-                    {categories.map(cat => {
-                      const emoji = getCategoryEmoji(cat);
-                      const bgClass = getCategoryBgClass(cat);
-                      return (
-                        <div
-                          key={cat}
-                          className={`custom-category-card ${selectedCategory === cat ? 'active' : ''}`}
-                          onClick={() => handleSelectCategory(cat)}
-                        >
-                          <div className={`custom-category-icon-wrap ${bgClass}`}>
-                            {emoji}
+                {selectedCategory === 'All' && (
+                  <div className="custom-category-section">
+                    <h3 className="custom-category-title">Explore Categories</h3>
+                    <div className="custom-category-grid">
+                      {categories.map(cat => {
+                        const emoji = getCategoryEmoji(cat);
+                        const bgClass = getCategoryBgClass(cat);
+                        return (
+                          <div
+                            key={cat}
+                            className={`custom-category-card ${selectedCategory === cat ? 'active' : ''}`}
+                            onClick={() => handleSelectCategory(cat)}
+                          >
+                            <div className={`custom-category-icon-wrap ${bgClass}`}>
+                              {emoji}
+                            </div>
+                            <span className="custom-category-name">{cat}</span>
                           </div>
-                          <span className="custom-category-name">{cat}</span>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Dynamic Deal of the Day Banner */}
-                {dealOfTheDay && dealOfTheDay.active && (
+                {selectedCategory === 'All' && dealOfTheDay && dealOfTheDay.active && (
                   <div className="deal-of-the-day-banner glass-panel fade-in border-glow" style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -5752,6 +5756,31 @@ function App() {
                 {/* Product Grid / Sectioned Rows */}
                 {searchQuery.trim() !== '' || selectedCategory !== 'All' ? (
                   <div className="products-grid">
+                    {/* Category Page Breadcrumb / Back button */}
+                    {selectedCategory !== 'All' && (
+                      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', textAlign: 'left' }}>
+                        <button
+                          onClick={() => setSelectedCategory('All')}
+                          style={{
+                            background: 'rgba(31, 78, 61, 0.08)',
+                            border: 'none',
+                            color: 'var(--color-primary)',
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: '700',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <ArrowRight size={14} style={{ transform: 'rotate(180deg)' }} /> Back to Categories
+                        </button>
+                        <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>/</span>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>{selectedCategory}</span>
+                      </div>
+                    )}
                     {(() => {
                       const paddedFiltered = [...filteredProducts];
                       if (selectedCategory !== 'All' && paddedFiltered.length < 5) {
