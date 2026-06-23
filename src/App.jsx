@@ -352,6 +352,7 @@ const MAX_DELIVERY_RADIUS_KM = 10.0;
 function App() {
   // --- STATE DECLARATIONS ---
   const [activeTab, setActiveTab] = useState('customer'); // customer | admin | delivery | merchant
+  const customerSnapshotUnsubscribe = useRef(null);
   const [riderWatchId, setRiderWatchId] = useState(null);
   const [riderTrackingOrderId, setRiderTrackingOrderId] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
@@ -409,7 +410,18 @@ function App() {
       }
     }, 50);
   };
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pixigo_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('pixigo_cart', JSON.stringify(cart));
+  }, [cart]);
   const [couponCode, setCouponCode] = useState('');
   const [appliedDiscount, setAppliedDiscount] = useState(0);
   const [coupons, setCoupons] = useState([]);
@@ -443,7 +455,7 @@ function App() {
   const [customerName, setCustomerName] = useState(() => localStorage.getItem('pixigo_customerName') || 'Raj Malhotra');
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
   const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
-  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || '');
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('ONLINE');
@@ -865,6 +877,7 @@ function App() {
     localStorage.setItem('pixigo_customerName', customerName);
     localStorage.setItem('pixigo_customerPhone', customerPhone);
     localStorage.setItem('pixigo_customerEmail', customerEmail);
+    localStorage.setItem('pixigo_customerAddress', customerAddress);
 
     // Save profile to Firestore /customers Collection (fallback to guest ID for unauthenticated testers)
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
@@ -1079,7 +1092,7 @@ function App() {
         let localName = localStorage.getItem('pixigo_customerName') || nameVal;
         let localPhone = localStorage.getItem('pixigo_customerPhone') || '';
         let localEmail = currentUser.email; // ALWAYS use the authenticated email as primary source of truth
-        let localAddress = '';
+        let localAddress = localStorage.getItem('pixigo_customerAddress') || '';
 
         try {
           const timestamp = new Date().toISOString();
@@ -1090,35 +1103,58 @@ function App() {
 
           // 1. Sync with Customer collection for all logged-in users to load/create their customer profiles
           const customerDocRef = doc(db, "customers", currentUser.uid);
-          const custSnap = await getDoc(customerDocRef);
-          if (custSnap.exists()) {
-            const data = custSnap.data();
-            if (data.isActive === false) {
-              await signOut(auth);
-              setUser(null);
-              alert("Your account has been temporarily deactivated by the Administrator.");
-              return;
-            }
-            localName = data.name || localName;
-            localPhone = data.phone || localPhone;
-            localEmail = data.email || localEmail;
 
-            localStorage.setItem('pixigo_customerName', localName);
-            localStorage.setItem('pixigo_customerPhone', localPhone);
-            localStorage.setItem('pixigo_customerEmail', localEmail);
-          } else {
-            // Document doesn't exist yet, auto-create
-            await setDoc(customerDocRef, {
-              name: localName,
-              email: localEmail,
-              phone: localPhone,
-              address: localAddress,
-              createdAt: timestamp
-            });
-            localStorage.setItem('pixigo_customerName', localName);
-            localStorage.setItem('pixigo_customerPhone', localPhone);
-            localStorage.setItem('pixigo_customerEmail', localEmail);
+          // Clean up any existing customer snapshot subscription first
+          if (customerSnapshotUnsubscribe.current) {
+            customerSnapshotUnsubscribe.current();
+            customerSnapshotUnsubscribe.current = null;
           }
+
+          // Subscribe to live customer document updates
+          customerSnapshotUnsubscribe.current = onSnapshot(customerDocRef, async (custSnap) => {
+            if (custSnap.exists()) {
+              const data = custSnap.data();
+              if (data.isActive === false) {
+                // If deactivated, sign out immediately
+                await signOut(auth);
+                setUser(null);
+                alert("Your account has been temporarily deactivated by the Administrator.");
+                return;
+              }
+              const dbName = data.name || localName;
+              const dbPhone = data.phone || localPhone;
+              const dbEmail = data.email || localEmail;
+              const dbAddress = data.address || localAddress;
+
+              localStorage.setItem('pixigo_customerName', dbName);
+              localStorage.setItem('pixigo_customerPhone', dbPhone);
+              localStorage.setItem('pixigo_customerEmail', dbEmail);
+              localStorage.setItem('pixigo_customerAddress', dbAddress);
+
+              setCustomerName(dbName);
+              setCustomerPhone(dbPhone);
+              setCustomerEmail(dbEmail);
+              setCustomerAddress(dbAddress);
+            } else {
+              // Create the document if it doesn't exist yet
+              await setDoc(customerDocRef, {
+                name: localName,
+                email: localEmail,
+                phone: localPhone,
+                address: localAddress,
+                createdAt: timestamp
+              });
+              localStorage.setItem('pixigo_customerName', localName);
+              localStorage.setItem('pixigo_customerPhone', localPhone);
+              localStorage.setItem('pixigo_customerEmail', localEmail);
+              localStorage.setItem('pixigo_customerAddress', localAddress);
+
+              setCustomerName(localName);
+              setCustomerPhone(localPhone);
+              setCustomerEmail(localEmail);
+              setCustomerAddress(localAddress);
+            }
+          });
 
           // 2. Sync with Admin collection if on admin page AND not already another role
           if (currentTab === 'admin') {
@@ -2078,6 +2114,12 @@ function App() {
   };
 
   const handleLogout = () => {
+    // Unsubscribe from customer snapshot
+    if (customerSnapshotUnsubscribe.current) {
+      customerSnapshotUnsubscribe.current();
+      customerSnapshotUnsubscribe.current = null;
+    }
+
     sessionStorage.removeItem('pixigo_sales_unlocked');
     setIsSalesUnlocked(false);
     setSelectedAnalyticsMerchant(null);
@@ -2087,10 +2129,13 @@ function App() {
     localStorage.removeItem('pixigo_customerName');
     localStorage.removeItem('pixigo_customerPhone');
     localStorage.removeItem('pixigo_customerEmail');
+    localStorage.removeItem('pixigo_customerAddress');
+    localStorage.removeItem('pixigo_cart');
     setCustomerName('Raj Malhotra');
     setCustomerPhone('9251054064');
     setCustomerEmail('pixigodelivery@gmail.com');
     setCustomerAddress('');
+    setCart([]);
     setUser(null);
     setUserRole(null);
     signOut(auth)
