@@ -547,6 +547,19 @@ function App() {
   const [salesTab, setSalesTab] = useState('merchants'); // merchants | riders
   const [salesModalSearchQuery, setSalesModalSearchQuery] = useState('');
   const [salesLogFilter, setSalesLogFilter] = useState('today'); // today | all
+  const [payouts, setPayouts] = useState([]);
+  const [payoutType, setPayoutType] = useState('merchant'); // merchant | rider
+  const [payoutPayeeId, setPayoutPayeeId] = useState('');
+  const [payoutAmount, setPayoutAmount] = useState('');
+  const [payoutStatus, setPayoutStatus] = useState('UNPAID'); // UNPAID | PAID | PARTIAL PAID
+  const [payoutUseCustomName, setPayoutUseCustomName] = useState(false);
+  const [payoutCustomName, setPayoutCustomName] = useState('');
+  const [payoutTimeFilter, setPayoutTimeFilter] = useState('today'); // today | all
+  const [payoutGivenAmount, setPayoutGivenAmount] = useState('');
+  const [editingPayout, setEditingPayout] = useState(null);
+  const [editPayoutAmount, setEditPayoutAmount] = useState('');
+  const [editPayoutGivenAmount, setEditPayoutGivenAmount] = useState('');
+  const [editPayoutStatus, setEditPayoutStatus] = useState('UNPAID');
 
   const audioContextRef = useRef(null);
 
@@ -1387,6 +1400,26 @@ function App() {
       setDeliveryPartners(mergedRiders);
     }, (error) => {
       console.error("Firestore delivery partners subscription error:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch real-time payouts from Firestore
+  useEffect(() => {
+    const payoutsRef = collection(db, "payouts");
+    const unsubscribe = onSnapshot(payoutsRef, (snapshot) => {
+      const fetchedPayouts = [];
+      snapshot.forEach((doc) => {
+        fetchedPayouts.push({
+          id: doc.id,
+          ...doc.data()
+        });
+      });
+      // Sort payouts by date descending
+      fetchedPayouts.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+      setPayouts(fetchedPayouts);
+    }, (error) => {
+      console.error("Firestore payouts subscription error:", error);
     });
     return () => unsubscribe();
   }, []);
@@ -3552,6 +3585,168 @@ function App() {
     } catch (error) {
       console.error("Error deleting rider:", error);
       alert(`Failed to delete rider: ${error.message}`);
+    }
+  };
+
+  // Admin: Create Payout Record
+  const handleCreatePayout = async (e) => {
+    e.preventDefault();
+    if (!payoutUseCustomName && !payoutPayeeId) {
+      alert("Please select a Payee.");
+      return;
+    }
+    if (payoutUseCustomName && !payoutCustomName.trim()) {
+      alert("Please enter a custom Payee Name.");
+      return;
+    }
+    const amountNum = parseFloat(payoutAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert("Please enter a valid positive payout amount.");
+      return;
+    }
+
+    let givenAmountNum = 0;
+    if (payoutStatus === 'PAID') {
+      givenAmountNum = amountNum;
+    } else if (payoutStatus === 'PARTIAL PAID') {
+      givenAmountNum = parseFloat(payoutGivenAmount);
+      if (isNaN(givenAmountNum) || givenAmountNum < 0) {
+        alert("Please enter a valid positive given amount.");
+        return;
+      }
+      if (givenAmountNum > amountNum) {
+        alert("Given amount cannot be greater than Total Amount.");
+        return;
+      }
+    }
+
+    // Resolve Payee Name
+    let payeeName = '';
+    let payeeId = '';
+    if (payoutUseCustomName) {
+      payeeName = payoutCustomName.trim();
+      payeeId = 'custom';
+    } else {
+      payeeId = payoutPayeeId;
+      if (payoutType === 'merchant') {
+        const shop = shops.find(s => s.id === payoutPayeeId);
+        payeeName = shop ? (shop.storeName || shop.name) : 'Unknown Merchant';
+      } else {
+        const rider = deliveryPartners.find(r => r.id === payoutPayeeId);
+        payeeName = rider ? rider.name : 'Unknown Rider';
+      }
+    }
+
+    try {
+      const newPayout = {
+        payeeType: payoutType,
+        payeeId: payeeId,
+        payeeName: payeeName,
+        amount: amountNum,
+        givenAmount: givenAmountNum,
+        status: payoutStatus,
+        date: new Date().toISOString()
+      };
+      
+      await addDoc(collection(db, "payouts"), newPayout);
+      
+      setPayoutAmount('');
+      setPayoutGivenAmount('');
+      setPayoutPayeeId('');
+      setPayoutCustomName('');
+      setPayoutUseCustomName(false);
+      setPayoutStatus('UNPAID');
+      showToast("Payout record added successfully.");
+    } catch (err) {
+      console.error("Error creating payout:", err);
+      alert(`Failed to add payout: ${err.message}`);
+    }
+  };
+
+  // Admin: Toggle Payout Status
+  const handleTogglePayoutStatus = async (payout) => {
+    try {
+      let newStatus = 'UNPAID';
+      let newGivenAmount = 0;
+      
+      if (payout.status === 'UNPAID') {
+        newStatus = 'PAID';
+        newGivenAmount = payout.amount;
+      } else if (payout.status === 'PAID') {
+        newStatus = 'PARTIAL PAID';
+        newGivenAmount = Math.round(payout.amount / 2);
+      } else {
+        newStatus = 'UNPAID';
+        newGivenAmount = 0;
+      }
+
+      const docRef = doc(db, "payouts", payout.id);
+      await updateDoc(docRef, { status: newStatus, givenAmount: newGivenAmount });
+      showToast(`Payout marked as ${newStatus}.`);
+    } catch (err) {
+      console.error("Error toggling payout status:", err);
+      alert(`Failed to update status: ${err.message}`);
+    }
+  };
+
+  // Admin: Edit Payout Record Trigger
+  const handleStartEditPayout = (payout) => {
+    setEditingPayout(payout);
+    setEditPayoutAmount(payout.amount);
+    setEditPayoutGivenAmount(payout.givenAmount !== undefined ? payout.givenAmount : (payout.status === 'PAID' ? payout.amount : 0));
+    setEditPayoutStatus(payout.status || 'UNPAID');
+  };
+
+  // Admin: Save Edit Payout
+  const handleSaveEditPayout = async (e) => {
+    e.preventDefault();
+    if (!editingPayout) return;
+
+    const amountNum = parseFloat(editPayoutAmount);
+    if (isNaN(amountNum) || amountNum <= 0) {
+      alert("Please enter a valid positive payout amount.");
+      return;
+    }
+
+    let givenAmountNum = 0;
+    if (editPayoutStatus === 'PAID') {
+      givenAmountNum = amountNum;
+    } else if (editPayoutStatus === 'PARTIAL PAID') {
+      givenAmountNum = parseFloat(editPayoutGivenAmount);
+      if (isNaN(givenAmountNum) || givenAmountNum < 0) {
+        alert("Please enter a valid positive given amount.");
+        return;
+      }
+      if (givenAmountNum > amountNum) {
+        alert("Given amount cannot be greater than Total Amount.");
+        return;
+      }
+    }
+
+    try {
+      const docRef = doc(db, "payouts", editingPayout.id);
+      await updateDoc(docRef, {
+        amount: amountNum,
+        givenAmount: givenAmountNum,
+        status: editPayoutStatus
+      });
+      setEditingPayout(null);
+      showToast("Payout record updated successfully.");
+    } catch (err) {
+      console.error("Error updating payout:", err);
+      alert(`Failed to update payout: ${err.message}`);
+    }
+  };
+
+  // Admin: Delete Payout Record
+  const handleAdminDeletePayout = async (payout) => {
+    if (!window.confirm("Are you sure you want to delete this payout record?")) return;
+    try {
+      await deleteDoc(doc(db, "payouts", payout.id));
+      showToast("Payout record deleted.");
+    } catch (err) {
+      console.error("Error deleting payout:", err);
+      alert(`Failed to delete payout: ${err.message}`);
     }
   };
 
@@ -5821,6 +6016,13 @@ function App() {
                 Coupons ({coupons.length})
               </button>
               <button
+                className={`nav-link ${adminSubView === 'payouts' ? 'active' : ''}`}
+                onClick={() => { setAdminSubView('payouts'); setAdminSearchQuery(''); }}
+              >
+                <DollarSign size={16} style={{ marginRight: '6px' }} />
+                Payout Management
+              </button>
+              <button
                 className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
                 onClick={() => { setAdminSubView('settings'); setAdminSearchQuery(''); }}
               >
@@ -5924,8 +6126,31 @@ function App() {
 
 
             {user ? (
-              <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`}>
+              <div className={`user-profile-menu ${['delivery', 'admin'].includes(activeTab) ? '' : 'desktop-only-auth'}`} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span className="user-welcome">Hi, {(user.name || user.displayName || user.email || 'User').split('@')[0]}</span>
+                {activeTab === 'admin' && (
+                  <button
+                    className={`secondary-btn logout-btn ${adminSubView === 'settings' ? 'active' : ''}`}
+                    onClick={() => { setAdminSubView('settings'); setAdminSearchQuery(''); }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '8px',
+                      minWidth: 'unset',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: adminSubView === 'settings' ? 'var(--color-primary-glow)' : 'transparent',
+                      border: adminSubView === 'settings' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                      color: adminSubView === 'settings' ? 'var(--color-primary)' : 'var(--color-text-muted)',
+                      cursor: 'pointer'
+                    }}
+                    title="System Settings"
+                  >
+                    <Settings size={16} />
+                  </button>
+                )}
                 <button className="secondary-btn logout-btn" onClick={handleLogout}>Logout</button>
               </div>
             ) : (
@@ -8827,6 +9052,443 @@ function App() {
                 </div>
               </div>
             )}
+
+            {adminSubView === 'payouts' && (() => {
+              const todayStart = new Date();
+              todayStart.setHours(0, 0, 0, 0);
+              const filteredPayouts = payouts.filter(p => {
+                if (payoutTimeFilter === 'today') {
+                  if (!p.date) return false;
+                  return new Date(p.date) >= todayStart;
+                }
+                return true;
+              });
+
+              return (
+                <>
+                  <div className="admin-settings-layout" style={{ gap: '24px' }}>
+                    {/* Left Column - Record Form */}
+                    <div style={{ flex: '0 0 280px' }}>
+                      <div className="glass-panel border-glow" style={{ padding: '24px' }}>
+                        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <DollarSign size={20} style={{ color: 'var(--color-primary)' }} />
+                          Record New Payout
+                        </h3>
+                        
+                        <form onSubmit={handleCreatePayout} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                          <div className="form-group">
+                            <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '6px', display: 'block' }}>Payee Type</label>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                              <button
+                                type="button"
+                                onClick={() => { setPayoutType('merchant'); setPayoutPayeeId(''); }}
+                                className={`secondary-btn ${payoutType === 'merchant' ? 'active' : ''}`}
+                                style={{
+                                  flex: 1,
+                                  padding: '10px',
+                                  borderRadius: '8px',
+                                  background: payoutType === 'merchant' ? 'var(--color-primary-glow)' : 'transparent',
+                                  border: payoutType === 'merchant' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                  color: payoutType === 'merchant' ? 'var(--color-primary)' : 'var(--color-text-main)',
+                                  fontWeight: '600',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                🏪 Merchant
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { setPayoutType('rider'); setPayoutPayeeId(''); }}
+                                className={`secondary-btn ${payoutType === 'rider' ? 'active' : ''}`}
+                                style={{
+                                  flex: 1,
+                                  padding: '10px',
+                                  borderRadius: '8px',
+                                  background: payoutType === 'rider' ? 'var(--color-primary-glow)' : 'transparent',
+                                  border: payoutType === 'rider' ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
+                                  color: payoutType === 'rider' ? 'var(--color-primary)' : 'var(--color-text-main)',
+                                  fontWeight: '600',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                🛵 Rider
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="form-group">
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                              <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', margin: 0 }}>
+                                Select {payoutType === 'merchant' ? 'Merchant' : 'Rider'}
+                              </label>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <input
+                                  type="checkbox"
+                                  id="use-custom-name"
+                                  checked={payoutUseCustomName}
+                                  onChange={(e) => setPayoutUseCustomName(e.target.checked)}
+                                  style={{ cursor: 'pointer' }}
+                                />
+                                <label htmlFor="use-custom-name" style={{ fontSize: '11px', color: 'var(--color-text-muted)', cursor: 'pointer', userSelect: 'none' }}>Custom Name</label>
+                              </div>
+                            </div>
+
+                            {payoutUseCustomName ? (
+                              <input
+                                type="text"
+                                placeholder={payoutType === 'merchant' ? "Enter Custom Merchant Name" : "Enter Custom Rider Name"}
+                                value={payoutCustomName}
+                                onChange={(e) => setPayoutCustomName(e.target.value)}
+                                className="custom-input"
+                                style={{ width: '100%' }}
+                                required
+                              />
+                            ) : (
+                              <select
+                                value={payoutPayeeId}
+                                onChange={(e) => setPayoutPayeeId(e.target.value)}
+                                className="custom-input"
+                                style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)', color: '#fff', borderRadius: '8px' }}
+                                required
+                              >
+                                <option value="" style={{ background: '#1c1c24' }}>-- Select Payee --</option>
+                                {payoutType === 'merchant'
+                                  ? shops.map(s => (
+                                      <option key={s.id} value={s.id} style={{ background: '#1c1c24' }}>
+                                        {s.storeName || s.name}
+                                      </option>
+                                    ))
+                                  : deliveryPartners.map(r => (
+                                      <option key={r.id} value={r.id} style={{ background: '#1c1c24' }}>
+                                        {r.name}
+                                      </option>
+                                    ))
+                                }
+                              </select>
+                            )}
+                          </div>
+
+                          <div className="form-group">
+                            <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '6px', display: 'block' }}>Payout Amount (₹)</label>
+                            <input
+                              type="number"
+                              placeholder="e.g. 500"
+                              value={payoutAmount}
+                              onChange={(e) => setPayoutAmount(e.target.value)}
+                              className="custom-input"
+                              style={{ width: '100%' }}
+                              min="1"
+                              step="0.01"
+                              required
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '6px', display: 'block' }}>Initial Status</label>
+                            <select
+                              value={payoutStatus}
+                              onChange={(e) => setPayoutStatus(e.target.value)}
+                              className="custom-input"
+                              style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)', color: '#fff', borderRadius: '8px' }}
+                            >
+                              <option value="UNPAID" style={{ background: '#1c1c24' }}>🔴 UNPAID</option>
+                              <option value="PAID" style={{ background: '#1c1c24' }}>🟢 PAID</option>
+                              <option value="PARTIAL PAID" style={{ background: '#1c1c24' }}>🟡 PARTIAL PAID</option>
+                            </select>
+                          </div>
+
+                          {payoutStatus === 'PARTIAL PAID' && (
+                            <div className="form-group fade-in">
+                              <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '6px', display: 'block' }}>Given Amount (₹)</label>
+                              <input
+                                type="number"
+                                placeholder="e.g. 200"
+                                value={payoutGivenAmount}
+                                onChange={(e) => setPayoutGivenAmount(e.target.value)}
+                                className="custom-input"
+                                style={{ width: '100%' }}
+                                min="0"
+                                max={payoutAmount || undefined}
+                                step="0.01"
+                                required
+                              />
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                            <button
+                              type="submit"
+                              className="neon-btn"
+                              style={{ flex: 2, padding: '12px', fontWeight: 'bold' }}
+                            >
+                              Record Payout
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => {
+                                setPayoutAmount('');
+                                setPayoutGivenAmount('');
+                                setPayoutPayeeId('');
+                                setPayoutCustomName('');
+                                setPayoutUseCustomName(false);
+                                setPayoutStatus('UNPAID');
+                              }}
+                              style={{ flex: 1, padding: '12px', fontWeight: 'bold' }}
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+
+                    {/* Right Column - Table Log */}
+                    <div style={{ flex: '1', minWidth: '320px', overflow: 'hidden' }}>
+                      <div className="glass-panel border-glow" style={{ padding: '24px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                          <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold' }}>
+                            📋 Recorded Transactions ({filteredPayouts.length})
+                          </h3>
+                          <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '20px', padding: '2px', border: '1px solid var(--color-border)' }}>
+                            <button
+                              type="button"
+                              onClick={() => setPayoutTimeFilter('today')}
+                              style={{
+                                background: payoutTimeFilter === 'today' ? 'var(--color-primary)' : 'transparent',
+                                border: 'none',
+                                color: '#fff',
+                                padding: '6px 16px',
+                                borderRadius: '20px',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              Today
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPayoutTimeFilter('all')}
+                              style={{
+                                background: payoutTimeFilter === 'all' ? 'var(--color-primary)' : 'transparent',
+                                border: 'none',
+                                color: '#fff',
+                                padding: '6px 16px',
+                                borderRadius: '20px',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                              }}
+                            >
+                              All Time
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="analytics-table-wrapper" style={{ maxHeight: '550px', overflowY: 'auto', overflowX: 'auto' }}>
+                          <table className="analytics-table">
+                            <thead>
+                              <tr>
+                                <th>Payee Name</th>
+                                <th>Role</th>
+                                <th>Date</th>
+                                <th>Total Amount</th>
+                                <th>Given Amount</th>
+                                <th>Pending Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredPayouts.length === 0 ? (
+                                <tr>
+                                  <td colSpan="8" style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '40px' }}>
+                                    No payout transaction logs found.
+                                  </td>
+                                </tr>
+                              ) : (
+                                filteredPayouts.map(p => {
+                                  let badgeClass = 'analytics-badge-danger';
+                                  let statusStyle = {};
+                                  if (p.status === 'PAID') {
+                                    badgeClass = 'analytics-badge-success';
+                                  } else if (p.status === 'PARTIAL PAID') {
+                                    badgeClass = 'analytics-badge-warning';
+                                    statusStyle = {
+                                      background: 'rgba(251, 191, 36, 0.1)',
+                                      border: '1px solid rgba(251, 191, 36, 0.3)',
+                                      color: '#fbbf24'
+                                    };
+                                  }
+
+                                  const total = Number(p.amount || 0);
+                                  const given = p.givenAmount !== undefined ? Number(p.givenAmount) : (p.status === 'PAID' ? total : 0);
+                                  const pending = Math.max(0, total - given);
+
+                                  return (
+                                    <tr key={p.id}>
+                                      <td><strong>{p.payeeName}</strong></td>
+                                      <td>
+                                        <span style={{ fontSize: '11px', textTransform: 'uppercase', color: p.payeeType === 'merchant' ? 'var(--color-primary)' : '#fbbf24' }}>
+                                          {p.payeeType}
+                                        </span>
+                                      </td>
+                                      <td style={{ fontSize: '12px' }}>
+                                        {p.date ? new Date(p.date).toLocaleDateString() : 'N/A'}
+                                      </td>
+                                      <td><strong>₹{total.toFixed(2)}</strong></td>
+                                      <td><strong>₹{given.toFixed(2)}</strong></td>
+                                      <td>
+                                        <strong style={{ color: pending > 0 ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                                          ₹{pending.toFixed(2)}
+                                        </strong>
+                                      </td>
+                                      <td>
+                                        <button
+                                          onClick={() => handleTogglePayoutStatus(p)}
+                                          className={`analytics-badge-pill ${badgeClass}`}
+                                          style={{ border: 'none', cursor: 'pointer', outline: 'none', fontWeight: 'bold', fontSize: '10px', ...statusStyle }}
+                                          title="Click to toggle status"
+                                        >
+                                          {p.status}
+                                        </button>
+                                      </td>
+                                      <td>
+                                        <div style={{ display: 'flex', gap: '6px' }}>
+                                          <button
+                                            onClick={() => handleStartEditPayout(p)}
+                                            style={{
+                                              background: 'rgba(59, 130, 246, 0.1)',
+                                              border: '1px solid rgba(59, 130, 246, 0.3)',
+                                              color: '#3b82f6',
+                                              padding: '3px 6px',
+                                              borderRadius: '4px',
+                                              fontSize: '11px',
+                                              fontWeight: 'bold',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            Edit
+                                          </button>
+                                          <button
+                                            onClick={() => handleAdminDeletePayout(p)}
+                                            style={{
+                                              background: 'rgba(239, 68, 68, 0.1)',
+                                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                                              color: '#ef4444',
+                                              padding: '3px 6px',
+                                              borderRadius: '4px',
+                                              fontSize: '11px',
+                                              fontWeight: 'bold',
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            Delete
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Edit Payout Modal */}
+                  {editingPayout && (
+                    <div className="modal-backdrop fade-in" style={{ display: 'flex', zIndex: 1100 }}>
+                      <div className="modal-content glass-panel border-glow" style={{ width: '100%', maxWidth: '400px', padding: '24px' }}>
+                        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: 'bold' }}>
+                          ✏️ Edit Payout Transaction
+                        </h3>
+                        <form onSubmit={handleSaveEditPayout} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                          <div className="form-group">
+                            <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Payee Name</label>
+                            <input
+                              type="text"
+                              value={editingPayout.payeeName}
+                              disabled
+                              className="custom-input"
+                              style={{ width: '100%', opacity: 0.6 }}
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Total Amount (₹)</label>
+                            <input
+                              type="number"
+                              value={editPayoutAmount}
+                              onChange={(e) => setEditPayoutAmount(e.target.value)}
+                              className="custom-input"
+                              style={{ width: '100%' }}
+                              min="1"
+                              step="0.01"
+                              required
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Payment Status</label>
+                            <select
+                              value={editPayoutStatus}
+                              onChange={(e) => setEditPayoutStatus(e.target.value)}
+                              className="custom-input"
+                              style={{ width: '100%', padding: '10px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--color-border)', color: '#fff', borderRadius: '8px' }}
+                            >
+                              <option value="UNPAID" style={{ background: '#1c1c24' }}>🔴 UNPAID</option>
+                              <option value="PAID" style={{ background: '#1c1c24' }}>🟢 PAID</option>
+                              <option value="PARTIAL PAID" style={{ background: '#1c1c24' }}>🟡 PARTIAL PAID</option>
+                            </select>
+                          </div>
+
+                          {editPayoutStatus === 'PARTIAL PAID' && (
+                            <div className="form-group fade-in">
+                              <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Given Amount (₹)</label>
+                              <input
+                                type="number"
+                                value={editPayoutGivenAmount}
+                                onChange={(e) => setEditPayoutGivenAmount(e.target.value)}
+                                className="custom-input"
+                                style={{ width: '100%' }}
+                                min="0"
+                                max={editPayoutAmount || undefined}
+                                step="0.01"
+                                required
+                              />
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                            <button
+                              type="submit"
+                              className="neon-btn"
+                              style={{ flex: 1, padding: '10px', fontWeight: 'bold' }}
+                            >
+                              Save Changes
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              onClick={() => setEditingPayout(null)}
+                              style={{ flex: 1, padding: '10px', fontWeight: 'bold' }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {adminSubView === 'users' && (
               <div className="admin-orders-table glass-panel fade-in">
