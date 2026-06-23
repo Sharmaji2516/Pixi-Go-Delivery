@@ -1088,39 +1088,36 @@ function App() {
           const emailClean = localEmail.trim().toLowerCase();
           const existingRole = getRoleForEmail(emailClean);
 
-          // 1. Sync with Customer collection only if they are not signing up/logging in as admin
-          // and they are not already an admin, rider, or merchant
-          if (currentTab !== 'admin' && (existingRole === 'customer' || !existingRole)) {
-            const customerDocRef = doc(db, "customers", currentUser.uid);
-            const custSnap = await getDoc(customerDocRef);
-            if (custSnap.exists()) {
-              const data = custSnap.data();
-              if (data.isActive === false) {
-                await signOut(auth);
-                setUser(null);
-                alert("Your account has been temporarily deactivated by the Administrator.");
-                return;
-              }
-              localName = data.name || localName;
-              localPhone = data.phone || localPhone;
-              localEmail = data.email || localEmail;
-
-              localStorage.setItem('pixigo_customerName', localName);
-              localStorage.setItem('pixigo_customerPhone', localPhone);
-              localStorage.setItem('pixigo_customerEmail', localEmail);
-            } else {
-              // Document doesn't exist yet, auto-create
-              await setDoc(customerDocRef, {
-                name: localName,
-                email: localEmail,
-                phone: localPhone,
-                address: localAddress,
-                createdAt: timestamp
-              });
-              localStorage.setItem('pixigo_customerName', localName);
-              localStorage.setItem('pixigo_customerPhone', localPhone);
-              localStorage.setItem('pixigo_customerEmail', localEmail);
+          // 1. Sync with Customer collection for all logged-in users to load/create their customer profiles
+          const customerDocRef = doc(db, "customers", currentUser.uid);
+          const custSnap = await getDoc(customerDocRef);
+          if (custSnap.exists()) {
+            const data = custSnap.data();
+            if (data.isActive === false) {
+              await signOut(auth);
+              setUser(null);
+              alert("Your account has been temporarily deactivated by the Administrator.");
+              return;
             }
+            localName = data.name || localName;
+            localPhone = data.phone || localPhone;
+            localEmail = data.email || localEmail;
+
+            localStorage.setItem('pixigo_customerName', localName);
+            localStorage.setItem('pixigo_customerPhone', localPhone);
+            localStorage.setItem('pixigo_customerEmail', localEmail);
+          } else {
+            // Document doesn't exist yet, auto-create
+            await setDoc(customerDocRef, {
+              name: localName,
+              email: localEmail,
+              phone: localPhone,
+              address: localAddress,
+              createdAt: timestamp
+            });
+            localStorage.setItem('pixigo_customerName', localName);
+            localStorage.setItem('pixigo_customerPhone', localPhone);
+            localStorage.setItem('pixigo_customerEmail', localEmail);
           }
 
           // 2. Sync with Admin collection if on admin page AND not already another role
