@@ -317,6 +317,31 @@ const getProductRating = (id) => {
   return { rating: rating.toFixed(1), reviews };
 };
 
+const getNoticeStyles = (color) => {
+  const defaultColor = '#ea580c'; // premium orange
+  const activeColor = (color && color.startsWith('#')) ? color : defaultColor;
+  
+  // Parse hex to rgb
+  let r = 234, g = 88, b = 12;
+  try {
+    if (activeColor.length === 7) {
+      r = parseInt(activeColor.slice(1, 3), 16) || 234;
+      g = parseInt(activeColor.slice(3, 5), 16) || 88;
+      b = parseInt(activeColor.slice(5, 7), 16) || 12;
+    }
+  } catch (e) {
+    // fallback
+  }
+  
+  return {
+    borderLeft: `4px solid ${activeColor}`,
+    badgeBg: `rgba(${r}, ${g}, ${b}, 0.1)`,
+    badgeColor: activeColor,
+    badgeBorder: `1px solid rgba(${r}, ${g}, ${b}, 0.25)`,
+    cardBg: `linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.03) 0%, rgba(255, 255, 255, 0.95) 100%)`
+  };
+};
+
 const MAX_DELIVERY_RADIUS_KM = 10.0;
 
 function App() {
@@ -9939,44 +9964,76 @@ function App() {
       {/* Notification Center Drawer Overlay */}
       {isNotificationDrawerOpen && (
         <div className="drawer-backdrop fade-in" onClick={() => setIsNotificationDrawerOpen(false)}>
-          <div className="cart-drawer notification-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
-            <div className="drawer-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--color-border)' }}>
+          <div className="cart-drawer notification-drawer glass-panel" onClick={(e) => e.stopPropagation()} style={{ background: '#ffffff', color: '#0f172a', display: 'flex', flexDirection: 'column', height: '100%', borderLeft: '1px solid #e2e8f0', boxShadow: '-10px 0 35px rgba(0, 0, 0, 0.08)' }}>
+            <div className="drawer-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid #f1f5f9' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Bell size={20} style={{ color: 'var(--color-primary)' }} />
-                <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--color-text-main)', fontFamily: 'var(--font-heading)' }}>Notifications</h2>
+                <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: '#0f172a', fontFamily: 'var(--font-heading)' }}>Notifications</h2>
               </div>
-              <button className="close-drawer-btn" onClick={() => setIsNotificationDrawerOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-main)', cursor: 'pointer' }}>
+              <button className="close-drawer-btn" onClick={() => setIsNotificationDrawerOpen(false)} style={{ background: 'transparent', border: 'none', color: '#0f172a', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <X size={20} />
               </button>
             </div>
             
             <div className="drawer-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Active Announcements Card */}
-              {customerAnnouncement ? (
-                <div className="notification-card announcement-card" style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '16px',
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '10px',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '11px', fontWeight: '800', color: customerAnnouncementColor || 'var(--color-primary)', background: hexToRgba(customerAnnouncementColor || '#ffd700', 0.1), padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase' }}>
-                      Notice Update
-                    </span>
-                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Just Now</span>
+              {customerAnnouncement && customerAnnouncement.trim() ? (() => {
+                const styles = getNoticeStyles(customerAnnouncementColor);
+                return (
+                  <div className="notification-card announcement-card" style={{
+                    background: styles.cardBg,
+                    border: '1px solid #e2e8f0',
+                    borderLeft: styles.borderLeft,
+                    borderRadius: '16px',
+                    padding: '20px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    boxShadow: '0 4px 15px rgba(0, 0, 0, 0.03)',
+                    textAlign: 'left',
+                    flexShrink: 0,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ 
+                          fontSize: '11px', 
+                          fontWeight: '800', 
+                          color: styles.badgeColor, 
+                          background: styles.badgeBg, 
+                          border: styles.badgeBorder,
+                          padding: '4px 10px', 
+                          borderRadius: '20px', 
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}>
+                          <Info size={10} style={{ strokeWidth: 3 }} />
+                          Notice Update
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Active Now</span>
+                    </div>
+                    <p style={{ 
+                      fontSize: '14px', 
+                      color: '#1e293b', 
+                      margin: 0, 
+                      lineHeight: '1.6', 
+                      fontWeight: '600', 
+                      textAlign: 'left',
+                      whiteSpace: 'pre-line',
+                      wordBreak: 'break-word'
+                    }}>
+                      {customerAnnouncement}
+                    </p>
                   </div>
-                  <p style={{ fontSize: '13px', color: 'var(--color-text-main)', margin: 0, lineHeight: '1.5', fontWeight: '500', textAlign: 'left' }}>
-                    {customerAnnouncement}
-                  </p>
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '40px 20px' }}>
-                  <Bell size={36} style={{ margin: '0 auto 12px auto', display: 'block', opacity: 0.3 }} />
+                );
+              })() : (
+                <div style={{ textAlign: 'center', color: '#64748b', padding: '40px 20px', flexShrink: 0 }}>
+                  <Bell size={36} style={{ margin: '0 auto 12px auto', display: 'block', opacity: 0.3, color: '#64748b' }} />
                   <p style={{ margin: 0, fontSize: '14px' }}>No new notifications at the moment.</p>
                 </div>
               )}
@@ -9984,72 +10041,78 @@ function App() {
               {/* Active Promos and Offers section */}
               {coupons && coupons.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <h3 style={{ fontSize: '14px', fontWeight: '800', margin: '10px 0 4px 0', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'left' }}>
+                  <h3 style={{ fontSize: '12px', fontWeight: '800', margin: '10px 0 4px 0', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'left' }}>
                     <Tag size={14} style={{ color: 'var(--color-primary)' }} />
                     Active Offers & Promo Codes
                   </h3>
                   
-                  {coupons.map((coupon) => (
-                    <div 
-                      key={coupon.id}
-                      className="notification-card promo-card"
-                      style={{
-                        background: 'rgba(0, 255, 242, 0.02)',
-                        border: '1px solid rgba(0, 255, 242, 0.08)',
-                        borderRadius: '16px',
-                        padding: '16px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        textAlign: 'left',
-                        position: 'relative',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ background: 'rgba(0, 255, 242, 0.08)', border: '1px dashed var(--color-primary)', color: 'var(--color-primary)', fontFamily: 'monospace', fontWeight: 'bold', fontSize: '12px', padding: '3px 8px', borderRadius: '6px' }}>
-                          {coupon.code}
-                        </span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(coupon.code);
-                            showToast(`Coupon code ${coupon.code} copied!`);
-                          }}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--color-primary)',
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            cursor: 'pointer',
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 255, 242, 0.05)'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                        >
-                          Copy Code
-                        </button>
-                      </div>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <span style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--color-text-main)' }}>
-                          {coupon.title || (coupon.type === 'PERCENTAGE' ? `${coupon.value}% OFF` : `Flat \u20b9${coupon.value} OFF`)}
-                        </span>
-                        {coupon.description && (
-                          <p style={{ fontSize: '11.5px', color: 'var(--color-text-muted)', margin: 0, lineHeight: '1.4' }}>
-                            {coupon.description}
+                  {coupons.map((coupon) => {
+                    const isFlat = coupon.type === 'flat';
+                    const titleText = isFlat ? `₹${coupon.discount} OFF` : `${coupon.discount}% OFF`;
+                    const descriptionText = isFlat 
+                      ? `Save flat ₹${coupon.discount} on your total order value.` 
+                      : `Get ${coupon.discount}% off up to ₹${coupon.maxDiscount || 50} on your subtotal.`;
+                    
+                    return (
+                      <div 
+                        key={coupon.id}
+                        className="notification-card promo-card"
+                        style={{
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '16px',
+                          padding: '16px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '10px',
+                          textAlign: 'left',
+                          position: 'relative',
+                          transition: 'all 0.2s',
+                          flexShrink: 0
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ background: 'rgba(0, 255, 242, 0.08)', border: '1px dashed var(--color-primary)', color: 'var(--color-primary-dark, #0b7f78)', fontFamily: 'monospace', fontWeight: 'bold', fontSize: '12px', padding: '3px 8px', borderRadius: '6px' }}>
+                            {coupon.code}
+                          </span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(coupon.code);
+                              showToast(`Coupon code ${coupon.code} copied!`);
+                            }}
+                            className="promo-copy-btn"
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--color-primary-dark, #0b7f78)',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              cursor: 'pointer',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            Copy Code
+                          </button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>
+                            {titleText}
+                          </span>
+                          <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: '1.4' }}>
+                            {descriptionText}
                           </p>
-                        )}
+                        </div>
+                        
+                        <div style={{ fontSize: '10px', color: '#64748b', borderTop: '1px dashed #e2e8f0', paddingTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Min. Cart: ₹{coupon.minCart || 0}</span>
+                          {coupon.maxDiscount && <span>Max Discount: ₹{coupon.maxDiscount}</span>}
+                        </div>
                       </div>
-                      
-                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', borderTop: '1px dashed rgba(255,255,255,0.05)', paddingTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Min Order: \u20b9{coupon.minOrderValue || 0}</span>
-                        <span>Max Discount: \u20b9{coupon.maxDiscount || 'No Limit'}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

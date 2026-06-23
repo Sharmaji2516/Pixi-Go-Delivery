@@ -6676,13 +6676,13 @@
 .notification-drawer {
   display: flex !important;
   flex-direction: column !important;
-  background: linear-gradient(180deg, #090e1a 0%, #05070e 100%) !important;
-  border-left: 1px solid rgba(0, 255, 242, 0.15) !important;
-  box-shadow: -10px 0 35px rgba(0, 0, 0, 0.6) !important;
+  background: #ffffff !important;
+  border-left: 1px solid #e2e8f0 !important;
+  box-shadow: -10px 0 35px rgba(0, 0, 0, 0.08) !important;
 }
 
 .notification-drawer .drawer-header {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-bottom: 1px solid #f1f5f9 !important;
 }
 
 .notification-card {
@@ -6691,20 +6691,19 @@
 
 .notification-card:hover {
   transform: translateY(-2px);
-  background-color: rgba(255, 255, 255, 0.04) !important;
-  border-color: rgba(0, 255, 242, 0.2) !important;
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
 }
 
 .promo-card {
-  box-shadow: 0 4px 12px rgba(0, 255, 242, 0.03);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .promo-card:hover {
-  box-shadow: 0 6px 16px rgba(0, 255, 242, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
-/* Storefront static banner close button styling */
-.customer-announcement-banner button:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  color: #ffffff !important;
+.promo-copy-btn:hover {
+  background-color: rgba(0, 255, 242, 0.08) !important;
+  color: var(--color-primary-dark, #0b7f78) !important;
 }
