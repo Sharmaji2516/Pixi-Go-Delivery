@@ -8888,6 +8888,8 @@ function App() {
             }
           });
 
+          const todayEarnings = completedJobs.reduce((acc, o) => acc + (o.riderPayout !== undefined ? o.riderPayout : (o.deliveryCharge || 0)), 0);
+
           return (
             <div className="delivery-portal-wrap fade-in">
               <div className="delivery-layout glass-panel">
@@ -8967,6 +8969,12 @@ function App() {
                       {completedJobs.length}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Completed Jobs</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--color-success)' }}>
+                      {formatINR(todayEarnings)}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Today's Earnings</div>
                   </div>
                 </div>
 
@@ -9377,6 +9385,14 @@ function App() {
             }
           });
 
+          const todaysEarnings = todaysMerchantOrders
+            .filter(o => !o.status?.startsWith('CANCELLED'))
+            .reduce((acc, o) => {
+              const itemsSub = o.items?.reduce((a, item) => a + ((item.price || 0) * (item.quantity || 1)), 0) || (o.totalAmount - (o.deliveryCharge || 0));
+              const earn = o.netMerchantEarning !== undefined ? o.netMerchantEarning : (itemsSub - Math.round(itemsSub * 0.1));
+              return acc + earn;
+            }, 0);
+
           const ongoingMerchantOrders = merchantOrders.filter(o =>
             ['ACCEPTED', 'READY_FOR_PICKUP', 'ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY', 'DISPATCHED'].includes(o.status)
           );
@@ -9518,7 +9534,13 @@ function App() {
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Today's Total Orders</div>
                   </div>
                   <div className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--color-success)' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>
+                      {formatINR(todaysEarnings)}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Today's Net Earnings</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--color-info)' }}>
                       {ongoingMerchantOrders.length}
                     </div>
                     <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>Ongoing Deliveries</div>
@@ -9625,39 +9647,6 @@ function App() {
                       ))}
                     </div>
                   )}
-                </div>
-
-                <div className="divider" style={{ margin: '32px 0' }}></div>
-
-                {/* Keep existing Onboarding and Catalog forms */}
-                <div className="merchant-onboarding">
-                  <h2 style={{ textAlign: 'left' }}>Merchant Onboarding Form</h2>
-                  <div className="document-upload-grid">
-                    <div className="doc-uploader">
-                      <span>GST Document (Optional)</span>
-                      <button className="upload-box-btn" onClick={() => alert('GST Document uploaded!')}>
-                        Select File
-                      </button>
-                    </div>
-                    <div className="doc-uploader">
-                      <span>Shop Registration Certificate</span>
-                      <button className="upload-box-btn" onClick={() => alert('Shop registration certificate uploaded!')}>
-                        Select File
-                      </button>
-                    </div>
-                    <div className="doc-uploader">
-                      <span>Shop Photo & GPS Location</span>
-                      <button className="upload-box-btn" onClick={() => alert('Shop photo coordinates set!')}>
-                        Select File
-                      </button>
-                    </div>
-                    <div className="doc-uploader">
-                      <span>FSSAI License (Food shops only)</span>
-                      <button className="upload-box-btn" onClick={() => alert('FSSAI License uploaded!')}>
-                        Select File
-                      </button>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="divider" style={{ margin: '32px 0' }}></div>
