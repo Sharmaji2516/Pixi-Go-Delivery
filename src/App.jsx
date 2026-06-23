@@ -325,7 +325,7 @@ const getProductRating = (id) => {
 const getNoticeStyles = (color) => {
   const defaultColor = '#ea580c'; // premium orange
   const activeColor = (color && color.startsWith('#')) ? color : defaultColor;
-  
+
   // Parse hex to rgb
   let r = 234, g = 88, b = 12;
   try {
@@ -337,7 +337,7 @@ const getNoticeStyles = (color) => {
   } catch (e) {
     // fallback
   }
-  
+
   return {
     borderLeft: `4px solid ${activeColor}`,
     badgeBg: `rgba(${r}, ${g}, ${b}, 0.1)`,
@@ -1585,7 +1585,7 @@ function App() {
           ...data
         });
       });
-      
+
       // Deduplicate coupons automatically to resolve database and UI duplication
       const seen = new Set();
       const duplicatesToDelete = [];
@@ -1683,7 +1683,7 @@ function App() {
             createdAt: new Date().toISOString()
           }
         ];
-        
+
         for (const coupon of defaultCoupons) {
           try {
             // Using coupon code as document ID ensures uniqueness
@@ -2576,42 +2576,42 @@ function App() {
       setWarningModal({ isOpen: true, title: "Coupon Required", message: "Please enter a coupon code.", iconType: "coupon" });
       return;
     }
-    
+
     const codeUpper = couponCode.trim().toUpperCase();
     const coupon = coupons.find(c => c.code?.toUpperCase() === codeUpper);
-    
+
     if (!coupon) {
       setWarningModal({ isOpen: true, title: "Invalid Coupon", message: "Invalid coupon code!", iconType: "coupon" });
       return;
     }
-    
+
     if (!coupon.isActive) {
       setWarningModal({ isOpen: true, title: "Inactive Coupon", message: "This coupon is no longer active!", iconType: "coupon" });
       return;
     }
-    
+
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
     const minCartVal = Number(coupon.minCart) || 0;
     if (cartSubtotal < minCartVal) {
       setWarningModal({ isOpen: true, title: "Minimum Threshold Required", message: `Min cart value of ₹${minCartVal} required to apply this coupon. Your subtotal is ₹${cartSubtotal}.`, iconType: "coupon" });
       return;
     }
-    
+
     // Single-use validation: A user cannot reuse a coupon unless the previous order applying it was cancelled.
     const currentUserId = auth.currentUser ? auth.currentUser.uid : (customerPhone ? `guest_${customerPhone}` : 'anonymous');
-    
+
     const isAlreadyUsed = orders.some(o => {
       const isSameUser = o.customerId === currentUserId || (auth.currentUser && o.userId === auth.currentUser.uid);
       const isSameCoupon = o.couponCode?.toUpperCase() === codeUpper;
       const isNotCancelled = !o.status?.toUpperCase().startsWith('CANCEL');
       return isSameUser && isSameCoupon && isNotCancelled;
     });
-    
+
     if (isAlreadyUsed) {
       setWarningModal({ isOpen: true, title: "Coupon Already Used", message: "You have already used this coupon code on a prior order.", iconType: "coupon" });
       return;
     }
-    
+
     let discountAmt = 0;
     if (coupon.type === 'flat' || coupon.discountType === 'flat') {
       discountAmt = Number(coupon.discount) || 0;
@@ -2621,10 +2621,10 @@ function App() {
       const maxLimit = Number(coupon.maxDiscount) || Infinity;
       discountAmt = Math.min(calculated, maxLimit);
     }
-    
+
     // Ensure discount doesn't exceed subtotal
     discountAmt = Math.min(discountAmt, cartSubtotal);
-    
+
     setAppliedDiscount(discountAmt);
     setWarningModal({ isOpen: true, title: "Coupon Applied", message: `Coupon "${codeUpper}" applied successfully! Discount: ₹${discountAmt}`, iconType: "coupon_success" });
   };
@@ -2704,7 +2704,7 @@ function App() {
     const delCharge = getPromotionalDeliveryFee(cartSubtotal, cart, customerCharge, activeDeliveryPromos) + heavySurcharge;
 
     const total = cartSubtotal + delCharge - appliedDiscount;
-    
+
     const shopCommissionPercent = (cartShop && cartShop.commissionPercent !== undefined) ? cartShop.commissionPercent : commissionPercent;
     const comm = Math.round(cartSubtotal * (shopCommissionPercent / 100));
 
@@ -3647,9 +3647,9 @@ function App() {
         status: payoutStatus,
         date: new Date().toISOString()
       };
-      
+
       await addDoc(collection(db, "payouts"), newPayout);
-      
+
       setPayoutAmount('');
       setPayoutGivenAmount('');
       setPayoutPayeeId('');
@@ -3668,7 +3668,7 @@ function App() {
     try {
       let newStatus = 'UNPAID';
       let newGivenAmount = 0;
-      
+
       if (payout.status === 'UNPAID') {
         newStatus = 'PAID';
         newGivenAmount = payout.amount;
@@ -3828,7 +3828,7 @@ function App() {
   // Admin: Delete User
   const handleAdminDeleteUser = async (user) => {
     const roles = user.roles || [user.role];
-    const roleLabels = roles.map(role => 
+    const roleLabels = roles.map(role =>
       role === 'admin' ? 'Admin' :
         role === 'merchant' ? 'Merchant' :
           role === 'rider' ? 'Rider' :
@@ -3931,7 +3931,7 @@ function App() {
       }
       const typeVal = newCouponType === 'custom' ? (customCouponTypeText.trim() || 'custom_discount') : newCouponType;
       const discountTypeVal = newCouponType === 'custom' ? customCouponDiscountType : newCouponType;
-      
+
       couponData = {
         code: codeUpper,
         discount: Number(newCouponDiscount),
@@ -3950,7 +3950,7 @@ function App() {
       const promoTypeVal = newDeliveryPromoType === 'custom' ? (customDeliveryPromoTypeText.trim() || 'custom_delivery_promo') : newDeliveryPromoType;
       const discountVal = promoTypeVal === 'discount_delivery_percent' ? (Number(newCouponDiscount) || 30) : 100;
       const minCartVal = Number(newCouponMinCart) || (promoTypeVal === 'discount_delivery_percent' ? 599 : promoTypeVal === 'free_delivery_food' ? 999 : 1999);
-      
+
       couponData = {
         code: codeUpper,
         discount: discountVal,
@@ -3964,7 +3964,7 @@ function App() {
         createdAt: new Date().toISOString()
       };
     }
-    
+
     try {
       await setDoc(doc(db, "coupons", codeUpper), couponData);
       showToast(`Coupon "${codeUpper}" created successfully!`);
@@ -4173,12 +4173,12 @@ function App() {
     }));
 
     setRiderInputOTP('');
-    
+
     // Provide dynamic instructions to the delivery boy based on payment method
-    const instructions = order.paymentMethod === 'COD' 
-      ? `Please collect cash: ₹${order.totalAmount} from the customer.` 
+    const instructions = order.paymentMethod === 'COD'
+      ? `Please collect cash: ₹${order.totalAmount} from the customer.`
       : 'Payment was made online. No cash collection required.';
-      
+
     alert(`Order ${orderId} delivered successfully!\n\nInstructions: ${instructions}`);
   };
 
@@ -4647,7 +4647,7 @@ function App() {
 
       // WhatsApp message template construction
       const message = `Hello, I have placed order ${pendingPaymentOrder.id} for ₹${pendingPaymentOrder.totalAmount}. Here is my payment screenshot.`;
-      const waUrl = `https://wa.me/918233816674?text=${encodeURIComponent(message)}`;
+      const waUrl = `https://wa.me/917357681538?text=${encodeURIComponent(message)}`;
 
       // Reset checkout states
       setCheckoutStep('cart');
@@ -4666,7 +4666,7 @@ function App() {
   // Reusable cart content rendering (sidebar & mobile drawer)
   const renderCartContent = (isDrawer = false) => {
     if (checkoutStep === 'payment' && pendingPaymentOrder) {
-      const upiUrl = `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${pendingPaymentOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${pendingPaymentOrder.id}`;
+      const upiUrl = `upi://pay?pa=paytm.s27imms@pty&pn=SHAKTI%20SINGH%20RATHOR&am=${pendingPaymentOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${pendingPaymentOrder.id}`;
       return (
         <div className={`cart-card ${!isDrawer ? 'glass-panel' : ''}`} style={{ textAlign: 'left' }}>
           <div className="cart-header-row">
@@ -4726,10 +4726,10 @@ function App() {
                 padding: '8px 16px',
                 fontSize: '14px'
               }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>paytm.s27imms@pty</span>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText('8233816674@upi');
+                    navigator.clipboard.writeText('paytm.s27imms@pty');
                     showToast('UPI ID copied to clipboard!', 'success');
                   }}
                   style={{
@@ -5025,10 +5025,10 @@ function App() {
 
               // Check which delivery promo is applied
               let promoNotification = '';
-              const hasFoodItems = cart.some(item => 
+              const hasFoodItems = cart.some(item =>
                 ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
               );
-              const hasGroceryItems = cart.some(item => 
+              const hasGroceryItems = cart.some(item =>
                 ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
               );
 
@@ -5043,9 +5043,9 @@ function App() {
               } else if (discountRule && subtotal > (discountRule.minCart ?? 599) && originalFee > 0) {
                 promoNotification = `🎉 You saved ${discountRule.discount ?? 30}% on delivery because your cart value is above ₹${discountRule.minCart ?? 599}!`;
               } else if (originalFee > 0) {
-                const customAppliedRule = activeDeliveryPromos.find(c => 
-                  c.deliveryPromoType !== 'free_delivery_food' && 
-                  c.deliveryPromoType !== 'free_delivery_grocery' && 
+                const customAppliedRule = activeDeliveryPromos.find(c =>
+                  c.deliveryPromoType !== 'free_delivery_food' &&
+                  c.deliveryPromoType !== 'free_delivery_grocery' &&
                   c.deliveryPromoType !== 'discount_delivery_percent' &&
                   subtotal > (c.minCart ?? 0)
                 );
@@ -5744,8 +5744,8 @@ function App() {
 
     return (
       <div key={p.id} className="product-card glass-panel" style={{ position: 'relative', opacity: p.isOutOfStock ? 0.8 : 1 }}>
-        <div 
-          className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`} 
+        <div
+          className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`}
           style={{ position: 'relative', filter: p.isOutOfStock ? 'grayscale(60%) opacity(0.8)' : 'none' }}
         >
           {p.isOutOfStock && (
@@ -5771,14 +5771,14 @@ function App() {
               <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
             </span>
           </div>
-          
+
           {displayInfo.specs && (
             <div style={{ textAlign: 'left', marginBottom: '6px' }}>
               {(() => {
                 const hasVariants = parseProductVariants(p)?.length > 0;
                 if (hasVariants) {
                   return (
-                    <div 
+                    <div
                       className="prod-specs-dropdown-btn"
                       onClick={() => setSelectedVariantProduct(p)}
                     >
@@ -5807,12 +5807,12 @@ function App() {
               {p.store}
             </span>
             {shopDistance !== null && (
-              <span className="prod-distance-badge" style={{ 
-                display: 'inline-flex', 
-                alignItems: 'center', 
-                gap: '2px', 
-                color: 'var(--color-text-muted)', 
-                fontSize: '10px', 
+              <span className="prod-distance-badge" style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '2px',
+                color: 'var(--color-text-muted)',
+                fontSize: '10px',
                 marginLeft: '4px',
                 background: 'var(--color-primary-glow)',
                 padding: '2px 6px',
@@ -5911,8 +5911,8 @@ function App() {
   const renderPlaceholderCard = (p) => {
     return (
       <div key={p.id} className="product-card glass-panel coming-soon-card desktop-only" style={{ position: 'relative', opacity: 0.7 }}>
-        <div className="prod-img-wrap" style={{ 
-          position: 'relative', 
+        <div className="prod-img-wrap" style={{
+          position: 'relative',
           background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.08) 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -6098,15 +6098,15 @@ function App() {
             )}
 
             {activeTab === 'customer' && (
-              <button 
-                className="cart-header-icon-btn notification-bell-btn" 
+              <button
+                className="cart-header-icon-btn notification-bell-btn"
                 onClick={() => {
                   setIsNotificationDrawerOpen(true);
                   setHasUnreadNotifications(false);
                   if (customerAnnouncement) {
                     localStorage.setItem('pixigo_last_seen_announcement', customerAnnouncement);
                   }
-                }} 
+                }}
                 title="Notifications & Offers"
                 style={{ position: 'relative' }}
               >
@@ -6174,9 +6174,9 @@ function App() {
             {/* Custom PIXIgo Brand Banner */}
             {selectedCategory === 'All' && searchQuery.trim() === '' && (
               <div className="custom-brand-banner-wrap">
-                <img 
-                  src="/pixigo_banner.png?v=4.0" 
-                  alt="PIXIgo Delivery Banner" 
+                <img
+                  src="/pixigo_banner.png?v=4.0"
+                  alt="PIXIgo Delivery Banner"
                   className="custom-brand-banner-img"
                 />
               </div>
@@ -6274,13 +6274,13 @@ function App() {
                     )}
                     <div style={{ position: 'absolute', right: '12px', display: 'flex', alignItems: 'center', gap: '8px', pointerEvents: 'none' }}>
                       {searchQuery && (
-                        <button 
-                          className="search-clear-btn" 
+                        <button
+                          className="search-clear-btn"
                           onMouseDown={(e) => {
                             e.preventDefault();
                             setSearchQuery('');
                             setSuggestionsOpen(false);
-                          }} 
+                          }}
                           style={{ background: 'transparent', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
                         >
                           <X size={16} />
@@ -6452,7 +6452,7 @@ function App() {
 
                       return Object.entries(productsByCategory).map(([categoryName, categoryProds]) => {
                         if (categoryProds.length === 0) return null;
-                        
+
                         const paddedProds = [...categoryProds];
                         if (paddedProds.length < 5) {
                           const shortage = 5 - paddedProds.length;
@@ -6551,8 +6551,8 @@ function App() {
                             <div className="sidebar-detail-row">
                               <span>Status:</span>
                               <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' :
-                                  trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' :
-                                    'badge-warning'
+                                trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                                  'badge-warning'
                                 }`}>
                                 {trackedOrder.status}
                               </span>
@@ -6596,11 +6596,9 @@ function App() {
                                   border: '1px solid var(--color-border)'
                                 }}>
                                   <img
-                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                                      `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
-                                    )}`}
+                                    src="/pixigo_payment_qr.png"
                                     alt="UPI Payment QR Code"
-                                    style={{ width: '130px', height: '130px', display: 'block' }}
+                                    style={{ width: '180px', height: 'auto', display: 'block', borderRadius: '4px' }}
                                   />
                                 </div>
                                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
@@ -6617,10 +6615,10 @@ function App() {
                                   padding: '6px 14px',
                                   fontSize: '12px'
                                 }}>
-                                  <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                                  <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>paytm.s27imms@pty</span>
                                   <button
                                     onClick={() => {
-                                      navigator.clipboard.writeText('8233816674@upi');
+                                      navigator.clipboard.writeText('paytm.s27imms@pty');
                                       showToast('UPI ID copied to clipboard!', 'success');
                                     }}
                                     style={{
@@ -6674,17 +6672,17 @@ function App() {
                 {/* Brand & Recognitions Column */}
                 <div className="footer-col">
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '16px', marginBottom: '20px' }}>
-                    <img 
-                      src="/logo.jpg" 
-                      alt="PIXIgo Logo" 
-                      style={{ 
-                        height: '60px', 
-                        width: '60px', 
-                        borderRadius: '16px', 
+                    <img
+                      src="/logo.jpg"
+                      alt="PIXIgo Logo"
+                      style={{
+                        height: '60px',
+                        width: '60px',
+                        borderRadius: '16px',
                         boxShadow: '0 4px 20px rgba(60, 208, 112, 0.25)',
                         border: '1px solid rgba(60, 208, 112, 0.3)',
                         objectFit: 'cover'
-                      }} 
+                      }}
                     />
                     <span style={{ fontFamily: 'var(--font-heading)', fontSize: '26px', fontWeight: '700', color: '#ffffff', letterSpacing: '0.5px' }}>
                       <span className="brand-logo-highlight" style={{ color: '#3cd070' }}>PIXI</span>
@@ -6754,7 +6752,7 @@ function App() {
                   <div className="footer-socials" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                     <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')} style={{ background: '#25d366', color: '#ffffff' }}>
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.724-1.466L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.289 1.97 13.82 .948 12.006.948c-5.437 0-9.863 4.373-9.867 9.801-.001 1.73.461 3.42 1.337 4.908l-1.082 3.95 4.093-1.077zm11.385-6.24c-.3-.15-1.772-.875-2.046-.975-.276-.1-.476-.15-.676.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.467-2.41-1.485-.89-.794-1.49-1.775-1.665-2.075-.175-.3-.019-.463.13-.612.135-.133.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.676-1.625-.926-2.225-.244-.589-.493-.51-.676-.51-.172-.008-.371-.01-.571-.01-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.07 2.9 1.219 3.1c.15.2 2.105 3.212 5.099 4.502.713.308 1.27.491 1.704.63.716.227 1.368.195 1.884.118.576-.085 1.772-.725 2.022-1.425.25-.7.25-1.3 0-1.425-.075-.125-.275-.2-.575-.35z"/>
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.504-5.724-1.466L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.967C16.289 1.97 13.82 .948 12.006.948c-5.437 0-9.863 4.373-9.867 9.801-.001 1.73.461 3.42 1.337 4.908l-1.082 3.95 4.093-1.077zm11.385-6.24c-.3-.15-1.772-.875-2.046-.975-.276-.1-.476-.15-.676.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.265-.467-2.41-1.485-.89-.794-1.49-1.775-1.665-2.075-.175-.3-.019-.463.13-.612.135-.133.3-.35.45-.525.15-.175.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.676-1.625-.926-2.225-.244-.589-.493-.51-.676-.51-.172-.008-.371-.01-.571-.01-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.07 2.9 1.219 3.1c.15.2 2.105 3.212 5.099 4.502.713.308 1.27.491 1.704.63.716.227 1.368.195 1.884.118.576-.085 1.772-.725 2.022-1.425.25-.7.25-1.3 0-1.425-.075-.125-.275-.2-.575-.35z" />
                       </svg>
                     </span>
                     <span className="social-badge" title="Call Team" onClick={() => window.open('tel:+919251054064', '_blank')}>
@@ -6952,7 +6950,7 @@ function App() {
                                     const active = m.activeCount;
                                     const total = completed + cancelled + active;
                                     const cancelRate = total > 0 ? Math.round((cancelled / total) * 100) : 0;
-                                    
+
                                     let perfText = "No Data";
                                     let perfColor = "var(--color-text-muted)";
                                     if (total > 0) {
@@ -7126,7 +7124,7 @@ function App() {
                             const cancelledCount = logFilteredOrders.filter(o => o.status?.startsWith('CANCELLED')).length;
                             const totalLogCount = completedCount + cancelledCount;
                             const platformCancelRate = totalLogCount > 0 ? Math.round((cancelledCount / totalLogCount) * 100) : 0;
-                            
+
                             let platformRating = "No Data";
                             let platformRatingColor = "var(--color-text-muted)";
                             if (totalLogCount > 0) {
@@ -7146,7 +7144,7 @@ function App() {
                               <div style={{ marginBottom: '24px' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
                                   <h3 style={{ margin: 0 }}>📋 Detailed Orders Performance Log</h3>
-                                  
+
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
                                     <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '20px', padding: '2px', border: '1px solid var(--color-border)' }}>
                                       <button
@@ -7400,9 +7398,9 @@ function App() {
                                     {routing}
                                   </span>
                                   <span className={`badge ${o.status === 'ACCEPTED' ? 'badge-success' :
-                                      o.status === 'ASSIGNED' ? 'badge-primary' :
-                                        o.status?.startsWith('CANCELLED') ? 'badge-danger' :
-                                          'badge-warning'
+                                    o.status === 'ASSIGNED' ? 'badge-primary' :
+                                      o.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                                        'badge-warning'
                                     }`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
                                     {(() => {
                                       const statusUpper = o.status?.toUpperCase() || 'PLACED';
@@ -8190,7 +8188,7 @@ function App() {
                           style={{ width: '100%' }}
                         />
                       </div>
-                      
+
                       <div className="form-group" style={{ margin: 0 }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '4px', display: 'block' }}>Commission Rate (%) (Optional - Fallback to Default)</label>
                         <input
@@ -9074,7 +9072,7 @@ function App() {
                           <DollarSign size={20} style={{ color: 'var(--color-primary)' }} />
                           Record New Payout
                         </h3>
-                        
+
                         <form onSubmit={handleCreatePayout} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                           <div className="form-group">
                             <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginBottom: '6px', display: 'block' }}>Payee Type</label>
@@ -9154,15 +9152,15 @@ function App() {
                                 <option value="" style={{ background: '#1c1c24' }}>-- Select Payee --</option>
                                 {payoutType === 'merchant'
                                   ? shops.map(s => (
-                                      <option key={s.id} value={s.id} style={{ background: '#1c1c24' }}>
-                                        {s.storeName || s.name}
-                                      </option>
-                                    ))
+                                    <option key={s.id} value={s.id} style={{ background: '#1c1c24' }}>
+                                      {s.storeName || s.name}
+                                    </option>
+                                  ))
                                   : deliveryPartners.map(r => (
-                                      <option key={r.id} value={r.id} style={{ background: '#1c1c24' }}>
-                                        {r.name}
-                                      </option>
-                                    ))
+                                    <option key={r.id} value={r.id} style={{ background: '#1c1c24' }}>
+                                      {r.name}
+                                    </option>
+                                  ))
                                 }
                               </select>
                             )}
@@ -9613,7 +9611,7 @@ function App() {
                   <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--color-primary)' }}>
                     ➕ Create New Promo Coupon
                   </h3>
-                  
+
                   {(() => {
                     const customPurposesFromDb = Array.from(new Set(
                       coupons
@@ -9635,15 +9633,15 @@ function App() {
                         .filter(dt => dt && dt !== 'discount_delivery_percent' && dt !== 'free_delivery_food' && dt !== 'free_delivery_grocery')
                     ));
 
-                    const isDeliveryOption = newCouponPurpose === 'delivery' || 
+                    const isDeliveryOption = newCouponPurpose === 'delivery' ||
                       (newCouponPurpose === 'custom' && customPurposeClass === 'delivery') ||
                       (newCouponPurpose !== 'standard' && coupons.some(c => c.purpose === newCouponPurpose && c.isDeliveryPromo));
-                    
-                    const isStandardOption = newCouponPurpose === 'standard' || 
+
+                    const isStandardOption = newCouponPurpose === 'standard' ||
                       (newCouponPurpose === 'custom' && customPurposeClass === 'standard') ||
                       (newCouponPurpose !== 'delivery' && coupons.some(c => c.purpose === newCouponPurpose && !c.isDeliveryPromo));
 
-                    const isPercentageCalc = newCouponType === 'percentage' || 
+                    const isPercentageCalc = newCouponType === 'percentage' ||
                       (newCouponType === 'custom' && customCouponDiscountType === 'percentage') ||
                       (newCouponType !== 'flat' && coupons.some(c => c.type === newCouponType && c.discountType === 'percentage'));
 
@@ -9807,7 +9805,7 @@ function App() {
                             required
                           />
                         </div>
-                        
+
                         {isStandardOption && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>Sponsor</label>
@@ -9883,8 +9881,8 @@ function App() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-main)' }}>
-                            {isDeliveryOption 
-                              ? (newDeliveryPromoType === 'discount_delivery_percent' || newDeliveryPromoType === 'custom' ? 'Delivery Discount (%)' : 'Delivery Discount (%) [Free = 100]') 
+                            {isDeliveryOption
+                              ? (newDeliveryPromoType === 'discount_delivery_percent' || newDeliveryPromoType === 'custom' ? 'Delivery Discount (%)' : 'Delivery Discount (%) [Free = 100]')
                               : `Discount ${newCouponType === 'flat' ? 'Value (₹)' : 'Rate (%)'}`}
                           </label>
                           <input
@@ -9977,7 +9975,7 @@ function App() {
                                 </div>
                               </td>
                               <td style={{ textTransform: 'capitalize' }}>
-                                {c.isDeliveryPromo 
+                                {c.isDeliveryPromo
                                   ? (c.deliveryPromoType === 'discount_delivery_percent' ? 'Delivery Discount' : c.deliveryPromoType === 'free_delivery_food' ? 'Free Food Delivery' : 'Free Grocery Delivery')
                                   : `${c.type} discount`}
                               </td>
@@ -10126,19 +10124,19 @@ function App() {
                     </p>
                   </div>
 
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
                     gap: '12px',
                     background: 'rgba(255, 255, 255, 0.03)',
                     border: '1px solid var(--color-border)',
                     padding: '8px 16px',
                     borderRadius: '16px'
                   }}>
-                    <span style={{ 
-                      width: '10px', 
-                      height: '10px', 
-                      borderRadius: '50%', 
+                    <span style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
                       background: currentRider?.isOnline !== false ? 'var(--color-success)' : 'var(--color-danger)',
                       boxShadow: `0 0 8px ${currentRider?.isOnline !== false ? 'var(--color-success)' : 'var(--color-danger)'}`,
                       display: 'inline-block'
@@ -10212,7 +10210,7 @@ function App() {
                       const shopLat = matchedShop?.lat || 24.8887;
                       const shopLng = matchedShop?.lng || 74.6269;
                       const shopAddress = matchedShop?.address || 'Collectorate Road, Chittorgarh';
-                      const shopMapsUrl = matchedShop?.lat && matchedShop?.lng 
+                      const shopMapsUrl = matchedShop?.lat && matchedShop?.lng
                         ? `https://www.google.com/maps/dir/?api=1&destination=${shopLat},${shopLng}`
                         : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(shopAddress)}`;
 
@@ -10268,18 +10266,18 @@ function App() {
                             </div>
                           </div>
 
-                        <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
-                          <button
-                            className="neon-btn"
-                            style={{ width: '100%', background: 'rgba(0, 150, 255, 0.15)', border: '1px solid rgba(0, 150, 255, 0.4)', color: '#00fff2', fontWeight: 'bold' }}
-                            onClick={() => handleRiderAcceptJob(o.id)}
-                          >
-                            🤝 Claim Order
-                          </button>
+                          <div className="rider-tracking-controls" style={{ marginTop: '16px' }}>
+                            <button
+                              className="neon-btn"
+                              style={{ width: '100%', background: 'rgba(0, 150, 255, 0.15)', border: '1px solid rgba(0, 150, 255, 0.4)', color: '#00fff2', fontWeight: 'bold' }}
+                              onClick={() => handleRiderAcceptJob(o.id)}
+                            >
+                              🤝 Claim Order
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                   )}
                 </div>
 
@@ -10297,7 +10295,7 @@ function App() {
                       const shopLat = matchedShop?.lat || 24.8887;
                       const shopLng = matchedShop?.lng || 74.6269;
                       const shopAddress = matchedShop?.address || 'Collectorate Road, Chittorgarh';
-                      const shopMapsUrl = matchedShop?.lat && matchedShop?.lng 
+                      const shopMapsUrl = matchedShop?.lat && matchedShop?.lng
                         ? `https://www.google.com/maps/dir/?api=1&destination=${shopLat},${shopLng}`
                         : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(shopAddress)}`;
 
@@ -10458,8 +10456,8 @@ function App() {
                                         onClick={() => handleRiderCompleteDelivery(o.id)}
                                         style={{ flexGrow: 2 }}
                                       >
-                                        {o.paymentMethod === 'COD' 
-                                          ? 'Complete Delivery & Collect Cash (COD)' 
+                                        {o.paymentMethod === 'COD'
+                                          ? 'Complete Delivery & Collect Cash (COD)'
                                           : 'Complete Delivery (Paid Online)'}
                                       </button>
                                       <button
@@ -10680,7 +10678,7 @@ function App() {
                   {(() => {
                     const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                     const activeShopCommission = (matchedShop && matchedShop.commissionPercent !== undefined) ? matchedShop.commissionPercent : commissionPercent;
-                    
+
                     return loggedInMerchantShop ? (
                       <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
                         Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong> | Commission Rate: <strong>{activeShopCommission}%</strong>
@@ -10875,10 +10873,10 @@ function App() {
                 {(() => {
                   const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                   if (!matchedShop) return null;
-                  
+
                   const activeShopCommission = matchedShop.commissionPercent !== undefined ? matchedShop.commissionPercent : commissionPercent;
                   const isPendingRequest = matchedShop.commissionRequestStatus === 'pending';
-                  
+
                   return (
                     <>
                       <div className="merchant-onboarding" style={{ marginTop: '24px' }}>
@@ -10886,7 +10884,7 @@ function App() {
                         <p style={{ fontSize: '13.5px', color: 'var(--color-text-muted)', marginBottom: '16px', textAlign: 'left' }}>
                           Your current active commission rate is <strong>{activeShopCommission}%</strong>. You can request the Admin to change your commission rate below.
                         </p>
-                        
+
                         {isPendingRequest && (
                           <div style={{
                             background: 'rgba(245, 158, 11, 0.1)',
@@ -10901,7 +10899,7 @@ function App() {
                             ⏳ You have a pending request to change your commission rate to <strong>{matchedShop.pendingCommissionPercent}%</strong>. Please wait for Admin approval.
                           </div>
                         )}
-                        
+
                         <div style={{ display: 'flex', gap: '12px', alignItems: 'end', flexWrap: 'wrap', maxWidth: '400px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, textAlign: 'left' }}>
                             <label style={{ fontSize: '12.5px', fontWeight: '600' }}>Proposed Commission Rate (%)</label>
@@ -11188,7 +11186,7 @@ function App() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="drawer-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Active Announcements Card */}
               {customerAnnouncement && customerAnnouncement.trim() ? (() => {
@@ -11211,14 +11209,14 @@ function App() {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ 
-                          fontSize: '11px', 
-                          fontWeight: '800', 
-                          color: styles.badgeColor, 
-                          background: styles.badgeBg, 
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: '800',
+                          color: styles.badgeColor,
+                          background: styles.badgeBg,
                           border: styles.badgeBorder,
-                          padding: '4px 10px', 
-                          borderRadius: '20px', 
+                          padding: '4px 10px',
+                          borderRadius: '20px',
                           textTransform: 'uppercase',
                           letterSpacing: '0.5px',
                           display: 'inline-flex',
@@ -11231,12 +11229,12 @@ function App() {
                       </div>
                       <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Active Now</span>
                     </div>
-                    <p style={{ 
-                      fontSize: '14px', 
-                      color: '#1e293b', 
-                      margin: 0, 
-                      lineHeight: '1.6', 
-                      fontWeight: '600', 
+                    <p style={{
+                      fontSize: '14px',
+                      color: '#1e293b',
+                      margin: 0,
+                      lineHeight: '1.6',
+                      fontWeight: '600',
                       textAlign: 'left',
                       whiteSpace: 'pre-line',
                       wordBreak: 'break-word'
@@ -11259,16 +11257,16 @@ function App() {
                     <Tag size={14} style={{ color: 'var(--color-primary)' }} />
                     Active Offers & Promo Codes
                   </h3>
-                  
+
                   {coupons.map((coupon) => {
                     const isFlat = coupon.type === 'flat';
                     const titleText = isFlat ? `₹${coupon.discount} OFF` : `${coupon.discount}% OFF`;
-                    const descriptionText = isFlat 
-                      ? `Save flat ₹${coupon.discount} on your total order value.` 
+                    const descriptionText = isFlat
+                      ? `Save flat ₹${coupon.discount} on your total order value.`
                       : `Get ${coupon.discount}% off up to ₹${coupon.maxDiscount || 50} on your subtotal.`;
-                    
+
                     return (
-                      <div 
+                      <div
                         key={coupon.id}
                         className="notification-card promo-card"
                         style={{
@@ -11310,7 +11308,7 @@ function App() {
                             Copy Code
                           </button>
                         </div>
-                        
+
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <span style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a' }}>
                             {titleText}
@@ -11319,7 +11317,7 @@ function App() {
                             {descriptionText}
                           </p>
                         </div>
-                        
+
                         <div style={{ fontSize: '10px', color: '#64748b', borderTop: '1px dashed #e2e8f0', paddingTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
                           <span>Min. Cart: ₹{coupon.minCart || 0}</span>
                           {coupon.maxDiscount && <span>Max Discount: ₹{coupon.maxDiscount}</span>}
@@ -11628,8 +11626,8 @@ function App() {
                   const savingsPercent = hasDiscount ? Math.round(((variant.originalPrice - variant.price) / variant.originalPrice) * 100) : 0;
 
                   return (
-                    <div 
-                      key={index} 
+                    <div
+                      key={index}
                       className="variant-row-card"
                       style={{
                         display: 'flex',
@@ -11644,7 +11642,7 @@ function App() {
                       }}
                     >
                       {hasDiscount && (
-                        <span 
+                        <span
                           style={{
                             position: 'absolute',
                             top: '-10px',
@@ -11663,7 +11661,7 @@ function App() {
                           ★ SAVE {savingsPercent}%
                         </span>
                       )}
-                      
+
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, textAlign: 'left' }}>
                         <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '700', color: 'var(--color-text-main)' }}>{variant.specs}</h4>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
@@ -11677,7 +11675,7 @@ function App() {
                           )}
                         </div>
                       </div>
-                      
+
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: '90px' }}>
                         {cartItem ? (
                           <div className="prod-qty-selector" style={{ margin: 0, background: 'var(--color-primary)', color: '#ffffff', height: '36px' }}>
@@ -11692,7 +11690,7 @@ function App() {
                               const pShop = shops.find(s => s.name === selectedVariantProduct.store || s.storeName === selectedVariantProduct.store);
                               const statusInfo = getShopOpenStatus(pShop);
                               const isClosed = !statusInfo.isOpen;
-                              
+
                               const customerCoords = parseCoords(customerAddress);
                               let shopDistance = null;
                               let isOutOfRange = false;
@@ -11700,7 +11698,7 @@ function App() {
                                 shopDistance = getDistance(pShop.lat, pShop.lng, customerCoords.lat, customerCoords.lng);
                                 isOutOfRange = shopDistance > MAX_DELIVERY_RADIUS_KM;
                               }
-                              
+
                               if (isClosed) {
                                 setWarningModal({ isOpen: true, title: "Store Closed", message: "The store is closed.", iconType: "store" });
                                 return;
@@ -11763,7 +11761,7 @@ function App() {
               >
                 Go to Cart & Checkout <ArrowRight size={18} />
               </button>
-              
+
               <button
                 className="neon-btn"
                 onClick={() => setSelectedVariantProduct(null)}
@@ -11803,7 +11801,7 @@ function App() {
 
             {/* List of active coupons & delivery promotions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '420px', overflowY: 'auto', paddingRight: '4px' }}>
-              
+
               {/* Promo Codes Section Header */}
               <div style={{ fontSize: '11px', fontWeight: '800', color: 'var(--color-primary)', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '-4px', opacity: 0.8 }}>
                 Promo Codes
@@ -11831,11 +11829,11 @@ function App() {
                       }}
                     >
                       {/* Left side color accent strip depending on meetsMinCart */}
-                      <div 
+                      <div
                         className="pixigo-coupon-accent-strip"
                         style={{
-                          background: meetsMinCart 
-                            ? 'linear-gradient(180deg, #10b981 0%, #059669 100%)' 
+                          background: meetsMinCart
+                            ? 'linear-gradient(180deg, #10b981 0%, #059669 100%)'
                             : 'linear-gradient(180deg, #cbd5e1 0%, #94a3b8 100%)'
                         }}
                       ></div>
@@ -11846,7 +11844,7 @@ function App() {
                           <span className="pixigo-coupon-type-badge" style={{ color: meetsMinCart ? '#10b981' : 'rgba(255, 255, 255, 0.4)' }}>
                             {c.type === 'flat' ? 'Flat Discount' : 'Percentage Off'}
                           </span>
-                          
+
                           {/* Copy status action badge */}
                           {copiedCode === c.code ? (
                             <span className="pixigo-coupon-applied-badge">
@@ -11864,8 +11862,8 @@ function App() {
                             {c.type === 'flat' ? `₹${c.discount} OFF` : `${c.discount}% OFF`}
                           </h4>
                           <p className="pixigo-coupon-desc">
-                            {c.type === 'flat' 
-                              ? `Save flat ₹${c.discount} on your total order value.` 
+                            {c.type === 'flat'
+                              ? `Save flat ₹${c.discount} on your total order value.`
                               : `Get ${c.discount}% off up to ₹${c.maxDiscount || 50} on your subtotal.`}
                           </p>
                         </div>
@@ -11895,11 +11893,11 @@ function App() {
 
               {(() => {
                 const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-                
-                const hasFoodItems = cart.some(item => 
+
+                const hasFoodItems = cart.some(item =>
                   ['Fast Food', 'Restaurant Cafe', 'Bakery', 'Icecream and dessert', 'Juice and drink', 'Snacks and breakfast'].includes(item.category)
                 );
-                const hasGroceryItems = cart.some(item => 
+                const hasGroceryItems = cart.some(item =>
                   ['General Store', 'Vegetable', 'Dairy', 'PixiGo Store'].includes(item.category)
                 );
 
@@ -11964,8 +11962,8 @@ function App() {
                       className={`pixigo-coupon-card ${promo.isActive ? 'applied' : ''}`}
                     >
                       {/* Left accent strip */}
-                      <div 
-                        className="pixigo-coupon-accent-strip" 
+                      <div
+                        className="pixigo-coupon-accent-strip"
                         style={{
                           background: promo.gradient,
                           opacity: promo.isActive ? 1 : 0.4
@@ -11978,7 +11976,7 @@ function App() {
                           <span className="pixigo-coupon-type-badge" style={{ color: promo.isActive ? 'var(--color-primary)' : 'rgba(255, 255, 255, 0.4)' }}>
                             {promo.title}
                           </span>
-                          
+
                           <span style={{
                             display: 'inline-flex',
                             alignItems: 'center',
@@ -12450,8 +12448,8 @@ function App() {
                     <div className="sidebar-detail-row">
                       <span>Status:</span>
                       <span className={`badge ${trackedOrder.status === 'COMPLETED' ? 'badge-success' :
-                          trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' :
-                            'badge-warning'
+                        trackedOrder.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                          'badge-warning'
                         }`}>
                         {trackedOrder.status}
                       </span>
@@ -12548,11 +12546,9 @@ function App() {
                           border: '1px solid var(--color-border)'
                         }}>
                           <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(
-                              `upi://pay?pa=8233816674@upi&pn=PIXIgo%20Delivery&am=${trackedOrder.totalAmount}&cu=INR&tn=PIXIgo%20Order%20${trackedOrder.id}`
-                            )}`}
+                            src="/pixigo_payment_qr.png"
                             alt="UPI Payment QR Code"
-                            style={{ width: '130px', height: '130px', display: 'block' }}
+                            style={{ width: '180px', height: 'auto', display: 'block', borderRadius: '4px' }}
                           />
                         </div>
                         <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb300' }}>
@@ -12569,10 +12565,10 @@ function App() {
                           padding: '6px 14px',
                           fontSize: '12px'
                         }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>8233816674@upi</span>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 'bold', color: '#ffd700' }}>paytm.s27imms@pty</span>
                           <button
                             onClick={() => {
-                              navigator.clipboard.writeText('8233816674@upi');
+                              navigator.clipboard.writeText('paytm.s27imms@pty');
                               showToast('UPI ID copied to clipboard!', 'success');
                             }}
                             style={{
@@ -12740,7 +12736,7 @@ function App() {
 
             {/* Tab Selection */}
             <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '12px', marginBottom: '16px' }}>
-              <button 
+              <button
                 onClick={() => setAboutUsActiveTab('company')}
                 style={{
                   flex: 1,
@@ -12758,7 +12754,7 @@ function App() {
               >
                 🏢 Company Profile
               </button>
-              <button 
+              <button
                 onClick={() => setAboutUsActiveTab('founder')}
                 style={{
                   flex: 1,
@@ -12874,10 +12870,10 @@ function App() {
                 <>
                   <div style={{ display: 'flex', gap: '20px', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '16px' }}>
                     <div style={{ position: 'relative', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #3cd070', boxShadow: '0 0 10px rgba(60, 208, 112, 0.3)', flexShrink: 0 }}>
-                      <img 
-                        src="/founder.jpg" 
-                        alt="Shakti Singh Rathor" 
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      <img
+                        src="/founder.jpg"
+                        alt="Shakti Singh Rathor"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     </div>
                     <div>
@@ -12893,7 +12889,7 @@ function App() {
                   <div>
                     <h5 style={{ fontSize: '14px', fontWeight: '800', color: '#3cd070', margin: '0 0 8px 0' }}>About The Founder</h5>
                     <p style={{ fontSize: '13px', lineHeight: '1.7', color: '#b2c4ba', margin: 0 }}>
-                      Hailing from the historic land of Mewar in the small village of Narela (Tehsil Narela, Chittorgarh, Rajasthan), Shakti Singh Rathor is a 24-year-old dynamic entrepreneur fueled by an immense passion for breakthrough innovations. Coming from a focused Science-Biology educational background, Shakti chose an unconventional professional path driven purely by out-of-the-box thinking and an undeniable courage to launch and scale game-changing ideas single-handedly.
+                      Hailing from the historic land of Mewar in the small village (Narela, Chittorgarh, Rajasthan), Shakti Singh Rathor is a 24-year-old dynamic entrepreneur fueled by an immense passion for breakthrough innovations. Coming from a focused Science-Biology educational background, Shakti chose an unconventional professional path driven purely by out-of-the-box thinking and an undeniable courage to launch and scale game-changing ideas single-handedly.
                     </p>
                   </div>
 
@@ -12984,7 +12980,7 @@ function App() {
               </p>
 
               <h4 style={{ color: 'var(--color-primary)', fontWeight: '700', fontSize: '14px', marginTop: '8px', borderBottom: '1px solid var(--color-border)', paddingBottom: '4px' }}>PART A: TERMS OF SERVICE & FAIR USE POLICY</h4>
-              
+
               <div>
                 <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>1. Nature of the PIXIgo Platform</h5>
                 <p>PIXIgo is an instant local delivery marketplace platform. PIXIgo does not sell any grocery, food, medicine, or dairy items directly. We connect you with local Merchants and Independent Delivery Partners (Riders) in your vicinity. The respective Merchant from whom you order is solely responsible for the real-time quality, taste, legal compliance, and exact availability of the products.</p>
@@ -12992,8 +12988,8 @@ function App() {
 
               <div>
                 <h5 style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: '0 0 4px 0' }}>2. Order Verification & Pre-OTP Self-Check</h5>
-                <p><strong>CUSTOMER RIGHTS: VERIFICATION BEFORE DELIVERY COMPLETION</strong><br/>
-                Customers have the full right to inspect their parcel and verify the item count before sharing the Secure OTP with the Delivery Rider. Once the OTP is shared, the order will be considered "Successfully Delivered," and no claims regarding short-delivery, missing items, or incorrect quantities will be accepted.</p>
+                <p><strong>CUSTOMER RIGHTS: VERIFICATION BEFORE DELIVERY COMPLETION</strong><br />
+                  Customers have the full right to inspect their parcel and verify the item count before sharing the Secure OTP with the Delivery Rider. Once the OTP is shared, the order will be considered "Successfully Delivered," and no claims regarding short-delivery, missing items, or incorrect quantities will be accepted.</p>
               </div>
 
               <div>
@@ -13827,10 +13823,10 @@ function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Current Status:</span>
                   <span className={`badge ${selectedOrderDetails.status === 'COMPLETED' ? 'badge-success' :
-                      selectedOrderDetails.status === 'ACCEPTED' ? 'badge-success' :
-                        selectedOrderDetails.status === 'ASSIGNED' ? 'badge-primary' :
-                          selectedOrderDetails.status?.startsWith('CANCELLED') ? 'badge-danger' :
-                            'badge-warning'
+                    selectedOrderDetails.status === 'ACCEPTED' ? 'badge-success' :
+                      selectedOrderDetails.status === 'ASSIGNED' ? 'badge-primary' :
+                        selectedOrderDetails.status?.startsWith('CANCELLED') ? 'badge-danger' :
+                          'badge-warning'
                     }`}>
                     {(() => {
                       const statusUpper = selectedOrderDetails.status?.toUpperCase() || 'PLACED';
@@ -14208,8 +14204,8 @@ function App() {
                           </td>
                           <td>
                             <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                                o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
-                                  'analytics-badge-info'
+                              o.status?.startsWith('CANCELLED') ? 'analytics-badge-warning' :
+                                'analytics-badge-info'
                               }`}>
                               {o.status}
                             </span>
@@ -14337,8 +14333,8 @@ function App() {
                               </td>
                               <td>
                                 <span className={`analytics-badge-pill ${o.status === 'COMPLETED' ? 'analytics-badge-success' :
-                                    o.status?.startsWith('CANCELLED') ? 'analytics-badge-danger' :
-                                      'analytics-badge-info'
+                                  o.status?.startsWith('CANCELLED') ? 'analytics-badge-danger' :
+                                    'analytics-badge-info'
                                   }`}>
                                   {o.status.replace(/_/g, ' ')}
                                 </span>
