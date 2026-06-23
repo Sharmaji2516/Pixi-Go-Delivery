@@ -11,7 +11,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
-import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight } from './distanceUtils';
+import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -4635,12 +4635,17 @@ function App() {
                       <span className="bill-value">{formatINR(subtotal)}</span>
                     </div>
 
-                    <div className="bill-row">
-                      <span className="bill-label">
-                        <span className="bill-label-icon">⚖️</span> Total Weight
-                      </span>
-                      <span className="bill-value" style={{ fontWeight: '600', color: 'var(--color-text-main)' }}>{cartWeight.toFixed(2)} kg</span>
-                    </div>
+                    {(() => {
+                      const summary = getCartSummary(cart);
+                      return (
+                        <div className="bill-row">
+                          <span className="bill-label">
+                            <span className="bill-label-icon">{summary.icon}</span> {summary.label}
+                          </span>
+                          <span className="bill-value" style={{ fontWeight: '600', color: 'var(--color-text-main)' }}>{summary.value}</span>
+                        </div>
+                      );
+                    })()}
 
                     {cartWeight > 10 && (
                       <div className="bill-row" style={{ color: 'var(--color-accent-yellow-dark)' }}>

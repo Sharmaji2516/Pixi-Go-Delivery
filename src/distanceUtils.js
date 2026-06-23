@@ -209,4 +209,69 @@ export const getCartTotalWeight = (cart) => {
   }, 0);
 };
 
+/**
+ * Analyzes the cart items and generates a dynamic quantity/weight summary object.
+ * 
+ * @param {Array} cart Cart items
+ * @returns {{ label: string, value: string, icon: string }} Summary details
+ */
+export const getCartSummary = (cart) => {
+  if (!cart || !Array.isArray(cart) || cart.length === 0) {
+    return { label: "Total Items", value: "0", icon: "📦" };
+  }
+  
+  let totalPieces = 0;
+  let totalWeightKg = 0;
+  let hasWeightItems = false;
+  let hasPieceItems = false;
+
+  cart.forEach(item => {
+    const category = item.category || "";
+    const specs = (item.specs || "").toLowerCase();
+    const name = (item.name || "").toLowerCase();
+    
+    // Check if specs or name contains weight units: kg, g, l, ml, litre, etc.
+    const hasWeightUnit = /(\d+(?:\.\d+)?)\s*(kg|g|l|ml|litre|liters|grams)\b/i.test(specs || name);
+    const isKnownWeightCategory = ['Vegetable', 'Dairy', 'General Store'].includes(category);
+    const isWeightItem = hasWeightUnit || isKnownWeightCategory || name.includes('paneer') || name.includes('butter') || name.includes('atta') || name.includes('oil');
+
+    if (isWeightItem) {
+      hasWeightItems = true;
+      let weight = getProductWeight(item.specs);
+      if (weight === null) {
+        weight = getProductWeight(item.name);
+      }
+      if (weight === null) {
+        weight = 0.5; // fallback
+      }
+      totalWeightKg += (weight * item.quantity);
+    } else {
+      hasPieceItems = true;
+      totalPieces += item.quantity;
+    }
+  });
+
+  if (hasWeightItems && hasPieceItems) {
+    return {
+      label: "Package Summary",
+      value: `${totalPieces} Pcs & ${totalWeightKg.toFixed(2)} kg`,
+      icon: "📦"
+    };
+  } else if (hasWeightItems) {
+    return {
+      label: "Total Weight",
+      value: `${totalWeightKg.toFixed(2)} kg`,
+      icon: "⚖️"
+    };
+  } else {
+    const unit = totalPieces === 1 ? 'Pc' : 'Pcs';
+    return {
+      label: "Total Quantity",
+      value: `${totalPieces} ${unit}`,
+      icon: "📦"
+    };
+  }
+};
+
+
 
