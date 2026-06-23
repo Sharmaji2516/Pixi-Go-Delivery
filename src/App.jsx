@@ -1854,13 +1854,15 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'delivery') {
-      if (availablePoolJobs.length > prevPoolJobsCount.current) {
+      const currentRider = deliveryPartners.find(d => d.id === user?.uid);
+      const isOnline = currentRider?.isOnline !== false;
+      if (isOnline && availablePoolJobs.length > prevPoolJobsCount.current) {
         play30SecondBeepAlert();
         showToast("🔔 New delivery run available in the pool! Check details below.");
       }
     }
     prevPoolJobsCount.current = availablePoolJobs.length;
-  }, [availablePoolJobs.length, activeTab]);
+  }, [availablePoolJobs.length, activeTab, deliveryPartners, user]);
 
   // Get active merchant shop based on email or phone
   const loggedInMerchantShop = user ? shops.find(s =>
@@ -2885,6 +2887,26 @@ function App() {
       }
     }
     showToast(`Store is now ${newStatus ? 'OPEN' : 'CLOSED'}`);
+  };
+
+  // Rider: Toggle duty status (Online/Offline)
+  const handleToggleRiderDuty = async (rider, currentStatus) => {
+    const newStatus = !currentStatus;
+
+    // Update local state first
+    setDeliveryPartners(prevRiders =>
+      prevRiders.map(r => r.id === rider.id ? { ...r, isOnline: newStatus } : r)
+    );
+
+    if (rider && rider.firestoreId) {
+      try {
+        const docRef = doc(db, "delivery_boys", rider.firestoreId);
+        await updateDoc(docRef, { isOnline: newStatus });
+      } catch (err) {
+        console.error("Error updating rider duty status in Firestore:", err);
+      }
+    }
+    showToast(`Rider duty is now ${newStatus ? 'ON DUTY' : 'OFF DUTY'}`);
   };
 
   // Merchant: Request custom commission change
@@ -7728,66 +7750,86 @@ function App() {
                           <tr>
                             <th>Shop ID</th>
                             <th>Shop Name</th>
-                            <th>Status</th>
+                            <th>Account Status</th>
+                            <th>Store Status</th>
                             <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredShops.length === 0 ? (
                             <tr>
-                              <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                              <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                                 No shops match search query.
                               </td>
                             </tr>
                           ) : (
-                            filteredShops.map(s => (
-                              <tr
-                                key={s.id}
-                                onClick={() => handleOpenShopDetails(s)}
-                                className="clickable-row"
-                              >
-                                <td><strong>{s.id}</strong></td>
-                                <td>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span>
-                                      {s.name}
-                                      {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                                    </span>
-                                    <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                      View Details →
-                                    </span>
-                                  </div>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAdminToggleShopActive(s);
-                                    }}
-                                    className={`badge ${s.verified ? 'badge-success' : 'badge-danger'}`}
-                                    style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
-                                    title={s.verified ? "Click to Deactivate" : "Click to Activate"}
-                                  >
-                                    {s.verified ? 'Active' : 'Disabled'}
-                                  </button>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAdminDeleteShop(s);
-                                    }}
-                                    className="reject-btn"
-                                    style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                    title="Delete Shop"
-                                  >
-                                    <Trash2 size={13} /> Delete
-                                  </button>
-                                </td>
-                              </tr>
-                            )))}
+                            filteredShops.map(s => {
+                              const shopStatus = getShopOpenStatus(s);
+                              const isOpen = shopStatus.isOpen;
+                              return (
+                                <tr
+                                  key={s.id}
+                                  onClick={() => handleOpenShopDetails(s)}
+                                  className="clickable-row"
+                                >
+                                  <td><strong>{s.id}</strong></td>
+                                  <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <span>
+                                        {s.name}
+                                        {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                      </span>
+                                      <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                        View Details →
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAdminToggleShopActive(s);
+                                      }}
+                                      className={`badge ${s.verified ? 'badge-success' : 'badge-danger'}`}
+                                      style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
+                                      title={s.verified ? "Click to Deactivate" : "Click to Activate"}
+                                    >
+                                      {s.verified ? 'Active' : 'Disabled'}
+                                    </button>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                      <span style={{
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '50%',
+                                        background: isOpen ? 'var(--color-success)' : 'var(--color-danger)',
+                                        boxShadow: `0 0 6px ${isOpen ? 'var(--color-success)' : 'var(--color-danger)'}`,
+                                        display: 'inline-block'
+                                      }}></span>
+                                      <span style={{ fontSize: '12px', fontWeight: '600', color: isOpen ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                        {isOpen ? 'OPEN' : 'CLOSED'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAdminDeleteShop(s);
+                                      }}
+                                      className="reject-btn"
+                                      style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                      title="Delete Shop"
+                                    >
+                                      <Trash2 size={13} /> Delete
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }))}
                         </tbody>
                       </table>
                     </div>
@@ -8051,66 +8093,85 @@ function App() {
                           <tr>
                             <th>Rider ID</th>
                             <th>Rider Name</th>
-                            <th>Status</th>
+                            <th>Account Status</th>
+                            <th>Duty Status</th>
                             <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredRiders.length === 0 ? (
                             <tr>
-                              <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                              <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                                 No riders match search query.
                               </td>
                             </tr>
                           ) : (
-                            filteredRiders.map(d => (
-                              <tr
-                                key={d.id}
-                                onClick={() => handleStartEditRider(d)}
-                                className="clickable-row"
-                              >
-                                <td><strong>{d.id}</strong></td>
-                                <td>
-                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span>
-                                      {d.name}
-                                      {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                                    </span>
-                                    <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                      View Details →
-                                    </span>
-                                  </div>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAdminToggleRiderActive(d);
-                                    }}
-                                    className={`badge ${d.verified ? 'badge-success' : 'badge-danger'}`}
-                                    style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
-                                    title={d.verified ? "Click to Deactivate" : "Click to Activate"}
-                                  >
-                                    {d.verified ? 'Active' : 'Disabled'}
-                                  </button>
-                                </td>
-                                <td>
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleAdminDeleteRider(d);
-                                    }}
-                                    className="reject-btn"
-                                    style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                    title="Delete Rider"
-                                  >
-                                    <Trash2 size={13} /> Delete
-                                  </button>
-                                </td>
-                              </tr>
-                            )))}
+                            filteredRiders.map(d => {
+                              const isOnline = d.isOnline !== false;
+                              return (
+                                <tr
+                                  key={d.id}
+                                  onClick={() => handleStartEditRider(d)}
+                                  className="clickable-row"
+                                >
+                                  <td><strong>{d.id}</strong></td>
+                                  <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <span>
+                                        {d.name}
+                                        {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                      </span>
+                                      <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
+                                        View Details →
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAdminToggleRiderActive(d);
+                                      }}
+                                      className={`badge ${d.verified ? 'badge-success' : 'badge-danger'}`}
+                                      style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
+                                      title={d.verified ? "Click to Deactivate" : "Click to Activate"}
+                                    >
+                                      {d.verified ? 'Active' : 'Disabled'}
+                                    </button>
+                                  </td>
+                                  <td>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                      <span style={{
+                                        width: '8px',
+                                        height: '8px',
+                                        borderRadius: '50%',
+                                        background: isOnline ? 'var(--color-success)' : 'var(--color-danger)',
+                                        boxShadow: `0 0 6px ${isOnline ? 'var(--color-success)' : 'var(--color-danger)'}`,
+                                        display: 'inline-block'
+                                      }}></span>
+                                      <span style={{ fontSize: '12px', fontWeight: '600', color: isOnline ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                                        {isOnline ? 'ONLINE' : 'OFFLINE'}
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAdminDeleteRider(d);
+                                      }}
+                                      className="reject-btn"
+                                      style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                      title="Delete Rider"
+                                    >
+                                      <Trash2 size={13} /> Delete
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            }))}
                         </tbody>
                       </table>
                     </div>
@@ -9329,13 +9390,51 @@ function App() {
                 )}
 
                 {/* Rider Welcome Info */}
-                <div style={{ textAlign: 'left', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
-                  <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
-                    Welcome, {user?.name || user?.email}
-                  </h2>
-                  <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                    Logged in as: <strong>{user?.email}</strong> | UID: <strong>{user?.uid}</strong>
-                  </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
+                  <div style={{ textAlign: 'left' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
+                      Welcome, {currentRider?.name || user?.name || user?.email}
+                    </h2>
+                    <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                      Logged in as: <strong>{user?.email}</strong> | UID: <strong>{user?.uid}</strong>
+                    </p>
+                  </div>
+
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '12px',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid var(--color-border)',
+                    padding: '8px 16px',
+                    borderRadius: '16px'
+                  }}>
+                    <span style={{ 
+                      width: '10px', 
+                      height: '10px', 
+                      borderRadius: '50%', 
+                      background: currentRider?.isOnline !== false ? 'var(--color-success)' : 'var(--color-danger)',
+                      boxShadow: `0 0 8px ${currentRider?.isOnline !== false ? 'var(--color-success)' : 'var(--color-danger)'}`,
+                      display: 'inline-block'
+                    }}></span>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-text-main)' }}>
+                      Duty Status: <strong style={{ color: currentRider?.isOnline !== false ? 'var(--color-success)' : 'var(--color-danger)' }}>{currentRider?.isOnline !== false ? 'ON DUTY' : 'OFF DUTY'}</strong>
+                    </span>
+                    <button
+                      className="neon-btn small-btn"
+                      onClick={() => handleToggleRiderDuty(currentRider, currentRider?.isOnline !== false)}
+                      style={{
+                        background: currentRider?.isOnline !== false ? 'var(--color-danger)' : 'var(--color-success)',
+                        borderColor: currentRider?.isOnline !== false ? 'var(--color-danger)' : 'var(--color-success)',
+                        color: '#fff',
+                        marginLeft: '8px',
+                        padding: '6px 12px',
+                        fontSize: '12px'
+                      }}
+                    >
+                      {currentRider?.isOnline !== false ? 'Go Off Duty' : 'Go On Duty'}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Rider Stats Bar */}
@@ -9367,8 +9466,16 @@ function App() {
 
                 {/* Available Delivery Jobs Pool */}
                 <div className="rider-orders-section" style={{ marginBottom: '32px' }}>
-                  <h2>Available Delivery Jobs Pool ({availablePoolJobs.length})</h2>
-                  {availablePoolJobs.length === 0 ? (
+                  <h2>Available Delivery Jobs Pool ({currentRider?.isOnline !== false ? availablePoolJobs.length : 0})</h2>
+                  {currentRider?.isOnline === false ? (
+                    <div className="no-jobs-card" style={{ padding: '32px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', borderRadius: '12px' }}>
+                      <AlertCircle size={32} style={{ color: 'var(--color-danger)', marginBottom: '12px', display: 'inline-block' }} />
+                      <p style={{ fontWeight: 'bold', color: 'var(--color-text-main)', margin: 0 }}>You are currently Off Duty</p>
+                      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '6px', margin: '6px 0 0 0' }}>
+                        Please switch to **On Duty** above to start accepting new delivery jobs.
+                      </p>
+                    </div>
+                  ) : availablePoolJobs.length === 0 ? (
                     <div className="no-jobs-card">
                       <Package size={32} className="text-muted" />
                       <p>No available delivery runs in the pool at the moment.</p>
