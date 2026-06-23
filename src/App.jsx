@@ -11637,6 +11637,52 @@ function App() {
                     </div>
                   </div>
 
+                  {/* Items Ordered Section */}
+                  {trackedOrder.items && trackedOrder.items.length > 0 && (
+                    <div style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: '12px',
+                      padding: '12px',
+                      marginTop: '8px'
+                    }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: 'var(--color-primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        📦 Items Ordered
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {trackedOrder.items.map((item, idx) => (
+                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}>
+                              <span>{item.emoji || '📦'}</span>
+                              <span style={{ fontWeight: '500' }}>{item.name}</span>
+                              {item.specs && (
+                                <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>({item.specs})</span>
+                              )}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: 'var(--color-text-muted)' }}>x{item.quantity}</span>
+                              <strong style={{ color: 'var(--color-text-main)' }}>{formatINR(item.price * item.quantity)}</strong>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Small breakdown divider */}
+                      <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '10px 0 6px 0' }}></div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                        <span>Delivery Charge:</span>
+                        <span>{formatINR(trackedOrder.deliveryCharge || 0)}</span>
+                      </div>
+                      {trackedOrder.discountAmount > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--color-danger)' }}>
+                          <span>Coupon Discount:</span>
+                          <span>-{formatINR(trackedOrder.discountAmount)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Scan & Pay on Delivery UPI QR code for COD orders */}
                   {trackedOrder.paymentMethod === 'COD' &&
                     !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) &&
