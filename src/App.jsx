@@ -6616,7 +6616,7 @@ function App() {
                       {/* Today's Sales */}
                       <div className="analytics-card card-grad-primary" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">Today's Gross Sales</div>
-                        <div className="analytics-card-value">₹{analytics.todayStats.grossSales}</div>
+                        <div className="analytics-card-value">₹{Number(analytics.todayStats.grossSales || 0).toFixed(2)}</div>
                         <div className="analytics-card-footer">
                           <span>Orders: {analytics.todayStats.placedCount}</span>
                           <span>Delivered: {analytics.todayStats.completedCount}</span>
@@ -6626,7 +6626,7 @@ function App() {
                       {/* Today's Net Profit */}
                       <div className="analytics-card card-grad-warning" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">Today's Net Profit</div>
-                        <div className="analytics-card-value">₹{analytics.todayStats.netProfit || 0}</div>
+                        <div className="analytics-card-value">₹{Number(analytics.todayStats.netProfit || 0).toFixed(2)}</div>
                         <div className="analytics-card-footer">
                           <span>Successful Earnings Summary</span>
                         </div>
@@ -6635,7 +6635,7 @@ function App() {
                       {/* All-Time Sales */}
                       <div className="analytics-card card-grad-profit" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">All-Time Gross Sales</div>
-                        <div className="analytics-card-value">₹{analytics.allTimeStats.grossSales}</div>
+                        <div className="analytics-card-value">₹{Number(analytics.allTimeStats.grossSales || 0).toFixed(2)}</div>
                         <div className="analytics-card-footer">
                           <span>Total Orders: {analytics.allTimeStats.placedCount}</span>
                           <span>Delivered: {analytics.allTimeStats.completedCount}</span>
@@ -6645,7 +6645,7 @@ function App() {
                       {/* Net Profit */}
                       <div className="analytics-card card-grad-success" onClick={() => setSalesTab('orders_log')} style={{ cursor: 'pointer' }}>
                         <div className="analytics-card-title">All-Time Net Profit</div>
-                        <div className="analytics-card-value">₹{stats.netProfit}</div>
+                        <div className="analytics-card-value">₹{Number(stats.netProfit || 0).toFixed(2)}</div>
                         <div className="analytics-card-footer">
                           <span>Successful Earnings Summary</span>
                         </div>
@@ -6771,9 +6771,9 @@ function App() {
                                             {perfText}
                                           </span>
                                         </td>
-                                        <td>₹{m.grossSales}</td>
+                                        <td>₹{Number(m.grossSales || 0).toFixed(2)}</td>
                                         <td>
-                                          <strong style={{ color: '#4ade80' }}>₹{m.netEarnings}</strong>
+                                          <strong style={{ color: '#4ade80' }}>₹{Number(m.netEarnings || 0).toFixed(2)}</strong>
                                         </td>
                                       </tr>
                                     );
@@ -6869,7 +6869,7 @@ function App() {
                                           </span>
                                         </td>
                                         <td>
-                                          <strong style={{ color: '#fbbf24' }}>₹{r.totalPayout}</strong>
+                                          <strong style={{ color: '#fbbf24' }}>₹{Number(r.totalPayout || 0).toFixed(2)}</strong>
                                         </td>
                                       </tr>
                                     );
@@ -7015,7 +7015,7 @@ function App() {
                                         <td>{o.deliveryPartnerName || 'N/A'}</td>
                                         <td>
                                           <strong style={{ textDecoration: isCancelled ? 'line-through' : 'none', color: isCancelled ? 'var(--color-text-muted)' : 'var(--color-success)' }}>
-                                            ₹{o.totalAmount || 0}
+                                            ₹{Number(o.totalAmount || 0).toFixed(2)}
                                           </strong>
                                         </td>
                                         <td>
@@ -7025,11 +7025,11 @@ function App() {
                                         </td>
                                         <td>
                                           {isCancelled ? (
-                                            <span style={{ fontSize: '11px', color: 'var(--color-danger)' }}>Cancelled (₹0 earnings)</span>
+                                            <span style={{ fontSize: '11px', color: 'var(--color-danger)' }}>Cancelled (₹0.00 earnings)</span>
                                           ) : (
                                             <>
-                                              <div style={{ fontSize: '12px' }}>Net Profit: <strong>₹{o.netAdminEarning || Math.round((o.totalAmount || 0) * 0.1)}</strong></div>
-                                              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Rider: ₹{o.riderPayout || 0}</div>
+                                              <div style={{ fontSize: '12px' }}>Net Profit: <strong>₹{Number(o.netAdminEarning !== undefined ? o.netAdminEarning : (o.totalAmount || 0) * 0.1).toFixed(2)}</strong></div>
+                                              <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Rider: ₹{Number(o.riderPayout || 0).toFixed(2)}</div>
                                             </>
                                           )}
                                         </td>
