@@ -11675,7 +11675,7 @@ function App() {
                           <h4>Courier Dispatched</h4>
                           <p>
                             {getStatusStepIndex(trackedOrder.status) >= 3
-                              ? `Rider ${trackedOrder.deliveryPartnerName || 'Partner'} claimed your run!`
+                              ? `Your order is on the way! (Rider: ${trackedOrder.deliveryPartnerName || 'Partner'})`
                               : "Waiting to assign courier..."}
                           </p>
                         </div>
