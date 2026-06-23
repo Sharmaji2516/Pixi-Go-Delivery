@@ -11658,7 +11658,7 @@ function App() {
                         </div>
                         <div className="timeline-content">
                           <h4>Accepted & Preparing</h4>
-                          <p>{getStatusStepIndex(trackedOrder.status) >= 2 ? "Kitchen is preparing your order!" : "Awaiting shop confirmation."}</p>
+                          <p>{getStatusStepIndex(trackedOrder.status) >= 2 ? "Your order is being prepared!" : "Awaiting shop confirmation."}</p>
                         </div>
                       </div>
 
