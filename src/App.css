@@ -6638,3 +6638,73 @@
   background: rgba(60, 208, 112, 0.5);
 }
 
+
+/* ==================== ZOMATO-STYLE NOTIFICATION CENTER ==================== */
+.notification-bell-btn {
+  position: relative;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.notification-bell-btn:hover {
+  transform: scale(1.05);
+}
+
+.notification-bell-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--color-success, #10b981);
+  border-radius: 50%;
+  border: 1px solid #ffffff;
+  animation: pulse-glow-badge 1.8s infinite ease-in-out;
+}
+
+@keyframes pulse-glow-badge {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.notification-drawer {
+  display: flex !important;
+  flex-direction: column !important;
+  background: linear-gradient(180deg, #090e1a 0%, #05070e 100%) !important;
+  border-left: 1px solid rgba(0, 255, 242, 0.15) !important;
+  box-shadow: -10px 0 35px rgba(0, 0, 0, 0.6) !important;
+}
+
+.notification-drawer .drawer-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+.notification-card {
+  transition: transform 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.notification-card:hover {
+  transform: translateY(-2px);
+  background-color: rgba(255, 255, 255, 0.04) !important;
+  border-color: rgba(0, 255, 242, 0.2) !important;
+}
+
+.promo-card {
+  box-shadow: 0 4px 12px rgba(0, 255, 242, 0.03);
+}
+
+.promo-card:hover {
+  box-shadow: 0 6px 16px rgba(0, 255, 242, 0.08);
+}
+
+/* Storefront static banner close button styling */
+.customer-announcement-banner button:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}

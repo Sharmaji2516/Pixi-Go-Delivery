@@ -3,7 +3,7 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag,
   MessageCircle, AlertCircle, AlertTriangle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown, Users, Info, Code, Edit
+  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
@@ -409,6 +409,8 @@ function App() {
   const [rerouteSelectedShop, setRerouteSelectedShop] = useState('');
   const [rerouteSelectedRider, setRerouteSelectedRider] = useState('');
   const [isCartDrawerOpen, setIsCartDrawerOpen] = useState(false);
+  const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState('cart'); // cart | payment
   const [pendingPaymentOrder, setPendingPaymentOrder] = useState(null);
   const [logoError, setLogoError] = useState(false);
@@ -1375,6 +1377,16 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Trigger notification dot when announcement changes
+  useEffect(() => {
+    if (customerAnnouncement) {
+      const lastSeen = localStorage.getItem('pixigo_last_seen_announcement');
+      if (lastSeen !== customerAnnouncement) {
+        setHasUnreadNotifications(true);
+      }
+    }
+  }, [customerAnnouncement]);
 
   // Fetch real-time Merchant Announcement from Firestore
   useEffect(() => {
@@ -5549,20 +5561,28 @@ function App() {
             )}
 
             {activeTab === 'customer' && (
+              <button 
+                className="cart-header-icon-btn notification-bell-btn" 
+                onClick={() => {
+                  setIsNotificationDrawerOpen(true);
+                  setHasUnreadNotifications(false);
+                  if (customerAnnouncement) {
+                    localStorage.setItem('pixigo_last_seen_announcement', customerAnnouncement);
+                  }
+                }} 
+                title="Notifications & Offers"
+                style={{ position: 'relative' }}
+              >
+                <Bell size={20} />
+                {hasUnreadNotifications && (
+                  <span className="notification-bell-badge"></span>
+                )}
+              </button>
+            )}
+
+            {activeTab === 'customer' && (
               <button className="cart-header-icon-btn" onClick={() => setIsProfileOpen(true)} title="My Profile & Orders">
                 <User size={20} />
-              </button>
-            )}
-
-            {activeTab === 'customer' && (
-              <button className="cart-header-icon-btn" onClick={() => setIsContactOpen(true)} title="Contact Us">
-                <Phone size={20} />
-              </button>
-            )}
-
-            {activeTab === 'customer' && (
-              <button className="cart-header-icon-btn" onClick={() => setIsAboutUsOpen(true)} title="About Us">
-                <Store size={20} />
               </button>
             )}
 
@@ -5589,52 +5609,7 @@ function App() {
         {activeTab === 'customer' && (
           <div className="customer-portal-layout fade-in">
 
-            {/* Customer Storefront Announcement Marquee Banner */}
-            {customerAnnouncement && (
-              <div className="customer-announcement-banner" style={{
-                margin: '16px auto 10px auto',
-                padding: '8px 16px',
-                background: hexToRgba(customerAnnouncementColor, 0.05),
-                border: `1px solid ${hexToRgba(customerAnnouncementColor, 0.15)}`,
-                borderRadius: '24px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                overflow: 'hidden',
-                boxShadow: `0 0 10px ${hexToRgba(customerAnnouncementColor, 0.05)}`
-              }}>
-                <span style={{
-                  fontSize: '12px',
-                  fontWeight: '800',
-                  color: customerAnnouncementColor,
-                  background: hexToRgba(customerAnnouncementColor, 0.15),
-                  padding: '4px 10px',
-                  borderRadius: '12px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.5px',
-                  whiteSpace: 'nowrap',
-                  display: 'inline-flex',
-                  alignItems: 'center'
-                }}>
-                  📢 Notice
-                </span>
-                <marquee
-                  behavior="scroll"
-                  direction="left"
-                  scrollamount="4"
-                  style={{
-                    fontSize: '13px',
-                    color: customerAnnouncementColor,
-                    textShadow: `0 0 4px ${hexToRgba(customerAnnouncementColor, 0.3)}`,
-                    fontWeight: '600',
-                    margin: 0,
-                    padding: 0
-                  }}
-                >
-                  {customerAnnouncement}
-                </marquee>
-              </div>
-            )}
+            {/* Announcement banner removed as per user request. Announcements are viewable in the notification drawer center */}
 
             {/* Custom PIXIgo Brand Banner */}
             {selectedCategory === 'All' && searchQuery.trim() === '' && (
@@ -9960,6 +9935,128 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Notification Center Drawer Overlay */}
+      {isNotificationDrawerOpen && (
+        <div className="drawer-backdrop fade-in" onClick={() => setIsNotificationDrawerOpen(false)}>
+          <div className="cart-drawer notification-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="drawer-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 24px', borderBottom: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Bell size={20} style={{ color: 'var(--color-primary)' }} />
+                <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, color: 'var(--color-text-main)', fontFamily: 'var(--font-heading)' }}>Notifications</h2>
+              </div>
+              <button className="close-drawer-btn" onClick={() => setIsNotificationDrawerOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--color-text-main)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="drawer-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Active Announcements Card */}
+              {customerAnnouncement ? (
+                <div className="notification-card announcement-card" style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                  position: 'relative',
+                  overflow: 'hidden'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '11px', fontWeight: '800', color: customerAnnouncementColor || 'var(--color-primary)', background: hexToRgba(customerAnnouncementColor || '#ffd700', 0.1), padding: '3px 8px', borderRadius: '6px', textTransform: 'uppercase' }}>
+                      Notice Update
+                    </span>
+                    <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Just Now</span>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--color-text-main)', margin: 0, lineHeight: '1.5', fontWeight: '500', textAlign: 'left' }}>
+                    {customerAnnouncement}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', color: 'var(--color-text-muted)', padding: '40px 20px' }}>
+                  <Bell size={36} style={{ margin: '0 auto 12px auto', display: 'block', opacity: 0.3 }} />
+                  <p style={{ margin: 0, fontSize: '14px' }}>No new notifications at the moment.</p>
+                </div>
+              )}
+
+              {/* Active Promos and Offers section */}
+              {coupons && coupons.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <h3 style={{ fontSize: '14px', fontWeight: '800', margin: '10px 0 4px 0', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'left' }}>
+                    <Tag size={14} style={{ color: 'var(--color-primary)' }} />
+                    Active Offers & Promo Codes
+                  </h3>
+                  
+                  {coupons.map((coupon) => (
+                    <div 
+                      key={coupon.id}
+                      className="notification-card promo-card"
+                      style={{
+                        background: 'rgba(0, 255, 242, 0.02)',
+                        border: '1px solid rgba(0, 255, 242, 0.08)',
+                        borderRadius: '16px',
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        textAlign: 'left',
+                        position: 'relative',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ background: 'rgba(0, 255, 242, 0.08)', border: '1px dashed var(--color-primary)', color: 'var(--color-primary)', fontFamily: 'monospace', fontWeight: 'bold', fontSize: '12px', padding: '3px 8px', borderRadius: '6px' }}>
+                          {coupon.code}
+                        </span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(coupon.code);
+                            showToast(`Coupon code ${coupon.code} copied!`);
+                          }}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--color-primary)',
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            cursor: 'pointer',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            transition: 'all 0.2s'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 255, 242, 0.05)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          Copy Code
+                        </button>
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <span style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--color-text-main)' }}>
+                          {coupon.title || (coupon.type === 'PERCENTAGE' ? `${coupon.value}% OFF` : `Flat \u20b9${coupon.value} OFF`)}
+                        </span>
+                        {coupon.description && (
+                          <p style={{ fontSize: '11.5px', color: 'var(--color-text-muted)', margin: 0, lineHeight: '1.4' }}>
+                            {coupon.description}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div style={{ fontSize: '10px', color: 'var(--color-text-muted)', borderTop: '1px dashed rgba(255,255,255,0.05)', paddingTop: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Min Order: \u20b9{coupon.minOrderValue || 0}</span>
+                        <span>Max Discount: \u20b9{coupon.maxDiscount || 'No Limit'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* Floating Mobile Cart Button */}
       {activeTab === 'customer' && cart.length > 0 && (
