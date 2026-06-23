@@ -2167,68 +2167,64 @@ function App() {
     }, 0)
   };
 
-  // Compile all users list
+  // Compile all users list grouped by email or id
   const compiledAllUsers = [];
-  const userIdsSeen = new Set();
+  const usersMap = new Map();
+
+  const mergeUser = (uid, name, email, role, docId, rawUser) => {
+    const key = (email && email !== 'N/A') ? email.trim().toLowerCase() : uid;
+    if (!key) return;
+
+    if (!usersMap.has(key)) {
+      usersMap.set(key, {
+        id: uid,
+        firestoreId: docId || uid,
+        name: name,
+        email: email || 'N/A',
+        roles: [role],
+        isActive: rawUser.isActive !== false,
+        roleDocIds: { [role]: docId || uid }
+      });
+    } else {
+      const existing = usersMap.get(key);
+      if (!existing.roles.includes(role)) {
+        existing.roles.push(role);
+      }
+      existing.roleDocIds[role] = docId || uid;
+      if (rawUser.isActive === false) {
+        existing.isActive = false;
+      }
+      const rolePriority = { admin: 4, merchant: 3, rider: 2, customer: 1 };
+      const currentHighestRole = existing.roles.reduce((a, b) => rolePriority[a] > rolePriority[b] ? a : b);
+      if (role === currentHighestRole) {
+        existing.name = name;
+      }
+    }
+  };
 
   // 1. Add Admins
   allAdmins.forEach(u => {
-    if (u.id && !userIdsSeen.has(u.id)) {
-      userIdsSeen.add(u.id);
-      compiledAllUsers.push({
-        id: u.id,
-        firestoreId: u.firestoreId || u.id,
-        name: u.name,
-        email: u.email || 'N/A',
-        role: 'admin',
-        isActive: u.isActive !== false
-      });
-    }
+    mergeUser(u.id, u.name, u.email, 'admin', u.firestoreId || u.id, u);
   });
 
   // 2. Add Merchants
   shops.forEach(u => {
-    if (u.id && !userIdsSeen.has(u.id)) {
-      userIdsSeen.add(u.id);
-      compiledAllUsers.push({
-        id: u.id,
-        firestoreId: u.firestoreId || u.id,
-        name: u.name || u.storeName,
-        email: u.email || 'N/A',
-        role: 'merchant',
-        isActive: u.isActive !== false
-      });
-    }
+    mergeUser(u.id, u.name || u.storeName, u.email, 'merchant', u.firestoreId || u.id, u);
   });
 
   // 3. Add Riders
   deliveryPartners.forEach(u => {
-    if (u.id && !userIdsSeen.has(u.id)) {
-      userIdsSeen.add(u.id);
-      compiledAllUsers.push({
-        id: u.id,
-        firestoreId: u.firestoreId || u.id,
-        name: u.name,
-        email: u.email || 'N/A',
-        role: 'rider',
-        isActive: u.isActive !== false
-      });
-    }
+    mergeUser(u.id, u.name, u.email, 'rider', u.firestoreId || u.id, u);
   });
 
   // 4. Add Customers
   allCustomers.forEach(u => {
-    if (u.id && !userIdsSeen.has(u.id)) {
-      userIdsSeen.add(u.id);
-      compiledAllUsers.push({
-        id: u.id,
-        firestoreId: u.firestoreId || u.id,
-        name: u.name,
-        email: u.email || 'N/A',
-        role: 'customer',
-        isActive: u.isActive !== false
-      });
-    }
+    mergeUser(u.id, u.name, u.email, 'customer', u.firestoreId || u.id, u);
+  });
+
+  // Convert map to array
+  usersMap.forEach((value) => {
+    compiledAllUsers.push(value);
   });
 
   // Admin search filtering logic
@@ -3497,32 +3493,35 @@ function App() {
       const currentStatus = user.isActive !== false;
       const newStatus = !currentStatus;
 
-      const docId = user.firestoreId || user.id;
-      let collectionName = '';
-      if (user.role === 'admin') collectionName = 'admins';
-      else if (user.role === 'merchant') collectionName = 'merchants';
-      else if (user.role === 'rider') collectionName = 'delivery_boys';
-      else if (user.role === 'customer') collectionName = 'customers';
+      const roles = user.roles || [user.role];
+      const roleDocIds = user.roleDocIds || { [user.role]: user.firestoreId || user.id };
 
-      if (collectionName && docId) {
-        await updateDoc(doc(db, collectionName, docId), { isActive: newStatus });
-      }
+      for (const role of roles) {
+        const docId = roleDocIds[role];
+        if (!docId) continue;
 
-      // Sync specific fields in corresponding collections
-      if (user.role === 'admin') {
-        setAllAdmins(allAdmins.map(a => a.id === user.id ? { ...a, isActive: newStatus } : a));
-      } else if (user.role === 'merchant') {
-        setShops(shops.map(s => s.id === user.id ? { ...s, isActive: newStatus, verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' } : s));
-        if (docId) {
+        let collectionName = '';
+        if (role === 'admin') collectionName = 'admins';
+        else if (role === 'merchant') collectionName = 'merchants';
+        else if (role === 'rider') collectionName = 'delivery_boys';
+        else if (role === 'customer') collectionName = 'customers';
+
+        if (collectionName) {
+          await updateDoc(doc(db, collectionName, docId), { isActive: newStatus });
+        }
+
+        // Sync specific fields in corresponding collections
+        if (role === 'admin') {
+          setAllAdmins(prev => prev.map(a => a.id === docId || a.firestoreId === docId ? { ...a, isActive: newStatus } : a));
+        } else if (role === 'merchant') {
+          setShops(prev => prev.map(s => s.id === docId || s.firestoreId === docId ? { ...s, isActive: newStatus, verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' } : s));
           await updateDoc(doc(db, "merchants", docId), { verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' });
-        }
-      } else if (user.role === 'rider') {
-        setDeliveryPartners(deliveryPartners.map(d => d.id === user.id ? { ...d, isActive: newStatus, verified: newStatus } : d));
-        if (docId) {
+        } else if (role === 'rider') {
+          setDeliveryPartners(prev => prev.map(d => d.id === docId || d.firestoreId === docId ? { ...d, isActive: newStatus, verified: newStatus } : d));
           await updateDoc(doc(db, "delivery_boys", docId), { verified: newStatus });
+        } else if (role === 'customer') {
+          setAllCustomers(prev => prev.map(c => c.id === docId || c.firestoreId === docId ? { ...c, isActive: newStatus } : c));
         }
-      } else if (user.role === 'customer') {
-        setAllCustomers(allCustomers.map(c => c.id === user.id ? { ...c, isActive: newStatus } : c));
       }
 
       showToast(`User status updated.`);
@@ -3565,29 +3564,37 @@ function App() {
 
   // Admin: Delete User
   const handleAdminDeleteUser = async (user) => {
-    const roleLabel =
-      user.role === 'admin' ? 'Admin' :
-        user.role === 'merchant' ? 'Merchant' :
-          user.role === 'rider' ? 'Rider' :
-            'Customer';
+    const roles = user.roles || [user.role];
+    const roleLabels = roles.map(role => 
+      role === 'admin' ? 'Admin' :
+        role === 'merchant' ? 'Merchant' :
+          role === 'rider' ? 'Rider' :
+            'Customer'
+    ).join(' & ');
 
-    if (!window.confirm(`Are you sure you want to permanently delete the ${roleLabel} "${user.name}" (ID: ${user.id}) from the system?`)) return;
+    if (!window.confirm(`Are you sure you want to permanently delete the ${roleLabels} "${user.name}" (ID: ${user.id}) from the system?`)) return;
 
     try {
-      const docId = user.firestoreId || user.id;
-      let collectionName = '';
-      if (user.role === 'admin') collectionName = 'admins';
-      else if (user.role === 'merchant') collectionName = 'merchants';
-      else if (user.role === 'rider') collectionName = 'delivery_boys';
-      else if (user.role === 'customer') collectionName = 'customers';
+      const roleDocIds = user.roleDocIds || { [user.role]: user.firestoreId || user.id };
 
-      if (collectionName && docId) {
-        await deleteDoc(doc(db, collectionName, docId));
+      for (const role of roles) {
+        const docId = roleDocIds[role];
+        if (!docId) continue;
+
+        let collectionName = '';
+        if (role === 'admin') collectionName = 'admins';
+        else if (role === 'merchant') collectionName = 'merchants';
+        else if (role === 'rider') collectionName = 'delivery_boys';
+        else if (role === 'customer') collectionName = 'customers';
+
+        if (collectionName) {
+          await deleteDoc(doc(db, collectionName, docId));
+        }
       }
       const updated = [...deletedUserIds, user.id];
       setDeletedUserIds(updated);
       localStorage.setItem('pixigo_deleted_users', JSON.stringify(updated));
-      showToast(`${roleLabel} "${user.name}" has been successfully deleted.`);
+      showToast(`User "${user.name}" has been successfully deleted.`);
     } catch (error) {
       console.error("Error deleting user:", error);
       alert(`Failed to delete user: ${error.message}`);
@@ -8698,17 +8705,7 @@ function App() {
                         </tr>
                       ) : (
                         filteredUsers.map(u => {
-                          const roleBadgeClass =
-                            u.role === 'admin' ? 'badge-danger' :
-                              u.role === 'merchant' ? 'badge-warning' :
-                                u.role === 'rider' ? 'badge-primary' :
-                                  'badge-success';
-
-                          const roleLabel =
-                            u.role === 'admin' ? 'Admin' :
-                              u.role === 'merchant' ? 'Merchant' :
-                                u.role === 'rider' ? 'Delivery Partner' :
-                                  'Customer';
+                          const roles = u.roles || [u.role || 'customer'];
 
                           return (
                             <tr key={u.id}>
@@ -8716,9 +8713,27 @@ function App() {
                               <td><strong>{u.name}</strong></td>
                               <td>{u.email}</td>
                               <td>
-                                <span className={`badge ${roleBadgeClass}`}>
-                                  {roleLabel}
-                                </span>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                  {roles.map(role => {
+                                    const badgeClass =
+                                      role === 'admin' ? 'badge-danger' :
+                                        role === 'merchant' ? 'badge-warning' :
+                                          role === 'rider' ? 'badge-primary' :
+                                            'badge-success';
+
+                                    const label =
+                                      role === 'admin' ? 'Admin' :
+                                        role === 'merchant' ? 'Merchant' :
+                                          role === 'rider' ? 'Delivery Partner' :
+                                            'Customer';
+
+                                    return (
+                                      <span key={role} className={`badge ${badgeClass}`} style={{ fontSize: '10px' }}>
+                                        {label}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
                               </td>
                               <td>
                                 <button
