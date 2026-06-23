@@ -263,6 +263,11 @@ const LeafletMap = ({
 const getShopOpenStatus = (shop) => {
   if (!shop) return { isOpen: false, reason: 'Unknown Store' };
 
+  // Check if deactivated/blocked by admin
+  if (shop.verified === false || shop.isActive === false) {
+    return { isOpen: false, reason: 'DEACTIVATED' };
+  }
+
   // PixiGo Store bypasses all operating hours & manual closed checks
   if (shop.name === 'PixiGo Store' || shop.storeName === 'PixiGo Store') {
     return { isOpen: true, reason: 'OPEN' };
@@ -368,6 +373,20 @@ function App() {
   const [isEditRiderModalOpen, setIsEditRiderModalOpen] = useState(false);
   const [selectedShopDetails, setSelectedShopDetails] = useState(null);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [deletedShopIds, setDeletedShopIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pixigo_deleted_shops') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
+  const [deletedUserIds, setDeletedUserIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pixigo_deleted_users') || '[]');
+    } catch (e) {
+      return [];
+    }
+  });
   const [selectedVariantProduct, setSelectedVariantProduct] = useState(null);
   const [products, setProducts] = useState(INITIAL_PRODUCTS);
   const [shops, setShops] = useState(INITIAL_SHOPS);
@@ -1076,6 +1095,12 @@ function App() {
             const custSnap = await getDoc(customerDocRef);
             if (custSnap.exists()) {
               const data = custSnap.data();
+              if (data.isActive === false) {
+                await signOut(auth);
+                setUser(null);
+                alert("Your account has been temporarily deactivated by the Administrator.");
+                return;
+              }
               localName = data.name || localName;
               localPhone = data.phone || localPhone;
               localEmail = data.email || localEmail;
@@ -2155,9 +2180,11 @@ function App() {
       userIdsSeen.add(u.id);
       compiledAllUsers.push({
         id: u.id,
+        firestoreId: u.firestoreId || u.id,
         name: u.name,
         email: u.email || 'N/A',
-        role: 'admin'
+        role: 'admin',
+        isActive: u.isActive !== false
       });
     }
   });
@@ -2168,9 +2195,11 @@ function App() {
       userIdsSeen.add(u.id);
       compiledAllUsers.push({
         id: u.id,
+        firestoreId: u.firestoreId || u.id,
         name: u.name || u.storeName,
         email: u.email || 'N/A',
-        role: 'merchant'
+        role: 'merchant',
+        isActive: u.isActive !== false
       });
     }
   });
@@ -2181,9 +2210,11 @@ function App() {
       userIdsSeen.add(u.id);
       compiledAllUsers.push({
         id: u.id,
+        firestoreId: u.firestoreId || u.id,
         name: u.name,
         email: u.email || 'N/A',
-        role: 'rider'
+        role: 'rider',
+        isActive: u.isActive !== false
       });
     }
   });
@@ -2194,9 +2225,11 @@ function App() {
       userIdsSeen.add(u.id);
       compiledAllUsers.push({
         id: u.id,
+        firestoreId: u.firestoreId || u.id,
         name: u.name,
         email: u.email || 'N/A',
-        role: 'customer'
+        role: 'customer',
+        isActive: u.isActive !== false
       });
     }
   });
@@ -2215,7 +2248,7 @@ function App() {
     );
   });
 
-  const filteredShops = shops.filter(s => {
+  const filteredShops = shops.filter(s => !deletedShopIds.includes(s.id)).filter(s => {
     if (!adminSearchQuery) return true;
     const queryLower = adminSearchQuery.toLowerCase();
     return (
@@ -2226,7 +2259,7 @@ function App() {
     );
   });
 
-  const filteredRiders = deliveryPartners.filter(d => {
+  const filteredRiders = deliveryPartners.filter(d => !deletedUserIds.includes(d.id)).filter(d => {
     if (!adminSearchQuery) return true;
     const queryLower = adminSearchQuery.toLowerCase();
     return (
@@ -2248,7 +2281,7 @@ function App() {
     );
   });
 
-  const filteredUsers = compiledAllUsers.filter(u => {
+  const filteredUsers = compiledAllUsers.filter(u => !deletedUserIds.includes(u.id)).filter(u => {
     if (!adminSearchQuery) return true;
     const queryLower = adminSearchQuery.toLowerCase();
     return (
@@ -2541,6 +2574,8 @@ function App() {
     if (!shopStatus.isOpen) {
       if (shopStatus.reason === 'OUTSIDE_HOURS') {
         setWarningModal({ isOpen: true, title: "Store Closed", message: `Sorry! ${storeName} is currently closed. Operating hours are ${cartShop?.openTime || '09:00'} to ${cartShop?.closeTime || '22:00'}.`, iconType: "store" });
+      } else if (shopStatus.reason === 'DEACTIVATED') {
+        setWarningModal({ isOpen: true, title: "Store Deactivated", message: `Sorry! ${storeName} is currently deactivated by the Platform Administrator. You cannot place orders from this store at the moment.`, iconType: "store" });
       } else {
         setWarningModal({ isOpen: true, title: "Store Offline", message: `Sorry! ${storeName} is currently not accepting orders.`, iconType: "store" });
       }
@@ -3410,6 +3445,158 @@ function App() {
     }
   };
 
+  // Admin: Toggle Shop Active
+  const handleAdminToggleShopActive = async (shop) => {
+    try {
+      const newStatus = !shop.verified;
+      if (shop.firestoreId) {
+        const docRef = doc(db, "merchants", shop.firestoreId);
+        await updateDoc(docRef, { verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' });
+      }
+      setShops(shops.map(s => s.id === shop.id ? { ...s, verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' } : s));
+      showToast(`Shop status updated.`);
+    } catch (err) {
+      console.error("Error toggling shop status:", err);
+      alert(`Failed to update shop status: ${err.message}`);
+    }
+  };
+
+  // Admin: Toggle Rider Active
+  const handleAdminToggleRiderActive = async (rider) => {
+    try {
+      const newStatus = !rider.verified;
+      if (rider.firestoreId) {
+        const docRef = doc(db, "delivery_boys", rider.firestoreId);
+        await updateDoc(docRef, { verified: newStatus });
+      }
+      setDeliveryPartners(deliveryPartners.map(d => d.id === rider.id ? { ...d, verified: newStatus } : d));
+      showToast(`Rider status updated.`);
+    } catch (err) {
+      console.error("Error toggling rider status:", err);
+      alert(`Failed to update rider status: ${err.message}`);
+    }
+  };
+
+  // Admin: Delete Rider
+  const handleAdminDeleteRider = async (rider) => {
+    if (!window.confirm(`Are you sure you want to permanently delete rider "${rider.name}" and remove them from the system?`)) return;
+    try {
+      if (rider.firestoreId) {
+        await deleteDoc(doc(db, "delivery_boys", rider.firestoreId));
+      }
+      const updated = [...deletedUserIds, rider.id];
+      setDeletedUserIds(updated);
+      localStorage.setItem('pixigo_deleted_users', JSON.stringify(updated));
+      showToast(`Rider "${rider.name}" has been successfully deleted.`);
+    } catch (error) {
+      console.error("Error deleting rider:", error);
+      alert(`Failed to delete rider: ${error.message}`);
+    }
+  };
+
+  // Admin: Toggle User Active (including Shop / Rider auth linkages)
+  const handleAdminToggleUserActive = async (user) => {
+    try {
+      const currentStatus = user.isActive !== false;
+      const newStatus = !currentStatus;
+
+      const docId = user.firestoreId || user.id;
+      let collectionName = '';
+      if (user.role === 'admin') collectionName = 'admins';
+      else if (user.role === 'merchant') collectionName = 'merchants';
+      else if (user.role === 'rider') collectionName = 'delivery_boys';
+      else if (user.role === 'customer') collectionName = 'customers';
+
+      if (collectionName && docId) {
+        await updateDoc(doc(db, collectionName, docId), { isActive: newStatus });
+      }
+
+      // Sync specific fields in corresponding collections
+      if (user.role === 'admin') {
+        setAllAdmins(allAdmins.map(a => a.id === user.id ? { ...a, isActive: newStatus } : a));
+      } else if (user.role === 'merchant') {
+        setShops(shops.map(s => s.id === user.id ? { ...s, isActive: newStatus, verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' } : s));
+        if (docId) {
+          await updateDoc(doc(db, "merchants", docId), { verified: newStatus, docs: newStatus ? 'Approved' : 'Rejected' });
+        }
+      } else if (user.role === 'rider') {
+        setDeliveryPartners(deliveryPartners.map(d => d.id === user.id ? { ...d, isActive: newStatus, verified: newStatus } : d));
+        if (docId) {
+          await updateDoc(doc(db, "delivery_boys", docId), { verified: newStatus });
+        }
+      } else if (user.role === 'customer') {
+        setAllCustomers(allCustomers.map(c => c.id === user.id ? { ...c, isActive: newStatus } : c));
+      }
+
+      showToast(`User status updated.`);
+    } catch (err) {
+      console.error("Error toggling user status:", err);
+      alert(`Failed to update user status: ${err.message}`);
+    }
+  };
+
+  // Admin: Toggle Product Active
+  const handleAdminToggleProductActive = async (product) => {
+    try {
+      const newStatus = product.approved === false;
+      await updateDoc(doc(db, "products", product.firestoreId || product.id), { approved: newStatus });
+      showToast(`Product status updated.`);
+    } catch (e) {
+      console.error("Error toggling product active status:", e);
+      alert(`Failed to toggle product status: ${e.message}`);
+    }
+  };
+
+  // Admin: Delete Shop
+  const handleAdminDeleteShop = async (shop) => {
+    if (!window.confirm(`Are you sure you want to permanently delete shop "${shop.name || shop.storeName}" and remove it from the system?`)) return;
+    try {
+      if (shop.firestoreId) {
+        await deleteDoc(doc(db, "merchants", shop.firestoreId));
+      }
+      const updated = [...deletedShopIds, shop.id];
+      setDeletedShopIds(updated);
+      localStorage.setItem('pixigo_deleted_shops', JSON.stringify(updated));
+      showToast(`Shop "${shop.name || shop.storeName}" has been successfully deleted.`);
+      setIsShopModalOpen(false);
+      setSelectedShopDetails(null);
+    } catch (error) {
+      console.error("Error deleting shop:", error);
+      alert(`Failed to delete shop: ${error.message}`);
+    }
+  };
+
+  // Admin: Delete User
+  const handleAdminDeleteUser = async (user) => {
+    const roleLabel =
+      user.role === 'admin' ? 'Admin' :
+        user.role === 'merchant' ? 'Merchant' :
+          user.role === 'rider' ? 'Rider' :
+            'Customer';
+
+    if (!window.confirm(`Are you sure you want to permanently delete the ${roleLabel} "${user.name}" (ID: ${user.id}) from the system?`)) return;
+
+    try {
+      const docId = user.firestoreId || user.id;
+      let collectionName = '';
+      if (user.role === 'admin') collectionName = 'admins';
+      else if (user.role === 'merchant') collectionName = 'merchants';
+      else if (user.role === 'rider') collectionName = 'delivery_boys';
+      else if (user.role === 'customer') collectionName = 'customers';
+
+      if (collectionName && docId) {
+        await deleteDoc(doc(db, collectionName, docId));
+      }
+      const updated = [...deletedUserIds, user.id];
+      setDeletedUserIds(updated);
+      localStorage.setItem('pixigo_deleted_users', JSON.stringify(updated));
+      showToast(`${roleLabel} "${user.name}" has been successfully deleted.`);
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert(`Failed to delete user: ${error.message}`);
+    }
+  };
+
   // Admin: Catalog Approvals
   const handleAdminApproveProduct = async (prodId) => {
     try {
@@ -4121,6 +4308,9 @@ function App() {
   // Filter products by search, mode, category, and veg/non-veg type
   const filteredProducts = products.filter(p => {
     if (p.approved === false) return false;
+    // Hide products from deactivated/disabled shops
+    const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+    if (pShop && (pShop.verified === false || pShop.isActive === false)) return false;
     let matchQuery = true;
     if (searchQuery.trim() !== '') {
       const queryLower = searchQuery.toLowerCase();
@@ -5163,10 +5353,31 @@ function App() {
         </div>
       );
     }
-    if (portalName === 'Delivery Rider' && userRole !== 'admin') {
+    if (portalName === 'Delivery Rider') {
       const currentRider = deliveryPartners.find(d => d.id === user.uid || d.email === user.email);
 
       if (!currentRider) {
+        if (userRole !== 'admin') {
+          return (
+            <div className="portal-auth-scene portal-theme-delivery fade-in">
+              <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+              <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+                <div className="portal-card-glow-ring"></div>
+                <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
+                  <AlertCircle size={36} style={{ color: '#ef4444' }} />
+                </div>
+                <h2 className="auth-portal-title-dark">Access Denied</h2>
+                <p className="auth-portal-subtitle-dark">
+                  You are not registered as an authorized Delivery Rider. Please contact the Admin.
+                </p>
+                <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
+                  Logout & Sign In Again
+                </button>
+              </div>
+            </div>
+          );
+        }
+      } else if (currentRider.isActive === false) {
         return (
           <div className="portal-auth-scene portal-theme-delivery fade-in">
             <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
@@ -5177,17 +5388,15 @@ function App() {
               </div>
               <h2 className="auth-portal-title-dark">Access Denied</h2>
               <p className="auth-portal-subtitle-dark">
-                You are not registered as an authorized Delivery Rider. Please contact the Admin.
+                Your Rider account (<strong>{currentRider.name}</strong>) is currently deactivated/blocked by the Administrator. Please contact support.
               </p>
               <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-                Logout & Sign In Again
+                Logout
               </button>
             </div>
           </div>
         );
-      }
-
-      if (!currentRider.verified) {
+      } else if (!currentRider.verified) {
         return (
           <div className="portal-auth-scene portal-theme-delivery fade-in">
             <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
@@ -5216,6 +5425,30 @@ function App() {
                 Message Admin on WhatsApp
               </button>
               <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%' }}>
+                Logout
+              </button>
+            </div>
+          </div>
+        );
+      }
+    }
+
+    if (portalName === 'Merchant Dashboard') {
+      const currentMerchant = shops.find(s => (s.email && s.email.toLowerCase() === user.email.toLowerCase()) || (s.id === user.uid));
+      if (currentMerchant && !currentMerchant.verified) {
+        return (
+          <div className="portal-auth-scene portal-theme-merchant fade-in">
+            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+              <div className="portal-card-glow-ring"></div>
+              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
+                <AlertCircle size={36} style={{ color: '#ef4444' }} />
+              </div>
+              <h2 className="auth-portal-title-dark">Access Denied</h2>
+              <p className="auth-portal-subtitle-dark">
+                Your Merchant shop account (<strong>{currentMerchant.name || currentMerchant.storeName}</strong>) is currently deactivated/blocked by the Administrator. Please contact support.
+              </p>
+              <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
                 Logout
               </button>
             </div>
@@ -7377,6 +7610,19 @@ function App() {
                                     Save
                                   </button>
                                   <button
+                                    type="button"
+                                    className="neon-btn small-btn"
+                                    onClick={() => handleAdminToggleProductActive(p)}
+                                    style={{
+                                      background: p.approved !== false ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                      borderColor: p.approved !== false ? '#10b981' : '#ef4444',
+                                      color: p.approved !== false ? '#10b981' : '#ef4444',
+                                      padding: '4px 10px'
+                                    }}
+                                  >
+                                    {p.approved !== false ? 'Active' : 'Disabled'}
+                                  </button>
+                                  <button
                                     className="neon-btn small-btn"
                                     onClick={() => {
                                       if (confirm(`Are you sure you want to delete ${p.name}?`)) {
@@ -7433,12 +7679,14 @@ function App() {
                           <tr>
                             <th>Shop ID</th>
                             <th>Shop Name</th>
+                            <th>Status</th>
+                            <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredShops.length === 0 ? (
                             <tr>
-                              <td colSpan="2" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                              <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                                 No shops match search query.
                               </td>
                             </tr>
@@ -7460,6 +7708,34 @@ function App() {
                                       View Details →
                                     </span>
                                   </div>
+                                </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAdminToggleShopActive(s);
+                                    }}
+                                    className={`badge ${s.verified ? 'badge-success' : 'badge-danger'}`}
+                                    style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
+                                    title={s.verified ? "Click to Deactivate" : "Click to Activate"}
+                                  >
+                                    {s.verified ? 'Active' : 'Disabled'}
+                                  </button>
+                                </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAdminDeleteShop(s);
+                                    }}
+                                    className="reject-btn"
+                                    style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                    title="Delete Shop"
+                                  >
+                                    <Trash2 size={13} /> Delete
+                                  </button>
                                 </td>
                               </tr>
                             )))}
@@ -7726,12 +8002,14 @@ function App() {
                           <tr>
                             <th>Rider ID</th>
                             <th>Rider Name</th>
+                            <th>Status</th>
+                            <th>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredRiders.length === 0 ? (
                             <tr>
-                              <td colSpan="2" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                              <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                                 No riders match search query.
                               </td>
                             </tr>
@@ -7753,6 +8031,34 @@ function App() {
                                       View Details →
                                     </span>
                                   </div>
+                                </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAdminToggleRiderActive(d);
+                                    }}
+                                    className={`badge ${d.verified ? 'badge-success' : 'badge-danger'}`}
+                                    style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
+                                    title={d.verified ? "Click to Deactivate" : "Click to Activate"}
+                                  >
+                                    {d.verified ? 'Active' : 'Disabled'}
+                                  </button>
+                                </td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAdminDeleteRider(d);
+                                    }}
+                                    className="reject-btn"
+                                    style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                    title="Delete Rider"
+                                  >
+                                    <Trash2 size={13} /> Delete
+                                  </button>
                                 </td>
                               </tr>
                             )))}
@@ -8382,12 +8688,14 @@ function App() {
                         <th>Name / Username</th>
                         <th>Email Address</th>
                         <th>Role / Account Type</th>
+                        <th>Status</th>
+                        <th>Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredUsers.length === 0 ? (
                         <tr>
-                          <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                             No users match search query.
                           </td>
                         </tr>
@@ -8414,6 +8722,28 @@ function App() {
                                 <span className={`badge ${roleBadgeClass}`}>
                                   {roleLabel}
                                 </span>
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminToggleUserActive(u)}
+                                  className={`badge ${u.isActive !== false ? 'badge-success' : 'badge-danger'}`}
+                                  style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
+                                  title={u.isActive !== false ? "Click to Deactivate" : "Click to Activate"}
+                                >
+                                  {u.isActive !== false ? 'Active' : 'Disabled'}
+                                </button>
+                              </td>
+                              <td>
+                                <button
+                                  type="button"
+                                  onClick={() => handleAdminDeleteUser(u)}
+                                  className="reject-btn"
+                                  style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                  title="Delete User"
+                                >
+                                  <Trash2 size={13} /> Delete
+                                </button>
                               </td>
                             </tr>
                           );
@@ -12499,16 +12829,31 @@ function App() {
               >
                 Save Documents
               </button>
-              <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+              <div style={{ display: 'flex', gap: '8px', width: '100%', flexWrap: 'wrap' }}>
                 <button
                   className="secondary-btn"
                   onClick={() => {
                     const sPhone = selectedShopDetails.phone || '9251054064';
                     window.open(`https://wa.me/${sPhone}?text=Hi%20${selectedShopDetails.name},%20we%20have%20reviewed%20your%20PixiGo%20merchant%20account.%20Please%20verify%20details.`, '_blank');
                   }}
-                  style={{ flex: 1, padding: '10px' }}
+                  style={{ flex: 1, padding: '10px', minWidth: '120px' }}
                 >
                   Contact Merchant
+                </button>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => handleAdminDeleteShop(selectedShopDetails)}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    minWidth: '100px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid #ef4444',
+                    color: '#ef4444'
+                  }}
+                >
+                  Delete Shop
                 </button>
                 <button
                   className="secondary-btn"
