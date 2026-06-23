@@ -546,6 +546,7 @@ function App() {
   const [selectedAnalyticsRider, setSelectedAnalyticsRider] = useState(null);
   const [salesTab, setSalesTab] = useState('merchants'); // merchants | riders
   const [salesModalSearchQuery, setSalesModalSearchQuery] = useState('');
+  const [salesLogFilter, setSalesLogFilter] = useState('today'); // today | all
 
   const audioContextRef = useRef(null);
 
@@ -6886,8 +6887,18 @@ function App() {
                         <div className="glass-panel fade-in" style={{ padding: '24px', width: '100%' }}>
                           {/* Log Statistics Summary */}
                           {(() => {
-                            const completedCount = orders.filter(o => o.status === 'COMPLETED').length;
-                            const cancelledCount = orders.filter(o => o.status?.startsWith('CANCELLED')).length;
+                            const todayStart = new Date();
+                            todayStart.setHours(0, 0, 0, 0);
+                            const logFilteredOrders = orders.filter(o => {
+                              if (o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')) return false;
+                              if (salesLogFilter === 'today') {
+                                if (!o.createdAt) return false;
+                                return new Date(o.createdAt) >= todayStart;
+                              }
+                              return true;
+                            });
+                            const completedCount = logFilteredOrders.filter(o => o.status === 'COMPLETED').length;
+                            const cancelledCount = logFilteredOrders.filter(o => o.status?.startsWith('CANCELLED')).length;
                             const totalLogCount = completedCount + cancelledCount;
                             const platformCancelRate = totalLogCount > 0 ? Math.round((cancelledCount / totalLogCount) * 100) : 0;
                             
@@ -6911,20 +6922,59 @@ function App() {
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
                                   <h3 style={{ margin: 0 }}>📋 Detailed Orders Performance Log</h3>
                                   
-                                  <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '280px' }}>
-                                    <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
-                                    <input
-                                      type="text"
-                                      placeholder="Search orders..."
-                                      value={salesModalSearchQuery}
-                                      onChange={(e) => setSalesModalSearchQuery(e.target.value)}
-                                      style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
-                                    />
-                                    {salesModalSearchQuery && (
-                                      <button onClick={() => setSalesModalSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                        <X size={14} />
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                                    <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '20px', padding: '2px', border: '1px solid var(--color-border)' }}>
+                                      <button
+                                        type="button"
+                                        onClick={() => setSalesLogFilter('today')}
+                                        style={{
+                                          background: salesLogFilter === 'today' ? 'var(--color-primary)' : 'transparent',
+                                          border: 'none',
+                                          color: '#fff',
+                                          padding: '6px 16px',
+                                          borderRadius: '20px',
+                                          fontSize: '12px',
+                                          fontWeight: 'bold',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.2s'
+                                        }}
+                                      >
+                                        Today
                                       </button>
-                                    )}
+                                      <button
+                                        type="button"
+                                        onClick={() => setSalesLogFilter('all')}
+                                        style={{
+                                          background: salesLogFilter === 'all' ? 'var(--color-primary)' : 'transparent',
+                                          border: 'none',
+                                          color: '#fff',
+                                          padding: '6px 16px',
+                                          borderRadius: '20px',
+                                          fontSize: '12px',
+                                          fontWeight: 'bold',
+                                          cursor: 'pointer',
+                                          transition: 'all 0.2s'
+                                        }}
+                                      >
+                                        All Time
+                                      </button>
+                                    </div>
+
+                                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '220px' }}>
+                                      <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                                      <input
+                                        type="text"
+                                        placeholder="Search orders..."
+                                        value={salesModalSearchQuery}
+                                        onChange={(e) => setSalesModalSearchQuery(e.target.value)}
+                                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                                      />
+                                      {salesModalSearchQuery && (
+                                        <button onClick={() => setSalesModalSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                          <X size={14} />
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
 
@@ -6978,7 +7028,16 @@ function App() {
                               </thead>
                               <tbody>
                                 {(() => {
-                                  const logOrders = orders.filter(o => o.status === 'COMPLETED' || o.status?.startsWith('CANCELLED')).filter(o => {
+                                  const todayStart = new Date();
+                                  todayStart.setHours(0, 0, 0, 0);
+                                  const logOrders = orders.filter(o => {
+                                    if (o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')) return false;
+                                    if (salesLogFilter === 'today') {
+                                      if (!o.createdAt) return false;
+                                      return new Date(o.createdAt) >= todayStart;
+                                    }
+                                    return true;
+                                  }).filter(o => {
                                     if (!salesModalSearchQuery) return true;
                                     const qLower = salesModalSearchQuery.toLowerCase();
                                     return (
@@ -7004,7 +7063,12 @@ function App() {
                                   return logOrders.map(o => {
                                     const isCancelled = o.status?.startsWith('CANCELLED');
                                     return (
-                                      <tr key={o.id}>
+                                      <tr
+                                        key={o.id}
+                                        onClick={() => { setSelectedOrderDetails(o); setIsOrderModalOpen(true); }}
+                                        className="clickable-row"
+                                        style={{ cursor: 'pointer' }}
+                                      >
                                         <td><strong>{o.id}</strong></td>
                                         <td>{o.createdAt ? new Date(o.createdAt).toLocaleString() : 'N/A'}</td>
                                         <td><strong>{o.merchantName || o.storeName}</strong></td>
@@ -13312,6 +13376,40 @@ function App() {
                 </div>
               </div>
 
+              {/* Earnings & Payout Breakdown for completed/cancelled orders */}
+              {(selectedOrderDetails.status === 'COMPLETED' || selectedOrderDetails.status?.startsWith('CANCELLED')) && (
+                <div style={{ marginTop: '8px' }}>
+                  <h4 style={{ fontSize: '13px', color: 'var(--color-success)', fontWeight: 'bold', marginBottom: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '4px' }}>
+                    💰 Earnings & Profit Breakdown
+                  </h4>
+                  <div style={{ display: 'grid', gap: '8px', background: 'rgba(255, 255, 255, 0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--color-text-muted)' }}>Total Amount:</span>
+                      <strong style={{ color: selectedOrderDetails.status?.startsWith('CANCELLED') ? 'var(--color-text-muted)' : 'var(--color-success)' }}>
+                        {formatINR(selectedOrderDetails.totalAmount || 0)}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--color-text-muted)' }}>Merchant Earning:</span>
+                      <strong style={{ color: '#4ade80' }}>
+                        {formatINR(selectedOrderDetails.status?.startsWith('CANCELLED') ? 0 : (selectedOrderDetails.netMerchantEarning || 0))}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                      <span style={{ color: 'var(--color-text-muted)' }}>Rider Payout:</span>
+                      <strong style={{ color: '#fbbf24' }}>
+                        {formatINR(selectedOrderDetails.status?.startsWith('CANCELLED') ? 0 : (selectedOrderDetails.riderPayout || 0))}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '6px', marginTop: '2px' }}>
+                      <span style={{ color: 'var(--color-text-muted)' }}>Net Profit (Admin):</span>
+                      <strong style={{ color: 'var(--color-primary)' }}>
+                        {formatINR(selectedOrderDetails.status?.startsWith('CANCELLED') ? 0 : (selectedOrderDetails.netAdminEarning !== undefined ? selectedOrderDetails.netAdminEarning : (selectedOrderDetails.totalAmount || 0) * 0.1))}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
