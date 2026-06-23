@@ -621,7 +621,7 @@ function App() {
       return {
         price: variants[0].price,
         originalPrice: variants[0].originalPrice,
-        specs: `${variants[0].specs} (${variants.length} Options)`
+        specs: `${variants.length} Options Available`
       };
     }
     return {
@@ -5209,8 +5209,10 @@ function App() {
           {p.isOutOfStock && (
             <span className="prod-img-badge" style={{ background: 'var(--color-danger)', top: '10px', left: '10px', fontSize: '9px', fontWeight: 'bold' }}>SOLD OUT</span>
           )}
-          {p.offerText && !p.isOutOfStock && (
-            <span className="prod-img-badge">{p.offerText}</span>
+          {!p.isOutOfStock && (p.offerText || displayInfo.originalPrice > displayInfo.price) && (
+            <span className="prod-img-badge offer-badge">
+              {p.offerText || `${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}% OFF`}
+            </span>
           )}
           {p.image && p.image.startsWith('http') ? (
             <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
@@ -5221,55 +5223,69 @@ function App() {
           )}
         </div>
         <div className="prod-meta" style={{ opacity: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
             <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
             <span className={`veg-dot-box ${p.isVeg !== false ? 'green' : 'red'}`} title={p.isVeg !== false ? 'Veg' : 'Non-Veg'}>
               <span className={p.isVeg !== false ? 'veg-dot-circle' : 'veg-dot-triangle'}></span>
             </span>
           </div>
           
+          {displayInfo.specs && (
+            <div style={{ textAlign: 'left', marginBottom: '6px' }}>
+              {(() => {
+                const hasVariants = parseProductVariants(p)?.length > 0;
+                if (hasVariants) {
+                  return (
+                    <div 
+                      className="prod-specs-dropdown-btn"
+                      onClick={() => setSelectedVariantProduct(p)}
+                    >
+                      {displayInfo.specs}
+                      <ChevronDown size={11} style={{ color: 'var(--color-text-muted)', marginLeft: '2px' }} />
+                    </div>
+                  );
+                }
+                return (
+                  <div className="prod-specs-text" style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: '600' }}>
+                    {displayInfo.specs}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
           {p.description && (
-            <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '4px 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3', textAlign: 'left' }}>
+            <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: '2px 0 6px 0', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: '1.3', textAlign: 'left' }}>
               {p.description}
             </p>
           )}
 
-          {displayInfo.specs && (
-            <div className="prod-specs-text">{displayInfo.specs}</div>
-          )}
-          <span className="prod-store">
-            {p.store}
+          <div className="prod-store-row" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
+            <span className="prod-store" style={{ margin: 0 }}>
+              {p.store}
+            </span>
             {shopDistance !== null && (
-              <span style={{ color: 'var(--color-text-muted)', fontSize: '11px', marginLeft: '6px' }}>
-                ({shopDistance.toFixed(1)} km)
+              <span className="prod-distance-badge" style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '2px', 
+                color: 'var(--color-text-muted)', 
+                fontSize: '10px', 
+                marginLeft: '4px',
+                background: 'var(--color-primary-glow)',
+                padding: '2px 6px',
+                borderRadius: '8px',
+                fontWeight: '700',
+                textTransform: 'none',
+                letterSpacing: 'normal'
+              }}>
+                <MapPin size={10} style={{ color: 'var(--color-primary)' }} />
+                {shopDistance.toFixed(1)} km
               </span>
             )}
-          </span>
-
-          {/* Rating Component */}
-          <div className="product-card-rating">
-            {(() => {
-              const { rating, reviews } = getProductRating(p.id);
-              const rounded = Math.min(5, Math.max(0, Math.round(parseFloat(rating))));
-              return (
-                <>
-                  {'★'.repeat(rounded)}
-                  {'☆'.repeat(5 - rounded)}
-                  <span>{rating} ({reviews}+)</span>
-                </>
-              );
-            })()}
           </div>
 
           <p className="prod-category" style={{ marginTop: '6px' }}>{p.category}</p>
-
-          {(displayInfo.originalPrice > displayInfo.price || p.offerText) && (
-            <div style={{ margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span className="badge badge-warning" style={{ fontSize: '9px', padding: '2px 6px', fontWeight: 'bold' }}>
-                {p.offerText || `SAVE ${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}%`}
-              </span>
-            </div>
-          )}
 
           <div className="prod-buy">
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
@@ -5285,23 +5301,7 @@ function App() {
             {(() => {
               if (p.isOutOfStock) {
                 return (
-                  <button
-                    className="circular-add-btn disabled-add-btn"
-                    disabled
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      borderColor: 'rgba(239, 68, 68, 0.3)',
-                      color: '#ef4444',
-                      cursor: 'not-allowed',
-                      fontSize: '11px',
-                      padding: '4px 10px',
-                      borderRadius: '20px',
-                      width: 'auto',
-                      height: 'auto',
-                      fontWeight: 'bold',
-                      boxShadow: 'none'
-                    }}
-                  >
+                  <button className="blinkit-add-btn disabled" disabled>
                     Sold Out
                   </button>
                 );
@@ -5314,18 +5314,8 @@ function App() {
                 if (totalQty > 0) {
                   return (
                     <button
-                      className="neon-btn small-btn"
+                      className="blinkit-add-btn active"
                       onClick={() => setSelectedVariantProduct(p)}
-                      style={{
-                        padding: '6px 12px',
-                        fontSize: '11px',
-                        background: 'rgba(0, 255, 242, 0.1)',
-                        borderColor: 'var(--color-primary)',
-                        borderRadius: '20px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
                     >
                       In Cart: {totalQty} ⚙
                     </button>
@@ -5333,10 +5323,10 @@ function App() {
                 }
                 return (
                   <button
-                    className="circular-add-btn"
+                    className="blinkit-add-btn"
                     onClick={() => setSelectedVariantProduct(p)}
                   >
-                    +
+                    ADD
                   </button>
                 );
               }
@@ -5344,16 +5334,16 @@ function App() {
               const cartItem = cart.find(item => item.id === p.id);
               if (cartItem) {
                 return (
-                  <div className="prod-qty-selector">
-                    <button className="qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
-                    <span className="qty-val">{cartItem.quantity}</span>
-                    <button className="qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
+                  <div className="blinkit-qty-selector">
+                    <button className="blinkit-qty-btn dec" onClick={() => handleUpdateQty(p.id, -1)}>-</button>
+                    <span className="blinkit-qty-val">{cartItem.quantity}</span>
+                    <button className="blinkit-qty-btn inc" onClick={() => handleUpdateQty(p.id, 1)}>+</button>
                   </div>
                 );
               }
               return (
                 <button
-                  className="circular-add-btn"
+                  className="blinkit-add-btn"
                   onClick={() => {
                     if (isClosed) {
                       setWarningModal({ isOpen: true, title: "Store Closed", message: "The store is closed.", iconType: "store" });
@@ -5366,7 +5356,7 @@ function App() {
                     handleAddToCart(p);
                   }}
                 >
-                  +
+                  ADD
                 </button>
               );
             })()}
