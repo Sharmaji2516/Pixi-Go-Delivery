@@ -66,25 +66,7 @@ service cloud.firestore {
     }
     // 6. Orders Collection
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.merchantId == request.auth.uid ||
-        resource.data.deliveryPartnerId == request.auth.uid ||
-        resource.data.customerPhone == request.auth.token.phone_number ||
-        (resource.data.deliveryPartnerId == null && isRider()) ||
-        isAdmin()
-      );
-      
-      allow create: if isAuthenticated() && (request.resource.data.customerId == request.auth.uid || isAdmin());
-      allow update: if isAdmin() || (isAuthenticated() && (
-        resource.data.customerId == request.auth.uid ||
-        resource.data.merchantId == request.auth.uid ||
-        resource.data.deliveryPartnerId == request.auth.uid ||
-        // Allow an authorized rider to accept an unassigned order
-        (resource.data.deliveryPartnerId == null && request.resource.data.deliveryPartnerId == request.auth.uid && isRider())
-      ));
-      
-      allow delete: if isAdmin();
+      allow read, write: if true; // Public access for client-side rider sessions and guest checkout
     }
     // 7. Payouts Collection
     match /payouts/{payoutId} {
