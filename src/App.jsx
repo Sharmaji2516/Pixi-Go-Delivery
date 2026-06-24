@@ -582,7 +582,7 @@ function App() {
   const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || '');
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
-  const [selectedPayment, setSelectedPayment] = useState('ONLINE');
+  const [selectedPayment, setSelectedPayment] = useState('COD');
   const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({});
   const [reroutingOrderId, setReroutingOrderId] = useState(null);
@@ -4555,7 +4555,9 @@ function App() {
     // Provide dynamic instructions to the delivery boy based on payment method
     const instructions = order.paymentMethod === 'COD'
       ? `Please collect cash: ₹${order.totalAmount} from the customer.`
-      : 'Payment was made online. No cash collection required.';
+      : order.paymentMethod === 'UPI'
+        ? `Please collect UPI payment: ₹${order.totalAmount} from the customer.`
+        : 'Payment was made online. No cash collection required.';
 
     alert(`Order ${orderId} delivered successfully!\n\nInstructions: ${instructions}`);
   };
@@ -5708,10 +5710,10 @@ function App() {
 
               <div className="payment-select-grid">
                 <button
-                  className={`pay-btn ${selectedPayment === 'ONLINE' ? 'active' : ''}`}
-                  onClick={() => setSelectedPayment('ONLINE')}
+                  className={`pay-btn ${selectedPayment === 'UPI' ? 'active' : ''}`}
+                  onClick={() => setSelectedPayment('UPI')}
                 >
-                  <DollarSign size={16} /> Online Pay (Razorpay)
+                  <DollarSign size={16} /> Pay via UPI on Delivery
                 </button>
                 <button
                   className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
@@ -7032,8 +7034,8 @@ function App() {
                             </div>
                           </div>
 
-                          {/* Scan & Pay on Delivery UPI QR code for COD orders */}
-                          {trackedOrder.paymentMethod === 'COD' &&
+                          {/* Scan & Pay on Delivery UPI QR code for COD/UPI orders */}
+                          {(trackedOrder.paymentMethod === 'COD' || trackedOrder.paymentMethod === 'UPI') &&
                             !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) &&
                             !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
                               <div className="cod-qr-card border-glow" style={{
@@ -10776,7 +10778,7 @@ function App() {
                               >
                                 📍 View on Google Maps
                               </a>
-                              <p><strong>Payment Method:</strong> {o.paymentMethod} {o.paymentMethod === 'COD' ? `(${formatINR(o.totalAmount)} to collect)` : '(Paid Online)'}</p>
+                              <p><strong>Payment Method:</strong> {o.paymentMethod} {(o.paymentMethod === 'COD' || o.paymentMethod === 'UPI') ? `(${formatINR(o.totalAmount)} to collect)` : '(Paid Online)'}</p>
                             </div>
                           </div>
 
@@ -10972,7 +10974,9 @@ function App() {
                                       >
                                         {o.paymentMethod === 'COD'
                                           ? 'Complete Delivery & Collect Cash (COD)'
-                                          : 'Complete Delivery (Paid Online)'}
+                                          : o.paymentMethod === 'UPI'
+                                            ? 'Complete Delivery & Collect via UPI'
+                                            : 'Complete Delivery (Paid Online)'}
                                       </button>
                                       <button
                                         className="neon-btn"
@@ -13190,8 +13194,8 @@ function App() {
                     </div>
                   )}
 
-                  {/* Scan & Pay on Delivery UPI QR code for COD orders */}
-                  {trackedOrder.paymentMethod === 'COD' &&
+                  {/* Scan & Pay on Delivery UPI QR code for COD/UPI orders */}
+                  {(trackedOrder.paymentMethod === 'COD' || trackedOrder.paymentMethod === 'UPI') &&
                     !['COMPLETED', 'DELIVERED'].includes(trackedOrder.status?.toUpperCase()) &&
                     !trackedOrder.status?.toUpperCase().startsWith('CANCEL') && (
                       <div className="cod-qr-card border-glow" style={{
