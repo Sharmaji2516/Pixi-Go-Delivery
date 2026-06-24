@@ -4008,13 +4008,26 @@ function App() {
   const handleAdminDeleteShop = async (shop) => {
     if (!window.confirm(`Are you sure you want to permanently delete shop "${shop.name || shop.storeName}" and remove it from the system?`)) return;
     try {
+      const shopName = shop.name || shop.storeName;
+
+      // 1. Delete all products belonging to this shop from Firestore
+      const productsToDelete = products.filter(p => p.store === shopName && p.firestoreId);
+      for (const p of productsToDelete) {
+        try {
+          await deleteDoc(doc(db, "products", p.firestoreId));
+        } catch (err) {
+          console.error(`Error deleting product ${p.name} during shop cascade deletion:`, err);
+        }
+      }
+
+      // 2. Delete the shop itself
       if (shop.firestoreId) {
         await deleteDoc(doc(db, "merchants", shop.firestoreId));
       }
       const updated = [...deletedShopIds, shop.id];
       setDeletedShopIds(updated);
       localStorage.setItem('pixigo_deleted_shops', JSON.stringify(updated));
-      showToast(`Shop "${shop.name || shop.storeName}" has been successfully deleted.`);
+      showToast(`Shop "${shopName}" and its products have been successfully deleted.`);
       setIsShopModalOpen(false);
       setSelectedShopDetails(null);
     } catch (error) {
@@ -4869,9 +4882,9 @@ function App() {
   // Filter products by search, mode, category, and veg/non-veg type
   const filteredProducts = products.filter(p => {
     if (p.approved === false) return false;
-    // Hide products from deactivated/disabled shops
+    // Hide products from deleted, deactivated, or unverified shops
     const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-    if (pShop && (pShop.verified === false || pShop.isActive === false)) return false;
+    if (!pShop || pShop.verified === false || pShop.isActive === false) return false;
     let matchQuery = true;
     if (searchQuery.trim() !== '') {
       const queryLower = searchQuery.toLowerCase();
