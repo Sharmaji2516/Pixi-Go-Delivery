@@ -598,6 +598,11 @@ function App() {
   const [user, setUser] = useState(null);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [showPhonePromptModal, setShowPhonePromptModal] = useState(false);
+  const [phonePromptInput, setPhonePromptInput] = useState('');
+  const [isSubmittingPhonePrompt, setIsSubmittingPhonePrompt] = useState(false);
+  const [phonePromptError, setPhonePromptError] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
@@ -1074,6 +1079,45 @@ function App() {
     showToast('Profile settings saved successfully!');
     setIsProfileOpen(false);
   };
+
+  const handlePhonePromptSubmit = async (e) => {
+    e.preventDefault();
+    setPhonePromptError('');
+    
+    const phoneClean = phonePromptInput.replace(/\D/g, '');
+    if (phoneClean.length !== 10) {
+      setPhonePromptError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    if (!user || !user.uid) {
+      setPhonePromptError('User session not found. Please log in again.');
+      return;
+    }
+
+    setIsSubmittingPhonePrompt(true);
+
+    try {
+      const fullPhone = "+91" + phoneClean;
+      const customerDocRef = doc(db, "customers", user.uid);
+      
+      await setDoc(customerDocRef, { phone: fullPhone }, { merge: true });
+
+      localStorage.setItem('pixigo_customerPhone', fullPhone);
+      setCustomerPhone(fullPhone);
+      
+      showToast("Profile completed and phone number saved successfully!");
+      setShowPhonePromptModal(false);
+      setPhonePromptInput('');
+      setPhonePromptError('');
+    } catch (err) {
+      console.error("Error saving prompt phone number:", err);
+      setPhonePromptError(`Failed to save: ${err.message}`);
+    } finally {
+      setIsSubmittingPhonePrompt(false);
+    }
+  };
+
   const handleAutoDetectLocation = (setAddressCallback, isAutomatic = false) => {
     if (!navigator.geolocation) {
       if (!isAutomatic) alert("Geolocation is not supported by your browser.");
@@ -1451,6 +1495,17 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Handle customer mobile phone prompt modal overlay if phone number is missing
+  useEffect(() => {
+    const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+    const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
+    if (user && userRole === 'customer' && !isStaffTab && (!customerPhone || customerPhone.trim() === '')) {
+      setShowPhonePromptModal(true);
+    } else {
+      setShowPhonePromptModal(false);
+    }
+  }, [user, userRole, customerPhone]);
 
   // Fetch real-time orders from Firestore
   useEffect(() => {
@@ -2295,6 +2350,15 @@ function App() {
     let targetEmail = authEmail;
 
     if (isSignUp) {
+      const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+      let cleanPhone = '';
+      if (currentTab !== 'admin') {
+        cleanPhone = authPhone.replace(/\D/g, '');
+        if (cleanPhone.length !== 10) {
+          setAuthError("Please enter a valid 10-digit phone number.");
+          return;
+        }
+      }
       const emailClean = targetEmail.trim().toLowerCase();
       const existingRole = getRoleForEmail(emailClean);
       if (existingRole) {
@@ -2307,7 +2371,6 @@ function App() {
           const email = targetEmail;
           const name = email.split('@')[0];
           const timestamp = new Date().toISOString();
-          const currentTab = window.location.pathname.replace('/', '').toLowerCase();
 
           try {
             // 1. Initialize customer document in Firestore
@@ -2316,7 +2379,7 @@ function App() {
               await setDoc(customerDocRef, {
                 name: name,
                 email: email,
-                phone: '',
+                phone: "+91" + cleanPhone,
                 address: '',
                 createdAt: timestamp
               });
@@ -2342,6 +2405,7 @@ function App() {
           setIsAuthModalOpen(false);
           setAuthEmail('');
           setAuthPassword('');
+          setAuthPhone('');
           setRiderPhoneInput('');
           setRiderVehicleInput('');
           setAuthError('');
@@ -2406,6 +2470,10 @@ function App() {
     setCart([]);
     setUser(null);
     setUserRole(null);
+    setAuthPhone('');
+    setShowPhonePromptModal(false);
+    setPhonePromptInput('');
+    setPhonePromptError('');
     signOut(auth)
       .then(() => {
         alert('Logged out successfully!');
@@ -11900,6 +11968,28 @@ function App() {
                     required
                   />
                 </div>
+                {isSignUp && (
+                  <div className="form-group-premium">
+                    <label className="form-label-premium">Phone Number</label>
+                    <div className="prefixed-phone-container-premium">
+                      <span className="phone-prefix-badge-premium">+91</span>
+                      <input
+                        type="text"
+                        name="pixigo_onboard_customerphone"
+                        maxLength={10}
+                        placeholder="9251054064"
+                        value={authPhone}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setAuthPhone(val);
+                        }}
+                        className="phone-numeric-input-premium"
+                        required
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                )}
                 <div className="form-group-premium">
                   <label className="form-label-premium">Password</label>
                   <input
@@ -11962,6 +12052,76 @@ function App() {
                   <img src="/chittortech_logo.png" alt="Chittortech Logo" className="chittortech-logo-img" />
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Mobile Phone Prompt Modal Overlay (Google Sign-in / Complete Profile) */}
+      {showPhonePromptModal && (
+        <div className="modal-backdrop fade-in phone-prompt-backdrop">
+          <div className="portal-auth-card-dark border-glow phone-prompt-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="portal-card-glow-ring"></div>
+            
+            <div className="auth-icon-badge-dark logo-badge-premium" style={{ margin: '0 auto 16px' }}>
+              <img src="/logo.jpg" alt="PIXIgo Logo" className="auth-icon-img-premium" />
+            </div>
+
+            <div className="auth-modal-header" style={{ textAlign: 'center', marginBottom: '8px' }}>
+              <h2 className="auth-portal-title-dark">Mobile Verification</h2>
+              <p className="auth-portal-subtitle-dark" style={{ color: 'rgba(255, 255, 255, 0.7)' }}>
+                Please link your mobile number to complete your profile registration.
+              </p>
+            </div>
+
+            {phonePromptError && (
+              <div className="auth-error-banner fade-in" style={{ marginBottom: '14px' }}>
+                <AlertCircle size={16} />
+                <span>{phonePromptError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handlePhonePromptSubmit} className="auth-form-premium" style={{ width: '100%' }}>
+              <div className="form-group-premium" style={{ marginBottom: '20px' }}>
+                <label className="form-label-premium">10-Digit Mobile Number</label>
+                <div className="prefixed-phone-container-premium">
+                  <span className="phone-prefix-badge-premium">+91</span>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    placeholder="9251054064"
+                    value={phonePromptInput}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setPhonePromptInput(val);
+                    }}
+                    className="phone-numeric-input-premium"
+                    required
+                    disabled={isSubmittingPhonePrompt}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="neon-btn auth-submit-btn-premium"
+                disabled={isSubmittingPhonePrompt}
+                style={{ width: '100%' }}
+              >
+                {isSubmittingPhonePrompt ? 'Saving Profile...' : 'Complete Profile'}
+              </button>
+            </form>
+
+            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+              <button
+                type="button"
+                className="toggle-btn-link-premium"
+                onClick={handleLogout}
+                style={{ fontSize: '12px', opacity: 0.8 }}
+              >
+                Logout & Sign In with Another Account
+              </button>
             </div>
           </div>
         </div>

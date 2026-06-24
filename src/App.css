@@ -2153,6 +2153,20 @@
   padding: 16px;
 }
 
+.phone-prompt-backdrop {
+  z-index: 10000 !important;
+  background: rgba(4, 7, 16, 0.85) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+}
+
+.phone-prompt-modal-card {
+  z-index: 10001 !important;
+  box-shadow: 
+    0 30px 80px rgba(0, 0, 0, 0.8),
+    0 0 40px rgba(59, 130, 246, 0.15) !important;
+}
+
 .auth-modal {
   width: 100%;
   max-width: 420px;
