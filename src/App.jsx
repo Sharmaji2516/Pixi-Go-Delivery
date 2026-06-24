@@ -3688,9 +3688,9 @@ function App() {
     setShopDocAadhaar(shop.hasAadhaar || false);
     setShopDocPan(shop.hasPan || false);
     setShopDocFssai(shop.hasFssai || false);
-    setShopDocLat(shop.lat !== undefined ? shop.lat.toString() : '');
-    setShopDocLng(shop.lng !== undefined ? shop.lng.toString() : '');
-    setShopDocCommission(shop.commissionPercent !== undefined ? shop.commissionPercent.toString() : '');
+    setShopDocLat(shop.lat !== undefined && shop.lat !== null ? shop.lat.toString() : '');
+    setShopDocLng(shop.lng !== undefined && shop.lng !== null ? shop.lng.toString() : '');
+    setShopDocCommission(shop.commissionPercent !== undefined && shop.commissionPercent !== null ? shop.commissionPercent.toString() : '');
     setTempAuthEmail(shop.email || '');
     setTempAuthPassword('');
     setIsShopModalOpen(true);
