@@ -2,7 +2,6 @@ import { initializeApp, getApps } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
-
 // TODO: Replace this config with the one shown in your Firebase Console
 // in the next step ("Add Firebase SDK")!
 export const firebaseConfig = {

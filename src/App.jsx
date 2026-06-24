@@ -8,8 +8,8 @@ import {
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth, updatePassword } from 'firebase/auth';
+import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
 import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
 
@@ -90,6 +90,29 @@ const cleanUndefined = (obj) => {
       }
     }
     return cleaned;
+  }
+  return obj;
+};
+
+const sanitizeInput = (text) => {
+  if (typeof text !== 'string') return text;
+  return text.replace(/<[^>]*>?/gm, ''); // Basic regex check to strip HTML tags
+};
+
+const deepSanitize = (obj) => {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') {
+    return sanitizeInput(obj);
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(deepSanitize);
+  }
+  if (typeof obj === 'object') {
+    const sanitized = {};
+    for (const key in obj) {
+      sanitized[key] = deepSanitize(obj[key]);
+    }
+    return sanitized;
   }
   return obj;
 };
@@ -374,6 +397,8 @@ function App() {
   const [isEditRiderModalOpen, setIsEditRiderModalOpen] = useState(false);
   const [selectedShopDetails, setSelectedShopDetails] = useState(null);
   const [isShopModalOpen, setIsShopModalOpen] = useState(false);
+  const [selectedUserDetails, setSelectedUserDetails] = useState(null);
+  const [isUserDetailsModalOpen, setIsUserDetailsModalOpen] = useState(false);
   const [deletedShopIds, setDeletedShopIds] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('pixigo_deleted_shops') || '[]');
@@ -610,6 +635,8 @@ function App() {
   const [merchantAnnouncementColorEdit, setMerchantAnnouncementColorEdit] = useState('#ff007f');
   const [tempAuthPassword, setTempAuthPassword] = useState('');
   const [tempAuthEmail, setTempAuthEmail] = useState('');
+  const [showAdminShopPassword, setShowAdminShopPassword] = useState(false);
+  const [showMerchantConsolePassword, setShowMerchantConsolePassword] = useState(false);
 
   const [onboardShopName, setOnboardShopName] = useState('');
   const [onboardShopCategory, setOnboardShopCategory] = useState('General Store');
@@ -1192,8 +1219,24 @@ function App() {
 
           const adminDocRef = doc(db, "admins", currentUser.uid);
           const adminSnap = await getDoc(adminDocRef);
-          if (adminSnap.exists()) {
+          const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+          const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
+
+          if (adminSnap.exists() || isHardcodedAdmin) {
             setUserRole('admin');
+            if (!adminSnap.exists()) {
+              try {
+                await setDoc(adminDocRef, {
+                  id: currentUser.uid,
+                  name: localName,
+                  email: localEmail,
+                  role: 'admin',
+                  createdAt: timestamp
+                });
+              } catch (e) {
+                console.error("Error creating missing admin doc:", e);
+              }
+            }
           } else {
             const ridersRef = collection(db, "delivery_boys");
             const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
@@ -1276,7 +1319,31 @@ function App() {
   // Fetch real-time orders from Firestore
   useEffect(() => {
     const ordersRef = collection(db, "orders");
-    const q = query(ordersRef, orderBy("createdAt", "desc"));
+    let q = null;
+
+    if (userRole === 'admin') {
+      q = query(ordersRef, orderBy("createdAt", "desc"));
+    } else if (userRole === 'merchant' && user) {
+      q = query(ordersRef, where("merchantId", "==", user.uid), orderBy("createdAt", "desc"));
+    } else if (userRole === 'rider' && user) {
+      q = query(ordersRef, or(
+        where("deliveryPartnerId", "==", user.uid),
+        where("status", "==", "PLACED")
+      ));
+    } else if (userRole === 'customer' && user) {
+      q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"));
+    } else {
+      // Guest / Anonymous user
+      if (guestOrderIds && guestOrderIds.length > 0) {
+        const sliceIds = guestOrderIds.slice(0, 30);
+        q = query(ordersRef, where("id", "in", sliceIds));
+      }
+    }
+
+    if (!q) {
+      setOrders(INITIAL_ORDERS);
+      return;
+    }
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedOrders = [];
@@ -1290,7 +1357,6 @@ function App() {
       });
 
       console.log("Firestore sync succeeded. Synced orders count:", fetchedOrders.length);
-      console.log("Synced orders details:", fetchedOrders.map(o => ({ id: o.id, email: o.customerEmail || o.email, status: o.status, userId: o.userId })));
       setDbError(null);
 
       // Merge fetched orders with default INITIAL_ORDERS to keep mock orders visible
@@ -1300,6 +1366,8 @@ function App() {
           mergedOrders.push(mockOrder);
         }
       });
+      // Sort merged orders locally
+      mergedOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
       setOrders(mergedOrders);
     }, (error) => {
       console.error("Firestore order subscription error/warning:", error.message);
@@ -1308,7 +1376,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [user]);
+  }, [userRole, user, guestOrderIds]);
 
   // Fetch real-time products from Firestore
   useEffect(() => {
@@ -1335,7 +1403,7 @@ function App() {
       console.error("Firestore products subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Fetch real-time merchants from Firestore
   useEffect(() => {
@@ -1374,10 +1442,14 @@ function App() {
       console.error("Firestore merchants subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Fetch real-time delivery partners from Firestore
   useEffect(() => {
+    if (!user) {
+      setDeliveryPartners([]);
+      return;
+    }
     const ridersRef = collection(db, "delivery_boys");
     const unsubscribe = onSnapshot(ridersRef, (snapshot) => {
       const fetchedRiders = [];
@@ -1402,10 +1474,14 @@ function App() {
       console.error("Firestore delivery partners subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Fetch real-time payouts from Firestore
   useEffect(() => {
+    if (userRole !== 'admin') {
+      setPayouts([]);
+      return;
+    }
     const payoutsRef = collection(db, "payouts");
     const unsubscribe = onSnapshot(payoutsRef, (snapshot) => {
       const fetchedPayouts = [];
@@ -1422,7 +1498,7 @@ function App() {
       console.error("Firestore payouts subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [userRole]);
 
   // Fetch real-time Deal of the Day configuration from Firestore
   useEffect(() => {
@@ -1449,7 +1525,7 @@ function App() {
       console.error("Firestore deal configurations subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Fetch real-time Rider Announcement from Firestore
   useEffect(() => {
@@ -1471,7 +1547,7 @@ function App() {
       console.error("Firestore rider announcement subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Fetch real-time Customer Announcement from Firestore
   useEffect(() => {
@@ -1493,7 +1569,7 @@ function App() {
       console.error("Firestore customer announcement subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Trigger notification dot when announcement changes
   useEffect(() => {
@@ -1525,10 +1601,14 @@ function App() {
       console.error("Firestore merchant announcement subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Fetch real-time admins from Firestore
   useEffect(() => {
+    if (userRole !== 'admin') {
+      setAllAdmins([]);
+      return;
+    }
     const adminsRef = collection(db, "admins");
     const unsubscribe = onSnapshot(adminsRef, (snapshot) => {
       const fetchedAdmins = [];
@@ -1548,10 +1628,14 @@ function App() {
       console.warn("Firestore admins subscription error (rules might restrict):", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [userRole]);
 
   // Fetch real-time customers from Firestore
   useEffect(() => {
+    if (userRole !== 'admin') {
+      setAllCustomers([]);
+      return;
+    }
     const customersRef = collection(db, "customers");
     const unsubscribe = onSnapshot(customersRef, (snapshot) => {
       const fetchedCustomers = [];
@@ -1571,7 +1655,7 @@ function App() {
       console.warn("Firestore customers subscription error (rules might restrict):", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [userRole]);
 
   // Fetch real-time coupons from Firestore and auto-populate defaults if empty
   useEffect(() => {
@@ -1697,7 +1781,7 @@ function App() {
       console.error("Firestore coupons subscription error:", error);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Recalculate/validate coupon discount dynamically when cart or coupons collection change
   useEffect(() => {
@@ -1945,6 +2029,10 @@ function App() {
   const getRoleForEmail = (email) => {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
+    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    if (hardcodedAdmins.includes(cleanEmail)) {
+      return 'admin';
+    }
     if (allAdmins.some(a => (a.email || '').trim().toLowerCase() === cleanEmail)) {
       return 'admin';
     }
@@ -2256,12 +2344,15 @@ function App() {
     const key = (email && email !== 'N/A') ? email.trim().toLowerCase() : uid;
     if (!key) return;
 
+    const userPhone = rawUser.phone || rawUser.mobile || 'N/A';
+
     if (!usersMap.has(key)) {
       usersMap.set(key, {
         id: uid,
         firestoreId: docId || uid,
         name: name,
         email: email || 'N/A',
+        phone: userPhone,
         roles: [role],
         isActive: rawUser.isActive !== false,
         roleDocIds: { [role]: docId || uid }
@@ -2275,10 +2366,16 @@ function App() {
       if (rawUser.isActive === false) {
         existing.isActive = false;
       }
+      if (userPhone && userPhone !== 'N/A' && (!existing.phone || existing.phone === 'N/A')) {
+        existing.phone = userPhone;
+      }
       const rolePriority = { admin: 4, merchant: 3, rider: 2, customer: 1 };
       const currentHighestRole = existing.roles.reduce((a, b) => rolePriority[a] > rolePriority[b] ? a : b);
       if (role === currentHighestRole) {
         existing.name = name;
+        if (userPhone && userPhone !== 'N/A') {
+          existing.phone = userPhone;
+        }
       }
     }
   };
@@ -2362,6 +2459,7 @@ function App() {
       (u.id && u.id.toLowerCase().includes(queryLower)) ||
       (u.name && u.name.toLowerCase().includes(queryLower)) ||
       (u.email && u.email.toLowerCase().includes(queryLower)) ||
+      (u.phone && u.phone.toLowerCase().includes(queryLower)) ||
       (u.role && u.role.toLowerCase().includes(queryLower))
     );
   });
@@ -2407,7 +2505,7 @@ function App() {
     if (prod.firestoreId) {
       try {
         const prodRef = doc(db, "products", prod.firestoreId);
-        await updateDoc(prodRef, updatedFields);
+        await updateDoc(prodRef, deepSanitize(updatedFields));
         showToast(`${prod.name} successfully updated!`);
       } catch (err) {
         console.error("Error updating catalog product in Firestore:", err);
@@ -2416,11 +2514,11 @@ function App() {
     } else {
       // It's a mock product not in Firestore. Create a new document in Firestore!
       try {
-        const docRef = await addDoc(collection(db, "products"), {
+        const docRef = await addDoc(collection(db, "products"), deepSanitize({
           ...prod,
           ...updatedFields,
           createdAt: new Date().toISOString()
-        });
+        }));
       } catch (err) {
         console.error("Error creating product in Firestore:", err);
         alert("Failed to save product in DB: " + err.message);
@@ -2474,7 +2572,7 @@ function App() {
     };
 
     try {
-      await addDoc(collection(db, "products"), newProd);
+      await addDoc(collection(db, "products"), deepSanitize(newProd));
       showToast(`${adminNewProductName} successfully added to global catalog!`);
       // Reset fields
       setAdminNewProductName('');
@@ -2771,7 +2869,7 @@ function App() {
 
     try {
       // Save order to Firestore Database
-      await addDoc(collection(db, "orders"), cleanUndefined(newOrder));
+      await addDoc(collection(db, "orders"), deepSanitize(cleanUndefined(newOrder)));
 
       // Auto-sync merchant profile doc if it does not exist
       try {
@@ -3358,7 +3456,7 @@ function App() {
     }
     const newShopId = `merch_${onboardShopName.trim().replace(/\s+/g, '_').toLowerCase()}_${Date.now()}`;
     try {
-      await setDoc(doc(db, "merchants", newShopId), {
+      await setDoc(doc(db, "merchants", newShopId), deepSanitize({
         id: newShopId,
         storeName: onboardShopName.trim(),
         category: onboardShopCategory,
@@ -3368,7 +3466,7 @@ function App() {
         verified: false,
         docs: 'Pending',
         createdAt: new Date().toISOString()
-      });
+      }));
       alert(`Onboarding request submitted successfully for "${onboardShopName.trim()}"!\nOur admin will review your request and create your account.`);
       setOnboardShopName('');
       setOnboardShopPhone('');
@@ -3395,7 +3493,7 @@ function App() {
     }
     const newRiderId = `rider_${Date.now()}`;
     try {
-      await setDoc(doc(db, "delivery_boys", newRiderId), {
+      await setDoc(doc(db, "delivery_boys", newRiderId), deepSanitize({
         id: newRiderId,
         name: onboardRiderName.trim(),
         email: onboardRiderEmail.trim().toLowerCase(),
@@ -3406,7 +3504,7 @@ function App() {
         totalDeliveries: 0,
         pendingPayout: 0,
         createdAt: new Date().toISOString()
-      });
+      }));
       alert(`Onboarding request submitted successfully for rider "${onboardRiderName.trim()}"!\nOur admin will review your request and create your account.`);
       setOnboardRiderName('');
       setOnboardRiderEmail('');
@@ -3512,9 +3610,6 @@ function App() {
       if (selectedShopDetails.firestoreId) {
         const docRef = doc(db, "merchants", selectedShopDetails.firestoreId);
         await updateDoc(docRef, {
-          hasAadhaar: shopDocAadhaar,
-          hasPan: shopDocPan,
-          hasFssai: shopDocFssai,
           lat: parsedLat,
           lng: parsedLng,
           commissionPercent: parsedCommission
@@ -3523,9 +3618,6 @@ function App() {
       // Update local shops state
       setShops(shops.map(s => s.id === selectedShopDetails.id ? {
         ...s,
-        hasAadhaar: shopDocAadhaar,
-        hasPan: shopDocPan,
-        hasFssai: shopDocFssai,
         lat: parsedLat !== null ? parsedLat : undefined,
         lng: parsedLng !== null ? parsedLng : undefined,
         commissionPercent: parsedCommission !== null ? parsedCommission : undefined
@@ -4400,7 +4492,8 @@ function App() {
             docs: merchant.docs || 'Approved',
             hasAuthAccount: true,
             authUid: newUid,
-            email: targetEmail
+            email: targetEmail,
+            password: password
           }, { merge: true });
         }
       } else if (type === 'rider') {
@@ -4427,8 +4520,100 @@ function App() {
       alert(`Firebase Auth Account successfully created for ${targetEmail}!\nThey can now log into their console.`);
       showToast("Auth account created successfully!");
     } catch (error) {
-      console.error("Error creating auth account:", error);
-      alert(`Failed to create auth account: ${error.message}`);
+      if (error.code === 'auth/email-already-in-use') {
+        if (confirm("This email is already registered in Firebase Auth. Would you like to link this shop to this existing email and save the password in the database?")) {
+          try {
+            if (type === 'merchant') {
+              const merchant = shops.find(s => s.id === id);
+              if (merchant) {
+                const docId = merchant.firestoreId || merchant.id;
+                const docRef = doc(db, "merchants", docId);
+                await setDoc(docRef, {
+                  id: merchant.id,
+                  storeName: merchant.storeName || merchant.name,
+                  category: merchant.category,
+                  phone: merchant.phone || '9251054064',
+                  address: merchant.address || 'Vaishali Market, Jaipur (RJ)',
+                  verified: merchant.verified ?? true,
+                  docs: merchant.docs || 'Approved',
+                  hasAuthAccount: true,
+                  email: targetEmail,
+                  password: password
+                }, { merge: true });
+                setTempAuthPassword('');
+                alert("Shop successfully linked to existing account and password saved!");
+                showToast("Account linked successfully!");
+              }
+            } else if (type === 'rider') {
+              const rider = deliveryPartners.find(d => d.id === id);
+              if (rider) {
+                const docId = rider.firestoreId || rider.id;
+                const docRef = doc(db, "delivery_boys", docId);
+                await setDoc(docRef, {
+                  id: rider.id,
+                  name: rider.name,
+                  password: password,
+                  email: targetEmail,
+                  phone: rider.phone || '9251054064',
+                  vehicle: rider.vehicle || 'RJ-14-AB-1234',
+                  verified: rider.verified ?? true,
+                  active: rider.active ?? true,
+                  hasAuthAccount: true
+                }, { merge: true });
+                setTempAuthPassword('');
+                alert("Rider successfully linked to existing account and password saved!");
+                showToast("Account linked successfully!");
+              }
+            }
+          } catch (dbErr) {
+            console.error("Error linking existing account:", dbErr);
+            alert("Failed to link existing account: " + dbErr.message);
+          }
+        }
+      } else {
+        console.error("Error creating auth account:", error);
+        alert(`Failed to create auth account: ${error.message}`);
+      }
+    }
+  };
+
+  const handleUpdateMerchantPassword = async (email, oldPassword, newPassword, id) => {
+    if (!newPassword || newPassword.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
+    try {
+      showToast("Updating password... Please wait.");
+      const tempAppName = `TempApp_${Date.now()}`;
+      const tempApp = initializeApp(firebaseConfig, tempAppName);
+      const tempAuth = getAuth(tempApp);
+      
+      // Sign in as merchant using old credentials
+      const userCredential = await signInWithEmailAndPassword(tempAuth, email, oldPassword);
+      
+      // Update password
+      await updatePassword(userCredential.user, newPassword);
+      
+      // Clean up temp app
+      await deleteApp(tempApp);
+
+      // Save new password in Firestore
+      const merchant = shops.find(s => s.id === id);
+      if (merchant) {
+        const docId = merchant.firestoreId || merchant.id;
+        const docRef = doc(db, "merchants", docId);
+        await setDoc(docRef, { password: newPassword }, { merge: true });
+        
+        // Also update local state
+        setShops(shops.map(s => s.id === id ? { ...s, password: newPassword } : s));
+      }
+      
+      setTempAuthPassword('');
+      alert("Password updated successfully both in Firebase Auth and Database!");
+      showToast("Password updated successfully!");
+    } catch (e) {
+      console.error("Error updating merchant password:", e);
+      alert(`Failed to update password: ${e.message}`);
     }
   };
 
@@ -4451,7 +4636,7 @@ function App() {
       createdAt: new Date().toISOString()
     };
     try {
-      await addDoc(collection(db, "products"), newProd);
+      await addDoc(collection(db, "products"), deepSanitize(newProd));
       setNewProductName('');
       setNewProductPrice('');
       setNewProductDescription('');
@@ -4495,7 +4680,7 @@ function App() {
           isOutOfStock: newStatus
         };
         delete newDoc.firestoreId;
-        await addDoc(collection(db, "products"), newDoc);
+        await addDoc(collection(db, "products"), deepSanitize(newDoc));
       }
       showToast(`${product.name} is now ${newStatus ? 'Out of Stock' : 'In Stock'}`, 'info');
     } catch (err) {
@@ -4534,14 +4719,14 @@ function App() {
 
     try {
       if (merchantEditingProduct.firestoreId) {
-        await updateDoc(doc(db, "products", merchantEditingProduct.firestoreId), updatedFields);
+        await updateDoc(doc(db, "products", merchantEditingProduct.firestoreId), deepSanitize(updatedFields));
       } else {
         const newDoc = {
           ...merchantEditingProduct,
           ...updatedFields
         };
         delete newDoc.firestoreId;
-        await addDoc(collection(db, "products"), newDoc);
+        await addDoc(collection(db, "products"), deepSanitize(newDoc));
       }
       showToast(`${merchantEditProductName} successfully updated!`, 'success');
       setIsMerchantEditModalOpen(false);
@@ -4615,7 +4800,7 @@ function App() {
 
     try {
       // Save order to Firestore Database
-      await addDoc(collection(db, "orders"), cleanUndefined(pendingPaymentOrder));
+      await addDoc(collection(db, "orders"), deepSanitize(cleanUndefined(pendingPaymentOrder)));
 
       // Auto-sync merchant profile doc if it does not exist
       const merchantId = pendingPaymentOrder.merchantId;
@@ -5677,7 +5862,7 @@ function App() {
                 Your Rider account (<strong>{currentRider.name}</strong>) is currently pending admin verification. Your account verification is in process, please wait some time.
               </p>
               <div className="divider" style={{ margin: '20px 0' }}></div>
-              <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '16px' }}>
+              <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.65)', marginBottom: '16px' }}>
                 Please message the Administrator to authorize your account:
               </p>
               <button
@@ -5691,7 +5876,7 @@ function App() {
               >
                 Message Admin on WhatsApp
               </button>
-              <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%' }}>
+              <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%', color: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
                 Logout
               </button>
             </div>
@@ -5729,6 +5914,9 @@ function App() {
 
   const renderProductCard = (p) => {
     const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+    if (!pShop || pShop.verified === false) {
+      return null;
+    }
     const statusInfo = getShopOpenStatus(pShop);
     const isClosed = !statusInfo.isOpen;
 
@@ -7473,7 +7661,7 @@ function App() {
                                     defaultValue=""
                                   >
                                     <option value="" disabled>Assign Rider...</option>
-                                    {deliveryPartners.filter(d => d.verified && d.active).map(d => (
+                                    {deliveryPartners.filter(d => d.verified && d.isOnline !== false).map(d => (
                                       <option key={d.id} value={d.id}>{d.name}</option>
                                     ))}
                                   </select>
@@ -7509,7 +7697,7 @@ function App() {
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
                                         <option value="">Select Rider (Optional)...</option>
-                                        {deliveryPartners.filter(d => d.verified && d.active).map(d => (
+                                        {deliveryPartners.filter(d => d.verified && d.isOnline !== false).map(d => (
                                           <option key={d.id} value={d.id}>{d.name}</option>
                                         ))}
                                       </select>
@@ -8035,22 +8223,24 @@ function App() {
                       <table className="order-log-table">
                         <thead>
                           <tr>
-                            <th>Shop ID</th>
+                            <th>#</th>
                             <th>Shop Name</th>
+                            <th>Email Address</th>
+                            <th>Phone Number</th>
                             <th>Account Status</th>
                             <th>Store Status</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredShops.length === 0 ? (
                             <tr>
-                              <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                              <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                                 No shops match search query.
                               </td>
                             </tr>
                           ) : (
-                            filteredShops.map(s => {
+                            filteredShops.map((s, idx) => {
                               const shopStatus = getShopOpenStatus(s);
                               const isOpen = shopStatus.isOpen;
                               return (
@@ -8059,18 +8249,15 @@ function App() {
                                   onClick={() => handleOpenShopDetails(s)}
                                   className="clickable-row"
                                 >
-                                  <td><strong>{s.id}</strong></td>
+                                  <td><strong>#{idx + 1}</strong></td>
                                   <td>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                      <span>
-                                        {s.name}
-                                        {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                                      </span>
-                                      <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                        View Details →
-                                      </span>
-                                    </div>
+                                    <span>
+                                      {s.name}
+                                      {s.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                    </span>
                                   </td>
+                                  <td>{s.email || 'N/A'}</td>
+                                  <td>{s.phone || 'N/A'}</td>
                                   <td>
                                     <button
                                       type="button"
@@ -8101,18 +8288,32 @@ function App() {
                                     </div>
                                   </td>
                                   <td>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAdminDeleteShop(s);
-                                      }}
-                                      className="reject-btn"
-                                      style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                      title="Delete Shop"
-                                    >
-                                      <Trash2 size={13} /> Delete
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleOpenShopDetails(s);
+                                        }}
+                                        className="neon-btn small-btn"
+                                        style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0, 255, 242, 0.1)', borderColor: 'rgba(0, 255, 242, 0.25)', color: '#00fff2' }}
+                                        title="View Details"
+                                      >
+                                        <Eye size={13} /> Details
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleAdminDeleteShop(s);
+                                        }}
+                                        className="reject-btn"
+                                        style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}
+                                        title="Delete Shop"
+                                      >
+                                        <Trash2 size={13} /> Delete
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -8378,22 +8579,24 @@ function App() {
                       <table className="order-log-table">
                         <thead>
                           <tr>
-                            <th>Rider ID</th>
+                            <th>#</th>
                             <th>Rider Name</th>
+                            <th>Email ID</th>
+                            <th>Phone Number</th>
                             <th>Account Status</th>
                             <th>Duty Status</th>
-                            <th>Action</th>
+                            <th>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {filteredRiders.length === 0 ? (
                             <tr>
-                              <td colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                              <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                                 No riders match search query.
                               </td>
                             </tr>
                           ) : (
-                            filteredRiders.map(d => {
+                            filteredRiders.map((d, idx) => {
                               const isOnline = d.isOnline !== false;
                               return (
                                 <tr
@@ -8401,18 +8604,15 @@ function App() {
                                   onClick={() => handleStartEditRider(d)}
                                   className="clickable-row"
                                 >
-                                  <td><strong>{d.id}</strong></td>
+                                  <td><strong>#{idx + 1}</strong></td>
                                   <td>
-                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                      <span>
-                                        {d.name}
-                                        {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
-                                      </span>
-                                      <span style={{ fontSize: '11px', color: 'var(--color-neon-cyan)', display: 'inline-flex', alignItems: 'center', gap: '4px', paddingRight: '8px' }}>
-                                        View Details →
-                                      </span>
-                                    </div>
+                                    <span>
+                                      {d.name}
+                                      {d.hasAuthAccount && <span style={{ marginLeft: '6px', color: 'var(--color-primary)', cursor: 'help' }} title="Firebase Auth account created">🔑</span>}
+                                    </span>
                                   </td>
+                                  <td>{d.email || 'N/A'}</td>
+                                  <td>{d.phone || 'N/A'}</td>
                                   <td>
                                     <button
                                       type="button"
@@ -8443,18 +8643,32 @@ function App() {
                                     </div>
                                   </td>
                                   <td>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAdminDeleteRider(d);
-                                      }}
-                                      className="reject-btn"
-                                      style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                      title="Delete Rider"
-                                    >
-                                      <Trash2 size={13} /> Delete
-                                    </button>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleStartEditRider(d);
+                                        }}
+                                        className="neon-btn small-btn"
+                                        style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0, 255, 242, 0.1)', borderColor: 'rgba(0, 255, 242, 0.25)', color: '#00fff2' }}
+                                        title="View Details"
+                                      >
+                                        <Eye size={13} /> Details
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleAdminDeleteRider(d);
+                                        }}
+                                        className="reject-btn"
+                                        style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}
+                                        title="Delete Rider"
+                                      >
+                                        <Trash2 size={13} /> Delete
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
@@ -9518,30 +9732,36 @@ function App() {
                   <table className="order-log-table">
                     <thead>
                       <tr>
-                        <th>User ID</th>
+                        <th>#</th>
                         <th>Name / Username</th>
                         <th>Email Address</th>
+                        <th>Mobile Number</th>
                         <th>Role / Account Type</th>
                         <th>Status</th>
-                        <th>Action</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredUsers.length === 0 ? (
                         <tr>
-                          <td colSpan="6" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                             No users match search query.
                           </td>
                         </tr>
                       ) : (
-                        filteredUsers.map(u => {
+                        filteredUsers.map((u, idx) => {
                           const roles = u.roles || [u.role || 'customer'];
 
                           return (
-                            <tr key={u.id}>
-                              <td><strong style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{u.id}</strong></td>
+                            <tr
+                              key={u.id}
+                              onClick={() => { setSelectedUserDetails(u); setIsUserDetailsModalOpen(true); }}
+                              className="clickable-row"
+                            >
+                              <td><strong>#{idx + 1}</strong></td>
                               <td><strong>{u.name}</strong></td>
-                              <td>{u.email}</td>
+                              <td>{u.email || 'N/A'}</td>
+                              <td>{u.phone || 'N/A'}</td>
                               <td>
                                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                                   {roles.map(role => {
@@ -9568,7 +9788,10 @@ function App() {
                               <td>
                                 <button
                                   type="button"
-                                  onClick={() => handleAdminToggleUserActive(u)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAdminToggleUserActive(u);
+                                  }}
                                   className={`badge ${u.isActive !== false ? 'badge-success' : 'badge-danger'}`}
                                   style={{ cursor: 'pointer', border: 'none', padding: '4px 8px' }}
                                   title={u.isActive !== false ? "Click to Deactivate" : "Click to Activate"}
@@ -9577,15 +9800,33 @@ function App() {
                                 </button>
                               </td>
                               <td>
-                                <button
-                                  type="button"
-                                  onClick={() => handleAdminDeleteUser(u)}
-                                  className="reject-btn"
-                                  style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                  title="Delete User"
-                                >
-                                  <Trash2 size={13} /> Delete
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedUserDetails(u);
+                                      setIsUserDetailsModalOpen(true);
+                                    }}
+                                    className="neon-btn small-btn"
+                                    style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', background: 'rgba(0, 255, 242, 0.1)', borderColor: 'rgba(0, 255, 242, 0.25)', color: '#00fff2' }}
+                                    title="View Details"
+                                  >
+                                    <Eye size={13} /> Details
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAdminDeleteUser(u);
+                                    }}
+                                    className="reject-btn"
+                                    style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}
+                                    title="Delete User"
+                                  >
+                                    <Trash2 size={13} /> Delete
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
@@ -10869,7 +11110,7 @@ function App() {
 
                 <div className="divider" style={{ margin: '32px 0' }}></div>
 
-                {/* Commission Rate Settings Request Form */}
+                {/* Commission Rate & Security Settings Form Grid */}
                 {(() => {
                   const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                   if (!matchedShop) return null;
@@ -10879,49 +11120,103 @@ function App() {
 
                   return (
                     <>
-                      <div className="merchant-onboarding" style={{ marginTop: '24px' }}>
-                        <h2 style={{ textAlign: 'left' }}>Commission Rate Request</h2>
-                        <p style={{ fontSize: '13.5px', color: 'var(--color-text-muted)', marginBottom: '16px', textAlign: 'left' }}>
-                          Your current active commission rate is <strong>{activeShopCommission}%</strong>. You can request the Admin to change your commission rate below.
-                        </p>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginTop: '24px' }}>
+                        <div className="merchant-onboarding" style={{ margin: 0, padding: '20px' }}>
+                          <h2 style={{ textAlign: 'left', fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>Commission Rate Request</h2>
+                          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '16px', textAlign: 'left' }}>
+                            Your current active commission rate is <strong>{activeShopCommission}%</strong>. You can request the Admin to change your commission rate below.
+                          </p>
 
-                        {isPendingRequest && (
-                          <div style={{
-                            background: 'rgba(245, 158, 11, 0.1)',
-                            border: '1px solid rgba(245, 158, 11, 0.3)',
-                            padding: '12px',
-                            borderRadius: '8px',
-                            color: '#fbbf24',
-                            fontSize: '13px',
-                            marginBottom: '16px',
-                            textAlign: 'left'
-                          }}>
-                            ⏳ You have a pending request to change your commission rate to <strong>{matchedShop.pendingCommissionPercent}%</strong>. Please wait for Admin approval.
-                          </div>
-                        )}
+                          {isPendingRequest && (
+                            <div style={{
+                              background: 'rgba(245, 158, 11, 0.1)',
+                              border: '1px solid rgba(245, 158, 11, 0.3)',
+                              padding: '10px',
+                              borderRadius: '8px',
+                              color: '#fbbf24',
+                              fontSize: '12px',
+                              marginBottom: '16px',
+                              textAlign: 'left'
+                            }}>
+                              ⏳ Pending request for <strong>{matchedShop.pendingCommissionPercent}%</strong>.
+                            </div>
+                          )}
 
-                        <div style={{ display: 'flex', gap: '12px', alignItems: 'end', flexWrap: 'wrap', maxWidth: '400px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, textAlign: 'left' }}>
-                            <label style={{ fontSize: '12.5px', fontWeight: '600' }}>Proposed Commission Rate (%)</label>
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              placeholder="e.g. 15"
-                              value={proposedCommissionInput}
-                              onChange={(e) => setProposedCommissionInput(e.target.value)}
-                              className="custom-input"
+                          <div style={{ display: 'flex', gap: '12px', alignItems: 'end' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, textAlign: 'left' }}>
+                              <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-muted)' }}>Proposed Rate (%)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                placeholder="e.g. 15"
+                                value={proposedCommissionInput}
+                                onChange={(e) => setProposedCommissionInput(e.target.value)}
+                                className="custom-input"
+                                disabled={isPendingRequest}
+                                style={{ width: '100%', padding: '8px' }}
+                              />
+                            </div>
+                            <button
+                              onClick={() => handleRequestCommissionChange(matchedShop)}
+                              className="neon-btn"
                               disabled={isPendingRequest}
-                            />
+                              style={{ height: '38px', padding: '0 16px', fontWeight: 'bold' }}
+                            >
+                              Submit
+                            </button>
                           </div>
-                          <button
-                            onClick={() => handleRequestCommissionChange(matchedShop)}
-                            className="neon-btn"
-                            disabled={isPendingRequest}
-                            style={{ height: '38px', padding: '0 16px', fontWeight: 'bold' }}
-                          >
-                            Submit Request
-                          </button>
+                        </div>
+
+                        <div className="merchant-onboarding" style={{ margin: 0, padding: '20px' }}>
+                          <h2 style={{ textAlign: 'left', fontSize: '16px', fontWeight: 'bold', marginBottom: '8px' }}>🔐 Console Security Settings</h2>
+                          <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginBottom: '16px', textAlign: 'left' }}>
+                            View your login details and change your console login password:
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', fontSize: '13px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--color-border)', paddingBottom: '6px' }}>
+                              <span style={{ color: 'var(--color-text-muted)' }}>Login Email:</span>
+                              <strong>{matchedShop.email || user?.email}</strong>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-border)', paddingBottom: '6px' }}>
+                              <span style={{ color: 'var(--color-text-muted)' }}>Old Password:</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <strong style={{ color: 'var(--color-primary)' }}>
+                                  {matchedShop.password ? (showMerchantConsolePassword ? matchedShop.password : '••••••••') : 'Not Set'}
+                                </strong>
+                                {matchedShop.password && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowMerchantConsolePassword(!showMerchantConsolePassword)}
+                                    style={{ background: 'transparent', border: 'none', padding: '2px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--color-text-muted)', outline: 'none' }}
+                                  >
+                                    {showMerchantConsolePassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div style={{ display: 'flex', gap: '12px', alignItems: 'end', marginTop: '8px' }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                                <label style={{ fontSize: '12px', fontWeight: '600', color: 'var(--color-text-muted)' }}>New Password</label>
+                                <input
+                                  type="password"
+                                  placeholder="Enter new password"
+                                  value={tempAuthPassword}
+                                  onChange={(e) => setTempAuthPassword(e.target.value)}
+                                  className="custom-input"
+                                  style={{ width: '100%', padding: '8px' }}
+                                />
+                              </div>
+                              <button
+                                onClick={() => handleUpdateMerchantPassword(matchedShop.email, matchedShop.password, tempAuthPassword, matchedShop.id)}
+                                className="neon-btn"
+                                style={{ height: '38px', padding: '0 16px', fontWeight: 'bold' }}
+                              >
+                                Update
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div className="divider" style={{ margin: '32px 0' }}></div>
@@ -13262,109 +13557,257 @@ function App() {
       )}
 
       {/* Edit Rider Modal (Admin) */}
-      {isEditRiderModalOpen && editingRider && (
-        <div className="modal-backdrop fade-in" onClick={() => { setIsEditRiderModalOpen(false); setEditingRider(null); }}>
-          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => { setIsEditRiderModalOpen(false); setEditingRider(null); }}>
-              <X size={20} />
-            </button>
+      {isEditRiderModalOpen && editingRider && (() => {
+        const activeRider = deliveryPartners.find(d => d.id === editingRider.id) || editingRider;
+        return (
+          <div className="modal-backdrop fade-in" onClick={() => { setIsEditRiderModalOpen(false); setEditingRider(null); }}>
+            <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => { setIsEditRiderModalOpen(false); setEditingRider(null); }}>
+                <X size={20} />
+              </button>
 
-            <div className="profile-avatar-section">
-              <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
-                <Bike size={40} style={{ color: 'var(--color-primary)' }} />
+              <div className="profile-avatar-section">
+                <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
+                  <Bike size={40} style={{ color: 'var(--color-primary)' }} />
+                </div>
+                <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--color-text-main)', fontFamily: 'var(--font-heading)', textAlign: 'center', margin: '0' }}>Edit Rider Credentials</h3>
+                <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center', margin: '4px 0 0 0' }}>ID: {activeRider.id}</p>
               </div>
-              <h3 className="section-title-premium">Edit Rider Credentials</h3>
-              <p className="profile-sub">ID: {editingRider.id}</p>
+
+              <form onSubmit={handleSaveRiderEdit} className="profile-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Rider Name (Username)</label>
+                  <input
+                    type="text"
+                    value={editRiderName}
+                    onChange={(e) => setEditRiderName(e.target.value)}
+                    className="custom-input"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Email ID</label>
+                  <input
+                    type="email"
+                    value={editRiderEmail}
+                    onChange={(e) => setEditRiderEmail(e.target.value)}
+                    className="custom-input"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Old Password</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type={showAdminShopPassword ? "text" : "password"}
+                      value={activeRider.password || 'Not Set'}
+                      className="custom-input"
+                      disabled
+                      readOnly
+                      style={{
+                        width: '100%',
+                        paddingRight: '40px',
+                        background: 'rgba(15, 23, 42, 0.05)',
+                        opacity: 0.8,
+                        cursor: 'not-allowed',
+                        color: 'var(--color-text-main)',
+                        fontWeight: activeRider.password ? '600' : 'normal'
+                      }}
+                    />
+                    {activeRider.password && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminShopPassword(!showAdminShopPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: 'var(--color-text-muted)',
+                          outline: 'none'
+                        }}
+                      >
+                        {showAdminShopPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">New Password</label>
+                  <input
+                    type="text"
+                    value={editRiderPassword}
+                    onChange={(e) => setEditRiderPassword(e.target.value)}
+                    className="custom-input"
+                    required
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Phone Number</label>
+                  <input
+                    type="text"
+                    value={editRiderPhone}
+                    onChange={(e) => setEditRiderPhone(e.target.value)}
+                    className="custom-input"
+                    required
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Vehicle Details</label>
+                  <input
+                    type="text"
+                    value={editRiderVehicle}
+                    onChange={(e) => setEditRiderVehicle(e.target.value)}
+                    className="custom-input"
+                    required
+                  />
+                </div>
+
+                <div className="divider" style={{ margin: '8px 0', borderBottom: '1px solid rgba(15, 23, 42, 0.08)' }}></div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(15, 23, 42, 0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(15, 23, 42, 0.06)', textAlign: 'left' }}>
+                  <span style={{ color: 'var(--color-primary)', fontSize: '13px', fontWeight: 'bold' }}>🔐 Firebase Auth Credentials</span>
+                  <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Register this rider's login account in Firebase Auth.</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
+                    <button
+                      type="button"
+                      className="neon-btn small-btn"
+                      onClick={() => handleCreateAuthAccount('rider', editRiderEmail || activeRider.name, editRiderPassword || activeRider.password, activeRider.id)}
+                      style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', alignSelf: 'flex-start' }}
+                    >
+                      Register Rider Login in Firebase
+                    </button>
+                  </div>
+                </div>
+
+                <button type="submit" className="neon-btn save-profile-btn-premium" style={{ marginTop: '10px' }}>
+                  Save Rider Settings
+                </button>
+              </form>
             </div>
+          </div>
+        );
+      })()}
 
-            <form onSubmit={handleSaveRiderEdit} className="profile-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Rider Name (Username)</label>
-                <input
-                  type="text"
-                  value={editRiderName}
-                  onChange={(e) => setEditRiderName(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Email ID</label>
-                <input
-                  type="email"
-                  value={editRiderEmail}
-                  onChange={(e) => setEditRiderEmail(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Old Password</label>
-                <input
-                  type="text"
-                  value={editingRider.password}
-                  className="custom-input-premium"
-                  disabled
-                  readOnly
-                  style={{ opacity: 0.6, cursor: 'not-allowed' }}
-                />
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">New Password</label>
-                <input
-                  type="text"
-                  value={editRiderPassword}
-                  onChange={(e) => setEditRiderPassword(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                  placeholder="Enter new password"
-                />
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Phone Number</label>
-                <input
-                  type="text"
-                  value={editRiderPhone}
-                  onChange={(e) => setEditRiderPhone(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Vehicle Details</label>
-                <input
-                  type="text"
-                  value={editRiderVehicle}
-                  onChange={(e) => setEditRiderVehicle(e.target.value)}
-                  className="custom-input-premium"
-                  required
-                />
+      {/* User Details Modal (Admin) */}
+      {isUserDetailsModalOpen && selectedUserDetails && (() => {
+        const u = selectedUserDetails;
+        const roles = u.roles || [u.role || 'customer'];
+        return (
+          <div className="modal-backdrop fade-in" onClick={() => { setIsUserDetailsModalOpen(false); setSelectedUserDetails(null); }}>
+            <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => { setIsUserDetailsModalOpen(false); setSelectedUserDetails(null); }}>
+                <X size={20} />
+              </button>
+
+              <div className="profile-avatar-section">
+                <div className="profile-avatar-glow" style={{ background: 'rgba(0, 255, 242, 0.1)' }}>
+                  <User size={40} style={{ color: 'var(--color-primary)' }} />
+                </div>
+                <h3 style={{ fontSize: '20px', fontWeight: '800', color: 'var(--color-text-main)', fontFamily: 'var(--font-heading)', textAlign: 'center', margin: '0' }}>Platform User Details</h3>
+                <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', textAlign: 'center', margin: '4px 0 0 0' }}>User ID: <strong style={{ color: 'var(--color-text-main)' }}>{u.id}</strong></p>
               </div>
 
-              <div className="divider" style={{ margin: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+                  <div style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(15, 23, 42, 0.06)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Name / Username</span>
+                    <strong style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{u.name || 'N/A'}</strong>
+                  </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)', textAlign: 'left' }}>
-                <span style={{ color: 'var(--color-primary)', fontSize: '13px', fontWeight: 'bold' }}>🔐 Firebase Auth Credentials</span>
-                <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Register this rider's login account in Firebase Auth.</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '4px' }}>
-                  <button
-                    type="button"
-                    className="neon-btn small-btn"
-                    onClick={() => handleCreateAuthAccount('rider', editRiderEmail || editingRider.name, editRiderPassword || editingRider.password, editingRider.id)}
-                    style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', alignSelf: 'flex-start' }}
-                  >
-                    Register Rider Login in Firebase
-                  </button>
+                  <div style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(15, 23, 42, 0.06)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Email Address</span>
+                    <strong style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{u.email || 'N/A'}</strong>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(15, 23, 42, 0.06)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Mobile Number</span>
+                    <strong style={{ fontSize: '15px', color: 'var(--color-text-main)' }}>{u.phone || 'N/A'}</strong>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(15, 23, 42, 0.06)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Role / Account Type</span>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '4px' }}>
+                      {roles.map(role => {
+                        const badgeClass =
+                          role === 'admin' ? 'badge-danger' :
+                            role === 'merchant' ? 'badge-warning' :
+                              role === 'rider' ? 'badge-primary' :
+                                'badge-success';
+
+                        const label =
+                          role === 'admin' ? 'Admin' :
+                            role === 'merchant' ? 'Merchant' :
+                              role === 'rider' ? 'Delivery Partner' :
+                                'Customer';
+
+                        return (
+                          <span key={role} className={`badge ${badgeClass}`} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(15, 23, 42, 0.02)', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(15, 23, 42, 0.06)' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>Account Status</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                      <span className={`badge ${u.isActive !== false ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                        {u.isActive !== false ? 'Active' : 'Disabled'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleAdminToggleUserActive(u);
+                          // Update locally selected state so UI updates dynamically
+                          setSelectedUserDetails(prev => ({ ...prev, isActive: prev.isActive === false }));
+                        }}
+                        className="neon-btn small-btn"
+                        style={{ fontSize: '11px', padding: '4px 8px' }}
+                      >
+                        Change Status
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <button type="submit" className="neon-btn save-profile-btn-premium" style={{ marginTop: '10px' }}>
-                Save Rider Settings
-              </button>
-            </form>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUserDetailsModalOpen(false);
+                    setSelectedUserDetails(null);
+                  }}
+                  className="neon-btn"
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Close Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to permanently delete user ${u.name}?`)) {
+                      handleAdminDeleteUser(u);
+                      setIsUserDetailsModalOpen(false);
+                      setSelectedUserDetails(null);
+                    }
+                  }}
+                  className="reject-btn"
+                  style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '6px', margin: 0 }}
+                >
+                  <Trash2 size={16} /> Delete User
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Edit Product & Approve Modal (Admin) */}
       {isEditProductModalOpen && editingProduct && (
@@ -13530,275 +13973,280 @@ function App() {
       )}
 
       {/* Shop Details Modal (Admin) */}
-      {isShopModalOpen && selectedShopDetails && (
-        <div className="modal-backdrop fade-in" onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}>
-          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close-btn" onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}>
-              <X size={20} />
-            </button>
-
-            <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
-              <div className="profile-avatar-glow" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
-                <Store size={40} style={{ color: 'rgba(245, 158, 11, 1)' }} />
-              </div>
-              <h3 className="section-title-premium">{selectedShopDetails.name}</h3>
-              <p className="profile-sub" style={{ marginTop: '4px' }}>Shop ID: <strong>{selectedShopDetails.id}</strong></p>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Category:</span>
-                <strong>{selectedShopDetails.category}</strong>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Phone:</span>
-                <strong>{selectedShopDetails.phone || '9251054064'}</strong>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Address:</span>
-                <span>{selectedShopDetails.address || 'Vaishali Market, Jaipur (RJ)'}</span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Commission Rate (%):</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  placeholder={`Default (${commissionPercent}%)`}
-                  value={shopDocCommission}
-                  onChange={(e) => setShopDocCommission(e.target.value)}
-                  className="custom-input-premium"
-                  style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%', maxWidth: '200px' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>GPS Location:</span>
-                <input
-                  type="number"
-                  step="0.000001"
-                  placeholder="Lat (e.g. 24.8887)"
-                  value={shopDocLat}
-                  onChange={(e) => setShopDocLat(e.target.value)}
-                  className="custom-input-premium"
-                  style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%' }}
-                />
-                <input
-                  type="number"
-                  step="0.000001"
-                  placeholder="Lng (e.g. 74.6269)"
-                  value={shopDocLng}
-                  onChange={(e) => setShopDocLng(e.target.value)}
-                  className="custom-input-premium"
-                  style={{ padding: '6px 8px', fontSize: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', color: '#fff', width: '100%' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
-                <span></span>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    type="button"
-                    className="neon-btn small-btn"
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          (position) => {
-                            setShopDocLat(position.coords.latitude.toFixed(6));
-                            setShopDocLng(position.coords.longitude.toFixed(6));
-                            showToast("Shop location auto-detected!");
-                          },
-                          (error) => {
-                            console.error("Geolocation failed:", error);
-                            alert("Could not detect location. Please check browser permissions.");
-                          }
-                        );
-                      } else {
-                        alert("Geolocation is not supported by your browser.");
-                      }
-                    }}
-                    style={{ padding: '6px 10px', fontSize: '11px', flex: 1, whiteSpace: 'nowrap' }}
-                  >
-                    🎯 Detect My GPS
-                  </button>
-                  <button
-                    type="button"
-                    className="neon-btn small-btn"
-                    onClick={async () => {
-                      const address = selectedShopDetails.address || selectedShopDetails.storeName || selectedShopDetails.name;
-                      if (!address) {
-                        alert("Shop address is empty! Please verify shop details.");
-                        return;
-                      }
-                      try {
-                        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
-                        const data = await response.json();
-                        if (data && data.length > 0) {
-                          setShopDocLat(parseFloat(data[0].lat).toFixed(6));
-                          setShopDocLng(parseFloat(data[0].lon).toFixed(6));
-                          showToast("Coordinates found from address!");
-                        } else {
-                          const retryResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ", Chittorgarh")}&limit=1`);
-                          const retryData = await retryResponse.json();
-                          if (retryData && retryData.length > 0) {
-                            setShopDocLat(parseFloat(retryData[0].lat).toFixed(6));
-                            setShopDocLng(parseFloat(retryData[0].lon).toFixed(6));
-                            showToast("Coordinates found from address search!");
-                          } else {
-                            alert("Could not find coordinates for: " + address);
-                          }
-                        }
-                      } catch (error) {
-                        console.error("Geocoding failed:", error);
-                        alert("Failed to fetch coordinates from address.");
-                      }
-                    }}
-                    style={{ padding: '6px 10px', fontSize: '11px', flex: 1, whiteSpace: 'nowrap' }}
-                  >
-                    🔍 Find from Address
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Documents Status:</span>
-                <span className={`badge ${selectedShopDetails.docs === 'Approved' ? 'badge-success' : 'badge-warning'}`}>
-                  {selectedShopDetails.docs || 'Pending Approval'}
-                </span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Auth Login Account:</span>
-                <span className={`badge ${selectedShopDetails.hasAuthAccount ? 'badge-success' : 'badge-warning'}`}>
-                  {selectedShopDetails.hasAuthAccount ? 'Created' : 'Not Created'}
-                </span>
-              </div>
-
-              <div style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '12px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px', display: 'block', marginBottom: '8px' }}>Onboarding Documents Provided:</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={shopDocAadhaar}
-                      onChange={(e) => setShopDocAadhaar(e.target.checked)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    Aadhaar Card
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={shopDocPan}
-                      onChange={(e) => setShopDocPan(e.target.checked)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    PAN Card
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={shopDocFssai}
-                      onChange={(e) => setShopDocFssai(e.target.checked)}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    FSSAI license
-                  </label>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px' }}>
-                <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Verification Status:</span>
-                <span className={`badge ${selectedShopDetails.verified ? 'badge-success' : 'badge-danger'}`}>
-                  {selectedShopDetails.verified ? 'Verified & Active' : 'Unverified / Blocked'}
-                </span>
-              </div>
-            </div>
-
-            <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
-              <span style={{ color: 'var(--color-primary)', fontSize: '14px', fontWeight: 'bold', display: 'block' }}>🔐 Create Merchant Login Account</span>
-              <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Create a Firebase Auth login account for this shop.</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Email:</span>
-                <input
-                  type="email"
-                  placeholder="e.g. owner@gmail.com"
-                  value={tempAuthEmail}
-                  onChange={(e) => setTempAuthEmail(e.target.value)}
-                  className="custom-input-premium"
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', fontSize: '13px' }}
-                />
-                <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Password:</span>
-                <input
-                  type="password"
-                  placeholder="Enter login password"
-                  value={tempAuthPassword}
-                  onChange={(e) => setTempAuthPassword(e.target.value)}
-                  className="custom-input-premium"
-                  style={{ width: '100%', padding: '8px', borderRadius: '6px', fontSize: '13px' }}
-                />
-                <button
-                  type="button"
-                  className="neon-btn small-btn"
-                  onClick={() => handleCreateAuthAccount('merchant', tempAuthEmail, tempAuthPassword, selectedShopDetails.id)}
-                  style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', display: 'inline-flex', alignSelf: 'flex-start', marginTop: '4px' }}
-                >
-                  Create Account
-                </button>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
-              <button
-                className="neon-btn"
-                onClick={handleAdminSaveShopDocs}
-                style={{ width: '100%', padding: '10px', fontWeight: 'bold' }}
-              >
-                Save Documents
+      {isShopModalOpen && selectedShopDetails && (() => {
+        const activeShop = shops.find(s => s.id === selectedShopDetails.id) || selectedShopDetails;
+        return (
+          <div className="modal-backdrop fade-in" onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}>
+            <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}>
+                <X size={20} />
               </button>
-              <div style={{ display: 'flex', gap: '8px', width: '100%', flexWrap: 'wrap' }}>
+
+              <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '16px' }}>
+                <div className="profile-avatar-glow" style={{ background: 'rgba(245, 158, 11, 0.1)' }}>
+                  <Store size={40} style={{ color: 'rgba(245, 158, 11, 1)' }} />
+                </div>
+                <h3 className="section-title-premium" style={{ color: 'var(--color-text-main)' }}>{activeShop.name}</h3>
+                <p className="profile-sub" style={{ marginTop: '4px', color: 'var(--color-text-muted)' }}>Shop ID: <strong style={{ color: 'var(--color-text-main)' }}>{activeShop.id}</strong></p>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', color: 'var(--color-text-main)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Category:</span>
+                  <strong>{activeShop.category}</strong>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Phone:</span>
+                  <strong>{activeShop.phone || '9251054064'}</strong>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Address:</span>
+                  <span>{activeShop.address || 'Vaishali Market, Jaipur (RJ)'}</span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>Commission Rate (%):</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder={`Default (${commissionPercent}%)`}
+                    value={shopDocCommission}
+                    onChange={(e) => setShopDocCommission(e.target.value)}
+                    className="custom-input"
+                    style={{ padding: '6px 8px', fontSize: '12px', width: '100%', maxWidth: '200px' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--color-text-muted)', fontSize: '13px' }}>GPS Location:</span>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    placeholder="Lat (e.g. 24.8887)"
+                    value={shopDocLat}
+                    onChange={(e) => setShopDocLat(e.target.value)}
+                    className="custom-input"
+                    style={{ padding: '6px 8px', fontSize: '12px', width: '100%' }}
+                  />
+                  <input
+                    type="number"
+                    step="0.000001"
+                    placeholder="Lng (e.g. 74.6269)"
+                    value={shopDocLng}
+                    onChange={(e) => setShopDocLng(e.target.value)}
+                    className="custom-input"
+                    style={{ padding: '6px 8px', fontSize: '12px', width: '100%' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '8px', alignItems: 'center' }}>
+                  <span></span>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="neon-btn small-btn"
+                      onClick={() => {
+                        if (navigator.geolocation) {
+                          navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                              setShopDocLat(position.coords.latitude.toFixed(6));
+                              setShopDocLng(position.coords.longitude.toFixed(6));
+                              showToast("Shop location auto-detected!");
+                            },
+                            (error) => {
+                              console.error("Geolocation failed:", error);
+                              alert("Could not detect location. Please check browser permissions.");
+                            }
+                          );
+                        } else {
+                          alert("Geolocation is not supported by your browser.");
+                        }
+                      }}
+                      style={{ padding: '6px 10px', fontSize: '11px', flex: 1, whiteSpace: 'nowrap' }}
+                    >
+                      🎯 Detect My GPS
+                    </button>
+                    <button
+                      type="button"
+                      className="neon-btn small-btn"
+                      onClick={async () => {
+                        const address = activeShop.address || activeShop.storeName || activeShop.name;
+                        if (!address) {
+                          alert("Shop address is empty! Please verify shop details.");
+                          return;
+                        }
+                        try {
+                          const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1`);
+                          const data = await response.json();
+                          if (data && data.length > 0) {
+                            setShopDocLat(parseFloat(data[0].lat).toFixed(6));
+                            setShopDocLng(parseFloat(data[0].lon).toFixed(6));
+                            showToast("Coordinates found from address!");
+                          } else {
+                            const retryResponse = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ", Chittorgarh")}&limit=1`);
+                            const retryData = await retryResponse.json();
+                            if (retryData && retryData.length > 0) {
+                              setShopDocLat(parseFloat(retryData[0].lat).toFixed(6));
+                              setShopDocLng(parseFloat(retryData[0].lon).toFixed(6));
+                              showToast("Coordinates found from address search!");
+                            } else {
+                              alert("Could not find coordinates for: " + address);
+                            }
+                          }
+                        } catch (error) {
+                          console.error("Geocoding failed:", error);
+                          alert("Failed to fetch coordinates from address.");
+                        }
+                      }}
+                      style={{ padding: '6px 10px', fontSize: '11px', flex: 1, whiteSpace: 'nowrap' }}
+                    >
+                      🔍 Find from Address
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+                <span style={{ color: 'var(--color-primary)', fontSize: '14px', fontWeight: 'bold', display: 'block' }}>🔐 Merchant Login Account</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+                  {activeShop.hasAuthAccount ? (
+                    <>
+                      <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-main)' }}>Login Email: <strong>{activeShop.email}</strong></p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--color-text-main)' }}>
+                        <span>Saved Password:</span>
+                        <strong>
+                          {activeShop.password ? (showAdminShopPassword ? activeShop.password : '••••••••') : 'Not Saved'}
+                        </strong>
+                        {activeShop.password && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAdminShopPassword(!showAdminShopPassword)}
+                            style={{ background: 'transparent', border: 'none', padding: '2px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', color: 'var(--color-text-muted)', outline: 'none' }}
+                          >
+                            {showAdminShopPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        )}
+                      </div>
+                      
+                      <div className="divider" style={{ margin: '8px 0', borderBottom: '1px dashed rgba(255,255,255,0.08)' }}></div>
+                      
+                      <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Update Password:</span>
+                      <input
+                        type="password"
+                        placeholder="Enter new password"
+                        value={tempAuthPassword}
+                        onChange={(e) => setTempAuthPassword(e.target.value)}
+                        className="custom-input"
+                        style={{ width: '100%', padding: '8px', fontSize: '13px' }}
+                      />
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                        {activeShop.password ? (
+                          <button
+                            type="button"
+                            className="neon-btn small-btn"
+                            onClick={() => handleUpdateMerchantPassword(activeShop.email, activeShop.password, tempAuthPassword, activeShop.id)}
+                            style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(0, 255, 242, 0.1)', border: '1px solid var(--color-neon-cyan)', color: 'var(--color-neon-cyan)' }}
+                          >
+                            Update Password
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="neon-btn small-btn"
+                            onClick={() => handleCreateAuthAccount('merchant', activeShop.email || tempAuthEmail, tempAuthPassword, activeShop.id)}
+                            style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}
+                          >
+                            Reset Account & Password
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p style={{ fontSize: '11px', color: 'var(--color-text-muted)', margin: 0 }}>Create a Firebase Auth login account for this shop.</p>
+                      <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Email:</span>
+                      <input
+                        type="email"
+                        placeholder="e.g. owner@gmail.com"
+                        value={tempAuthEmail}
+                        onChange={(e) => setTempAuthEmail(e.target.value)}
+                        className="custom-input"
+                        style={{ width: '100%', padding: '8px', fontSize: '13px' }}
+                      />
+                      <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>Login Password:</span>
+                      <input
+                        type="password"
+                        placeholder="Enter login password"
+                        value={tempAuthPassword}
+                        onChange={(e) => setTempAuthPassword(e.target.value)}
+                        className="custom-input"
+                        style={{ width: '100%', padding: '8px', fontSize: '13px' }}
+                      />
+                      <button
+                        type="button"
+                        className="neon-btn small-btn"
+                        onClick={() => handleCreateAuthAccount('merchant', tempAuthEmail, tempAuthPassword, activeShop.id)}
+                        style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)', display: 'inline-flex', alignSelf: 'flex-start', marginTop: '4px' }}
+                      >
+                        Create Account
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '24px' }}>
                 <button
-                  className="secondary-btn"
-                  onClick={() => {
-                    const sPhone = selectedShopDetails.phone || '9251054064';
-                    window.open(`https://wa.me/${sPhone}?text=Hi%20${selectedShopDetails.name},%20we%20have%20reviewed%20your%20PixiGo%20merchant%20account.%20Please%20verify%20details.`, '_blank');
-                  }}
-                  style={{ flex: 1, padding: '10px', minWidth: '120px' }}
+                  className="neon-btn"
+                  onClick={handleAdminSaveShopDocs}
+                  style={{ width: '100%', padding: '10px', fontWeight: 'bold' }}
                 >
-                  Contact Merchant
+                  Save GPS & Commission
                 </button>
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => handleAdminDeleteShop(selectedShopDetails)}
-                  style={{
-                    flex: 1,
-                    padding: '10px',
-                    minWidth: '100px',
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid #ef4444',
-                    color: '#ef4444'
-                  }}
-                >
-                  Delete Shop
-                </button>
-                <button
-                  className="secondary-btn"
-                  onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}
-                  style={{ width: '80px', padding: '10px' }}
-                >
-                  Close
-                </button>
+                <div style={{ display: 'flex', gap: '8px', width: '100%', flexWrap: 'wrap' }}>
+                  <button
+                    className="secondary-btn"
+                    onClick={() => {
+                      const sPhone = activeShop.phone || '9251054064';
+                      window.open(`https://wa.me/${sPhone}?text=Hi%20${activeShop.name},%20we%20have%20reviewed%20your%20PixiGo%20merchant%20account.%20Please%20verify%20details.`, '_blank');
+                    }}
+                    style={{ flex: 1, padding: '10px', minWidth: '120px' }}
+                  >
+                    Contact Merchant
+                  </button>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={() => handleAdminDeleteShop(activeShop)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      minWidth: '100px',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid #ef4444',
+                      color: '#ef4444'
+                    }}
+                  >
+                    Delete Shop
+                  </button>
+                  <button
+                    className="secondary-btn"
+                    onClick={() => { setIsShopModalOpen(false); setSelectedShopDetails(null); }}
+                    style={{ width: '80px', padding: '10px' }}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Order Details Modal (Admin) */}
       {isOrderModalOpen && selectedOrderDetails && (
