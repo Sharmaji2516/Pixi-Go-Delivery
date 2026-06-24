@@ -1425,7 +1425,7 @@ function App() {
     if (userRole === 'admin') {
       q = query(ordersRef, orderBy("createdAt", "desc"));
     } else if (userRole === 'merchant' && user) {
-      q = query(ordersRef, where("merchantId", "==", user.uid), orderBy("createdAt", "desc"));
+      q = query(ordersRef, orderBy("createdAt", "desc"));
     } else if (userRole === 'rider' && user) {
       q = query(ordersRef, or(
         where("deliveryPartnerId", "==", user.uid),
