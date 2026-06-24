@@ -1547,10 +1547,6 @@ function App() {
 
   // Fetch real-time delivery partners from Firestore
   useEffect(() => {
-    if (!user) {
-      setDeliveryPartners([]);
-      return;
-    }
     const ridersRef = collection(db, "delivery_boys");
     const unsubscribe = onSnapshot(ridersRef, (snapshot) => {
       const fetchedRiders = [];
@@ -1575,7 +1571,7 @@ function App() {
       console.error("Firestore delivery partners subscription error:", error);
     });
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
   // Fetch real-time payouts from Firestore
   useEffect(() => {

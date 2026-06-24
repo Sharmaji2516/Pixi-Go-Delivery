@@ -61,8 +61,7 @@ service cloud.firestore {
     }
     // 4. Delivery Boys (Riders) Collection
     match /delivery_boys/{riderId} {
-      allow read: if isAuthenticated(); // Customers and merchants need to read rider details for tracking
-      allow create: if isAuthenticated(); // Allow rider self-registration
+      allow read, create: if true; // Publicly readable for tracking/login, allow self-registration
       allow update: if isAdmin() || (isAuthenticated() && (
         resource.data.authUid == request.auth.uid || 
         resource.data.email == request.auth.token.email
