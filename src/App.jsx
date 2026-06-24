@@ -2071,7 +2071,7 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'delivery') {
-      const currentRider = deliveryPartners.find(d => d.id === user?.uid);
+      const currentRider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
       const isOnline = currentRider?.isOnline !== false;
       if (isOnline && availablePoolJobs.length > prevPoolJobsCount.current) {
         play30SecondBeepAlert();
@@ -3297,7 +3297,7 @@ function App() {
   };
 
   const handleRiderAcceptJob = async (orderId) => {
-    let rider = deliveryPartners.find(d => d.id === user?.uid);
+    let rider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
     if (!rider && user) {
       // Fallback rider object for Admin/Tester accounts
       rider = {
@@ -3320,12 +3320,14 @@ function App() {
       return;
     }
 
+    const targetRiderId = rider.id || user.uid;
+
     // Update local state first
     setOrders(orders.map(o => {
       if (o.id === orderId) {
         return {
           ...o,
-          deliveryPartnerId: user.uid,
+          deliveryPartnerId: targetRiderId,
           deliveryPartnerName: rider.name,
           riderAccepted: true
         };
@@ -3337,14 +3339,15 @@ function App() {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
         await updateDoc(orderRef, {
-          deliveryPartnerId: user.uid,
+          deliveryPartnerId: targetRiderId,
           deliveryPartnerName: rider.name,
-          riderId: user.uid,
+          riderId: targetRiderId,
           riderAccepted: true
         });
 
         // Set rider status to busy in delivery_boys collection
-        const riderDocRef = doc(db, "delivery_boys", user.uid);
+        const docId = rider.firestoreId || rider.id || targetRiderId;
+        const riderDocRef = doc(db, "delivery_boys", docId);
         await setDoc(riderDocRef, {
           status: 'busy',
           updatedAt: new Date().toISOString()
@@ -4470,8 +4473,10 @@ function App() {
 
   const handleUploadDocument = async (docType) => {
     if (!user) return alert('Please sign in first.');
+    const matchedRider = deliveryPartners.find(d => d.id === user.uid || (d.email && user.email && d.email.toLowerCase() === user.email.toLowerCase()));
+    const docId = matchedRider?.firestoreId || matchedRider?.id || user.uid;
     try {
-      const riderDocRef = doc(db, "delivery_boys", user.uid);
+      const riderDocRef = doc(db, "delivery_boys", docId);
       const updateData = {};
       updateData[`${docType}Uploaded`] = true;
       updateData['updatedAt'] = new Date().toISOString();
@@ -10427,7 +10432,7 @@ function App() {
 
         {/* ==================== DELIVERY RIDER PORTAL ==================== */}
         {activeTab === 'delivery' && renderPortalGuard('Delivery Rider', (() => {
-          const currentRider = deliveryPartners.find(d => d.id === user?.uid);
+          const currentRider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
 
           const isAadhaarUploaded = currentRider?.aadhaarUploaded || false;
           const isDlUploaded = currentRider?.dlUploaded || false;
