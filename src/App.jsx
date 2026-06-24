@@ -2087,6 +2087,14 @@ function App() {
 
   const currentMerchantShopName = loggedInMerchantShop ? (loggedInMerchantShop.storeName || loggedInMerchantShop.name) : merchantShopSelect;
 
+  // Compile list of lowercase shop names owned by the logged-in merchant
+  const myMerchantShopNames = React.useMemo(() => {
+    return user ? shops
+      .filter(s => s.email && s.email.toLowerCase() === user.email.toLowerCase())
+      .map(s => (s.storeName || s.name || '').trim().toLowerCase())
+      : [];
+  }, [user, shops]);
+
   // Sync merchantShopSelect with logged in merchant's shop name automatically
   useEffect(() => {
     if (activeTab === 'merchant' && loggedInMerchantShop) {
@@ -2101,12 +2109,14 @@ function App() {
 
   // New Order Alerts for Merchant
   useEffect(() => {
-    if (activeTab === 'merchant' && user && currentMerchantShopName) {
+    if (activeTab === 'merchant' && user && myMerchantShopNames.length > 0) {
       // Find orders for this merchant shop that are pending acceptance
-      const merchantPendingOrders = orders.filter(o =>
-        (o.merchantName === currentMerchantShopName || (o.items && o.items.some(i => i.store === currentMerchantShopName))) &&
-        ['PLACED', 'PENDING'].includes(o.status)
-      );
+      const merchantPendingOrders = orders.filter(o => {
+        const orderMName = (o.merchantName || '').trim().toLowerCase();
+        const hasMatchingItem = o.items && o.items.some(i => i.store && myMerchantShopNames.includes(i.store.trim().toLowerCase()));
+        return (myMerchantShopNames.includes(orderMName) || hasMatchingItem) &&
+               ['PLACED', 'PENDING'].includes(o.status);
+      });
 
       if (merchantPendingOrders.length > prevMerchantOrdersCount.current) {
         if (prevMerchantOrdersCount.current > 0 || merchantPendingOrders.length > 0) {
@@ -2121,7 +2131,7 @@ function App() {
       }
       prevMerchantOrdersCount.current = merchantPendingOrders.length;
     }
-  }, [orders, currentMerchantShopName, activeTab, user]);
+  }, [orders, myMerchantShopNames, activeTab, user]);
 
   const getRoleForEmail = (email) => {
     if (!email) return null;
@@ -10961,8 +10971,9 @@ function App() {
         {activeTab === 'merchant' && renderPortalGuard('Merchant Dashboard', (() => {
           const merchantOrders = orders.filter(o => {
             const routing = o.routingOption || (['Bake House', 'Grand Plaza Restaurant', 'Sweet Treat Cafe'].includes(o.merchantName) ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)');
-            return (o.merchantName === currentMerchantShopName ||
-              (o.items && o.items.some(i => i.store === currentMerchantShopName))) &&
+            const orderMName = (o.merchantName || '').trim().toLowerCase();
+            const hasMatchingItem = o.items && o.items.some(i => i.store && myMerchantShopNames.includes(i.store.trim().toLowerCase()));
+            return (myMerchantShopNames.includes(orderMName) || hasMatchingItem) &&
               routing === 'Option 1 (Shop-Direct)';
           });
 
@@ -11457,9 +11468,9 @@ function App() {
 
                   {/* Listed Products */}
                   <div className="listed-products">
-                    <h2 style={{ textAlign: 'left' }}>My Listed Products ({products.filter(p => p.store === currentMerchantShopName).length})</h2>
+                    <h2 style={{ textAlign: 'left' }}>My Listed Products ({products.filter(p => p.store && myMerchantShopNames.includes(p.store.trim().toLowerCase())).length})</h2>
                     <div className="listed-items-container">
-                      {products.filter(p => p.store === currentMerchantShopName).map(p => (
+                      {products.filter(p => p.store && myMerchantShopNames.includes(p.store.trim().toLowerCase())).map(p => (
                         <div key={p.id} className="listed-item-row" style={{ opacity: p.isOutOfStock ? 0.7 : 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div className="item-details" style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                             <div style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0, marginTop: '2px' }}>
