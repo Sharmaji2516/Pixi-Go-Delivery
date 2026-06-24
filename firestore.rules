@@ -17,25 +17,15 @@ service cloud.firestore {
     }
     // Helper: Check if user is a registered Merchant
     function isMerchant() {
-      return isAuthenticated() && (
-        exists(/databases/$(database)/documents/merchants/$(request.auth.uid)) ||
-        (request.auth.token.email != null && request.auth.token.email in ['lavsharma.it25@gmail.com', 'pixigodelivery@gmail.com'])
-      );
+      return isAuthenticated();
     }
     // Helper: Check if user is a registered Delivery Rider
     function isRider() {
-      return isAuthenticated() && (
-        exists(/databases/$(database)/documents/delivery_boys/$(request.auth.uid))
-      );
+      return isAuthenticated();
     }
     // Helper: Check if the logged-in merchant owns the store name
-    // Enforces exists() check before get() to prevent runtime crashes
     function isStoreOwner(storeName) {
-      return isMerchant() && 
-        exists(/databases/$(database)/documents/merchants/$(request.auth.uid)) && (
-          get(/databases/$(database)/documents/merchants/$(request.auth.uid)).data.storeName == storeName ||
-          get(/databases/$(database)/documents/merchants/$(request.auth.uid)).data.name == storeName
-        );
+      return isAuthenticated();
     }
 
     // 1. Admins Collection
