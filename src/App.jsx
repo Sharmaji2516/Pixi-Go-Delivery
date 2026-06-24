@@ -451,7 +451,7 @@ const ProductCardImage = ({ product, isOutOfStock, displayInfo }) => {
   );
 };
 
-const AdminImageCell = ({ productId, initialValue, name, emoji }) => {
+const AdminImageCell = ({ productId, initialValue }) => {
   const [val, setVal] = useState(initialValue || '');
   
   useEffect(() => {
@@ -459,20 +459,15 @@ const AdminImageCell = ({ productId, initialValue, name, emoji }) => {
   }, [initialValue]);
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-      <div style={{ width: '32px', height: '32px', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
-        <ProductThumbnail src={val} name={name} emoji={emoji} style={{ width: '100%', height: '100%' }} />
-      </div>
-      <input
-        type="text"
-        id={`image-${productId}`}
-        value={val}
-        onChange={(e) => setVal(e.target.value)}
-        placeholder="Image URL"
-        className="rider-select"
-        style={{ width: '120px', padding: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '11px', margin: 0 }}
-      />
-    </div>
+    <input
+      type="text"
+      id={`image-${productId}`}
+      value={val}
+      onChange={(e) => setVal(e.target.value)}
+      placeholder="Image URL"
+      className="rider-select"
+      style={{ width: '150px', padding: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '11px', margin: 0 }}
+    />
   );
 };
 
@@ -6305,7 +6300,7 @@ function App() {
                 onClick={() => { setAdminSubView('payouts'); setAdminSearchQuery(''); }}
               >
                 <DollarSign size={16} style={{ marginRight: '6px' }} />
-                Payout Management
+                Payout Management ({payouts.length})
               </button>
               <button
                 className={`nav-link ${adminSubView === 'settings' ? 'active' : ''}`}
@@ -7178,7 +7173,7 @@ function App() {
                         style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
                       >
                         <Store size={15} />
-                        Merchant Performance
+                        Merchant Performance ({shops.length})
                       </button>
                       <button
                         onClick={() => setSalesTab('riders')}
@@ -7186,7 +7181,7 @@ function App() {
                         style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
                       >
                         <Bike size={15} />
-                        Rider Performance
+                        Rider Performance ({deliveryPartners.length})
                       </button>
                       <button
                         onClick={() => setSalesTab('orders_log')}
@@ -7194,7 +7189,7 @@ function App() {
                         style={{ fontSize: '13px', padding: '8px 20px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}
                       >
                         <FileText size={15} />
-                        Detailed Orders Log
+                        Detailed Orders Log ({orders.length})
                       </button>
                     </div>
 
@@ -7870,7 +7865,7 @@ function App() {
               {showPastOrders && (
                 <div className="admin-orders-table glass-panel fade-in" style={{ marginTop: '20px' }}>
                   <div className="panel-header">
-                    <h2>Past / Completed Orders</h2>
+                    <h2>Past / Completed Orders ({orders.filter(o => o.status === 'COMPLETED' || o.status?.toUpperCase().startsWith('CANCEL')).length})</h2>
                   </div>
 
                   <div className="table-responsive">
@@ -8140,6 +8135,7 @@ function App() {
                   <table className="order-log-table">
                     <thead>
                       <tr>
+                        <th>#</th>
                         <th>Item Info</th>
                         <th>Store</th>
                         <th>Category</th>
@@ -8155,14 +8151,15 @@ function App() {
                     <tbody>
                       {filteredAdminProducts.length === 0 ? (
                         <tr>
-                          <td colSpan="10" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
+                          <td colSpan="11" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-text-muted)' }}>
                             No products match search query.
                           </td>
                         </tr>
                       ) : (
-                        filteredAdminProducts.map(p => {
+                        filteredAdminProducts.map((p, index) => {
                           return (
                             <tr key={p.id}>
+                              <td><strong>#{index + 1}</strong></td>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <div style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
@@ -8179,7 +8176,7 @@ function App() {
                                 <span className="badge badge-info">{p.category}</span>
                               </td>
                               <td>
-                                <AdminImageCell productId={p.id} initialValue={p.image} name={p.name} emoji={p.emoji} />
+                                <AdminImageCell productId={p.id} initialValue={p.image} />
                               </td>
                               <td>
                                 <input
