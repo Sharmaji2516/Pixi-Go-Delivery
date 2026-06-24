@@ -4591,6 +4591,9 @@ function App() {
       console.log(`Successfully deleted Firebase Auth account for ${email}`);
     } catch (e) {
       console.warn("Could not delete Firebase Auth account (it might not exist or password changed):", e);
+      if (e.message.includes('auth/invalid-credential')) {
+        alert(`Warning: The Firebase Auth account for ${email} could not be deleted automatically because the password stored in the database did not match the password in Firebase Auth.\n\nPlease delete the user account manually in your Firebase Console (Authentication -> Users tab).`);
+      }
     }
   };
 
@@ -4757,7 +4760,11 @@ function App() {
       showToast("Password updated successfully!");
     } catch (e) {
       console.error("Error updating merchant password:", e);
-      alert(`Failed to update password: ${e.message}`);
+      if (e.message.includes('auth/invalid-credential')) {
+        alert(`Failed to update password: The password stored in the database (${oldPassword}) does not match the actual password for ${email} in Firebase Auth.\n\nTo resolve this:\n1. Log into your Firebase Console (console.firebase.google.com)\n2. Navigate to Authentication -> Users\n3. Find "${email}" and manually set their password to "${oldPassword}" (or delete the user and re-onboard them).\n4. Try updating the password here again.`);
+      } else {
+        alert(`Failed to update password: ${e.message}`);
+      }
     }
   };
 
