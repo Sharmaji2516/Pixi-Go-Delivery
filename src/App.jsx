@@ -3118,6 +3118,7 @@ function App() {
 
   // Merchant: Toggle order acceptance status (Manual override)
   const handleToggleAcceptingOrders = async (shop, currentStatus) => {
+    if (!shop) return;
     const newStatus = !currentStatus;
 
     // Update local state first
@@ -3136,6 +3137,7 @@ function App() {
 
   // Rider: Toggle duty status (Online/Offline)
   const handleToggleRiderDuty = async (rider, currentStatus) => {
+    if (!rider) return;
     const newStatus = !currentStatus;
 
     // Update local state first
