@@ -1429,7 +1429,9 @@ function App() {
     } else if (userRole === 'rider' && user) {
       q = query(ordersRef, or(
         where("deliveryPartnerId", "==", user.uid),
-        where("status", "==", "PLACED")
+        where("status", "==", "PLACED"),
+        where("status", "==", "ACCEPTED"),
+        where("status", "==", "READY_FOR_PICKUP")
       ));
     } else if (userRole === 'customer' && user) {
       q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"));

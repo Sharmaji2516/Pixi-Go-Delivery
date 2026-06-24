@@ -71,6 +71,7 @@ service cloud.firestore {
         resource.data.merchantId == request.auth.uid ||
         resource.data.deliveryPartnerId == request.auth.uid ||
         resource.data.customerPhone == request.auth.token.phone_number ||
+        (resource.data.deliveryPartnerId == null && isRider()) ||
         isAdmin()
       );
       
