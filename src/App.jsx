@@ -372,6 +372,110 @@ const getNoticeStyles = (color) => {
 
 const MAX_DELIVERY_RADIUS_KM = 10.0;
 
+const ProductThumbnail = ({ src, name, emoji, className, style }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  const hasHttpImage = src && src.startsWith('http');
+  const showFallback = !hasHttpImage || hasError;
+
+  if (!showFallback) {
+    return (
+      <img
+        src={src}
+        alt={name}
+        className={className}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', ...style }}
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  const fallbackEmoji = src && !src.startsWith('http') ? src : (emoji || '📦');
+  return (
+    <span
+      className={className ? `${className}-fallback` : ''}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '20px',
+        width: '100%',
+        height: '100%',
+        background: 'rgba(255,255,255,0.05)',
+        ...style
+      }}
+    >
+      {fallbackEmoji}
+    </span>
+  );
+};
+
+const ProductCardImage = ({ product, isOutOfStock, displayInfo }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [product.image]);
+
+  const hasHttpImage = product.image && product.image.startsWith('http');
+  const showFallback = !hasHttpImage || hasError;
+
+  return (
+    <div
+      className={`prod-img-wrap ${showFallback ? 'emoji-bg-' + (product.category ? product.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`}
+      style={{ position: 'relative', filter: isOutOfStock ? 'grayscale(60%) opacity(0.8)' : 'none' }}
+    >
+      {isOutOfStock && (
+        <span className="prod-img-badge" style={{ background: 'var(--color-danger)', top: '10px', left: '10px', fontSize: '9px', fontWeight: 'bold' }}>SOLD OUT</span>
+      )}
+      {!isOutOfStock && (product.offerText || displayInfo.originalPrice > displayInfo.price) && (
+        <span className="prod-img-badge offer-badge">
+          {product.offerText || `${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}% OFF`}
+        </span>
+      )}
+      {!showFallback ? (
+        <img
+          src={product.image}
+          alt={product.name}
+          className="prod-img"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <span className="prod-emoji-text">{product.image && !product.image.startsWith('http') ? product.image : (product.emoji || '📦')}</span>
+      )}
+    </div>
+  );
+};
+
+const AdminImageCell = ({ productId, initialValue, name, emoji }) => {
+  const [val, setVal] = useState(initialValue || '');
+  
+  useEffect(() => {
+    setVal(initialValue || '');
+  }, [initialValue]);
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+      <div style={{ width: '32px', height: '32px', borderRadius: '4px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
+        <ProductThumbnail src={val} name={name} emoji={emoji} style={{ width: '100%', height: '100%' }} />
+      </div>
+      <input
+        type="text"
+        id={`image-${productId}`}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        placeholder="Image URL"
+        className="rider-select"
+        style={{ width: '120px', padding: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '11px', margin: 0 }}
+      />
+    </div>
+  );
+};
+
 function App() {
   // --- STATE DECLARATIONS ---
   const [activeTab, setActiveTab] = useState('customer'); // customer | admin | delivery | merchant
@@ -538,6 +642,7 @@ function App() {
   const [newProductIsVeg, setNewProductIsVeg] = useState(true);
   const [newProductDescription, setNewProductDescription] = useState('');
   const [newProductSpecs, setNewProductSpecs] = useState('');
+  const [newProductImage, setNewProductImage] = useState('');
   const [proposedCommissionInput, setProposedCommissionInput] = useState('');
 
   // Merchant edit product states
@@ -549,6 +654,7 @@ function App() {
   const [merchantEditProductSpecs, setMerchantEditProductSpecs] = useState('');
   const [merchantEditProductCategory, setMerchantEditProductCategory] = useState('General Store');
   const [merchantEditProductIsVeg, setMerchantEditProductIsVeg] = useState(true);
+  const [merchantEditProductImage, setMerchantEditProductImage] = useState('');
 
   // Admin catalog additions state variables
   const [adminNewProductName, setAdminNewProductName] = useState('');
@@ -4627,7 +4733,7 @@ function App() {
       price: parseFloat(newProductPrice),
       category: newProductCategory,
       store: merchantShopSelect,
-      image: '🍔',
+      image: newProductImage || '🍔',
       approved: false,
       isVeg: newProductIsVeg,
       description: newProductDescription.trim(),
@@ -4641,6 +4747,7 @@ function App() {
       setNewProductPrice('');
       setNewProductDescription('');
       setNewProductSpecs('');
+      setNewProductImage('');
       setNewProductIsVeg(true);
       alert('Product added to listing catalog!');
     } catch (e) {
@@ -4697,6 +4804,7 @@ function App() {
     setMerchantEditProductSpecs(p.specs || '');
     setMerchantEditProductCategory(p.category || 'General Store');
     setMerchantEditProductIsVeg(p.isVeg !== false);
+    setMerchantEditProductImage(p.image || '');
     setIsMerchantEditModalOpen(true);
   };
 
@@ -4714,6 +4822,7 @@ function App() {
       specs: merchantEditProductSpecs.trim(),
       category: merchantEditProductCategory,
       isVeg: merchantEditProductIsVeg,
+      image: merchantEditProductImage || '🍔',
       approved: merchantEditingProduct.approved ?? false
     };
 
@@ -5072,13 +5181,7 @@ function App() {
             {cart.map(item => (
               <div key={item.cartItemId || item.id} className="cart-row">
                 <div className="cart-item-img-wrap">
-                  {item.image && item.image.startsWith('http') ? (
-                    <img src={item.image} alt={item.name} className="cart-item-img" onError={(e) => {
-                      e.target.style.display = 'none';
-                    }} />
-                  ) : (
-                    <span className="cart-item-emoji">{item.image || item.emoji || '📦'}</span>
-                  )}
+                  <ProductThumbnail src={item.image} name={item.name} emoji={item.emoji} className="cart-item-img" />
                 </div>
                 <div className="cart-item-detail">
                   <h4 style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
@@ -5932,26 +6035,7 @@ function App() {
 
     return (
       <div key={p.id} className="product-card glass-panel" style={{ position: 'relative', opacity: p.isOutOfStock ? 0.8 : 1 }}>
-        <div
-          className={`prod-img-wrap ${!(p.image && p.image.startsWith('http')) ? 'emoji-bg-' + (p.category ? p.category.toLowerCase().replace(/\s+/g, '-') : 'default') : ''}`}
-          style={{ position: 'relative', filter: p.isOutOfStock ? 'grayscale(60%) opacity(0.8)' : 'none' }}
-        >
-          {p.isOutOfStock && (
-            <span className="prod-img-badge" style={{ background: 'var(--color-danger)', top: '10px', left: '10px', fontSize: '9px', fontWeight: 'bold' }}>SOLD OUT</span>
-          )}
-          {!p.isOutOfStock && (p.offerText || displayInfo.originalPrice > displayInfo.price) && (
-            <span className="prod-img-badge offer-badge">
-              {p.offerText || `${Math.round(((displayInfo.originalPrice - displayInfo.price) / displayInfo.originalPrice) * 100)}% OFF`}
-            </span>
-          )}
-          {p.image && p.image.startsWith('http') ? (
-            <img src={p.image} alt={p.name} className="prod-img" onError={(e) => {
-              e.target.style.display = 'none';
-            }} />
-          ) : (
-            <span className="prod-emoji-text">{p.image || p.emoji || '📦'}</span>
-          )}
-        </div>
+        <ProductCardImage product={p} isOutOfStock={p.isOutOfStock} displayInfo={displayInfo} />
         <div className="prod-meta" style={{ opacity: 1 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
             <h3 className="prod-title" style={{ margin: 0 }}>{p.name}</h3>
@@ -7931,13 +8015,19 @@ function App() {
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Image URL / Emoji</label>
-                        <input
-                          type="text"
-                          value={adminNewProductImage}
-                          onChange={(e) => setAdminNewProductImage(e.target.value)}
-                          className="custom-input"
-                          placeholder="https://... or 🍰"
-                        />
+                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                          <div style={{ width: '44px', height: '44px', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
+                            <ProductThumbnail src={adminNewProductImage} name={adminNewProductName || 'Preview'} emoji={adminNewProductImage && !adminNewProductImage.startsWith('http') ? adminNewProductImage : '📦'} style={{ width: '100%', height: '100%' }} />
+                          </div>
+                          <input
+                            type="text"
+                            value={adminNewProductImage}
+                            onChange={(e) => setAdminNewProductImage(e.target.value)}
+                            className="custom-input"
+                            style={{ flex: 1 }}
+                            placeholder="https://... or 🍰"
+                          />
+                        </div>
                       </div>
                       <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
                         <label style={{ fontSize: '12px', color: 'var(--color-text-muted)', fontWeight: 'bold' }}>Specs / Unit (Add commas for multiple variants)</label>
@@ -8062,7 +8152,9 @@ function App() {
                             <tr key={p.id}>
                               <td>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <div style={{ fontSize: '20px' }}>{p.emoji || '📦'}</div>
+                                  <div style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
+                                    <ProductThumbnail src={p.image} name={p.name} emoji={p.emoji} style={{ width: '100%', height: '100%' }} />
+                                  </div>
                                   <div style={{ textAlign: 'left' }}>
                                     <strong>{p.name}</strong>
                                     <div className="sub-text">ID: {p.id}</div>
@@ -8074,14 +8166,7 @@ function App() {
                                 <span className="badge badge-info">{p.category}</span>
                               </td>
                               <td>
-                                <input
-                                  type="text"
-                                  id={`image-${p.id}`}
-                                  defaultValue={p.image || ''}
-                                  placeholder="Image URL"
-                                  className="rider-select"
-                                  style={{ width: '150px', padding: '4px', background: 'rgba(255,255,255,0.05)', fontSize: '11px' }}
-                                />
+                                <AdminImageCell productId={p.id} initialValue={p.image} name={p.name} emoji={p.emoji} />
                               </td>
                               <td>
                                 <input
@@ -11293,6 +11378,22 @@ function App() {
                       </select>
                     </div>
                     <div className="form-group">
+                      <label>Image URL / Emoji</label>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
+                          <ProductThumbnail src={newProductImage} name={newProductName || 'Preview'} emoji={newProductImage && !newProductImage.startsWith('http') ? newProductImage : '📦'} style={{ width: '100%', height: '100%' }} />
+                        </div>
+                        <input
+                          type="text"
+                          value={newProductImage}
+                          onChange={(e) => setNewProductImage(e.target.value)}
+                          className="custom-input"
+                          style={{ flex: 1 }}
+                          placeholder="https://... or 🍰"
+                        />
+                      </div>
+                    </div>
+                    <div className="form-group">
                       <label>Representing Shop</label>
                       <input
                         type="text"
@@ -11314,11 +11415,9 @@ function App() {
                       {products.filter(p => p.store === currentMerchantShopName).map(p => (
                         <div key={p.id} className="listed-item-row" style={{ opacity: p.isOutOfStock ? 0.7 : 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div className="item-details" style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
-                            {p.image && p.image.startsWith('http') ? (
-                              <img src={p.image} alt={p.name} style={{ width: '40px', height: '40px', borderRadius: '6px', objectFit: 'cover', marginTop: '2px' }} />
-                            ) : (
-                              <span className="item-emoji" style={{ fontSize: '24px', marginTop: '2px', display: 'inline-block' }}>{p.image || p.emoji || '📦'}</span>
-                            )}
+                            <div style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0, marginTop: '2px' }}>
+                              <ProductThumbnail src={p.image} name={p.name} emoji={p.emoji} style={{ width: '100%', height: '100%' }} />
+                            </div>
                             <div>
                               <h4 style={{ textDecoration: p.isOutOfStock ? 'line-through' : 'none', margin: 0, fontSize: '14px', fontWeight: '600' }}>{p.name}</h4>
                               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '4px', flexWrap: 'wrap' }}>
@@ -11885,11 +11984,12 @@ function App() {
 
             <div className="profile-avatar-section" style={{ borderBottom: '1px solid var(--color-border)', paddingBottom: '16px', marginBottom: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
               <div className="profile-avatar-glow" style={{ background: 'var(--color-primary-glow)', border: '2px solid var(--color-primary)', width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {selectedVariantProduct.image && selectedVariantProduct.image.startsWith('http') ? (
-                  <img src={selectedVariantProduct.image} alt={selectedVariantProduct.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : (
-                  <span style={{ fontSize: '32px' }}>{selectedVariantProduct.image || selectedVariantProduct.emoji || '📦'}</span>
-                )}
+                <ProductThumbnail 
+                  src={selectedVariantProduct.image} 
+                  name={selectedVariantProduct.name} 
+                  emoji={selectedVariantProduct.emoji} 
+                  style={{ fontSize: '32px', width: '100%', height: '100%' }} 
+                />
               </div>
               <h3 className="section-title-premium" style={{ fontSize: '22px', fontWeight: 'bold', color: 'var(--color-text-main)', marginTop: '12px', textAlign: 'center' }}>{selectedVariantProduct.name}</h3>
               <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
@@ -13948,6 +14048,23 @@ function App() {
                     <option key={cat} value={cat}>{cat}</option>
                   ))}
                 </select>
+              </div>
+
+              <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+                <label className="form-label-premium" style={{ fontSize: '13px', color: 'var(--color-text-muted)' }}>Image URL / Emoji</label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ width: '44px', height: '44px', borderRadius: '8px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-border)', flexShrink: 0 }}>
+                    <ProductThumbnail src={merchantEditProductImage} name={merchantEditProductName || 'Preview'} emoji={merchantEditProductImage && !merchantEditProductImage.startsWith('http') ? merchantEditProductImage : '📦'} style={{ width: '100%', height: '100%' }} />
+                  </div>
+                  <input
+                    type="text"
+                    value={merchantEditProductImage}
+                    onChange={(e) => setMerchantEditProductImage(e.target.value)}
+                    className="custom-input-premium"
+                    style={{ flex: 1, padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                    placeholder="https://... or 🍰"
+                  />
+                </div>
               </div>
 
               <div className="form-group-premium" style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
