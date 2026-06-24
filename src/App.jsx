@@ -8,7 +8,7 @@ import {
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth, updatePassword } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth, updatePassword, deleteUser } from 'firebase/auth';
 import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
 import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
@@ -2452,7 +2452,8 @@ function App() {
         phone: userPhone,
         roles: [role],
         isActive: rawUser.isActive !== false,
-        roleDocIds: { [role]: docId || uid }
+        roleDocIds: { [role]: docId || uid },
+        password: rawUser.password || ''
       });
     } else {
       const existing = usersMap.get(key);
@@ -2460,6 +2461,9 @@ function App() {
         existing.roles.push(role);
       }
       existing.roleDocIds[role] = docId || uid;
+      if (rawUser.password && !existing.password) {
+        existing.password = rawUser.password;
+      }
       if (rawUser.isActive === false) {
         existing.isActive = false;
       }
@@ -3449,8 +3453,10 @@ function App() {
       return;
     }
 
-    if (deliveryPartners.some(d => (d.email || '').trim().toLowerCase() === newRiderEmail.trim().toLowerCase())) {
-      alert("This Email Address is already registered to a Rider.");
+    const cleanEmail = newRiderEmail.trim().toLowerCase();
+    const existingRole = getRoleForEmail(cleanEmail);
+    if (existingRole) {
+      alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
     }
 
@@ -3764,6 +3770,9 @@ function App() {
   const handleAdminDeleteRider = async (rider) => {
     if (!window.confirm(`Are you sure you want to permanently delete rider "${rider.name}" and remove them from the system?`)) return;
     try {
+      if (rider.email && rider.password) {
+        await deleteFirebaseAuthAccount(rider.email, rider.password);
+      }
       if (rider.firestoreId) {
         await deleteDoc(doc(db, "delivery_boys", rider.firestoreId));
       }
@@ -4001,6 +4010,11 @@ function App() {
     try {
       const shopName = shop.name || shop.storeName;
 
+      // Delete Firebase Auth account if email and password exist
+      if (shop.email && shop.password) {
+        await deleteFirebaseAuthAccount(shop.email, shop.password);
+      }
+
       // 1. Delete all products belonging to this shop from Firestore
       const productsToDelete = products.filter(p => p.store === shopName && p.firestoreId);
       for (const p of productsToDelete) {
@@ -4040,6 +4054,11 @@ function App() {
     if (!window.confirm(`Are you sure you want to permanently delete the ${roleLabels} "${user.name}" (ID: ${user.id}) from the system?`)) return;
 
     try {
+      // Delete Firebase Auth account if email and password exist
+      if (user.email && user.email !== 'N/A' && user.password) {
+        await deleteFirebaseAuthAccount(user.email, user.password);
+      }
+
       const roleDocIds = user.roleDocIds || { [user.role]: user.firestoreId || user.id };
 
       for (const role of roles) {
@@ -4557,6 +4576,21 @@ function App() {
       }
     } else {
       alert(`No delivery promotion rule document of type "${targetPromoType}" found. Please create one in the Coupons Dashboard first!`);
+    }
+  };
+
+  const deleteFirebaseAuthAccount = async (email, password) => {
+    if (!email || !password) return;
+    try {
+      const tempAppName = `TempApp_Delete_${Date.now()}`;
+      const tempApp = initializeApp(firebaseConfig, tempAppName);
+      const tempAuth = getAuth(tempApp);
+      const userCredential = await signInWithEmailAndPassword(tempAuth, email, password);
+      await deleteUser(userCredential.user);
+      await deleteApp(tempApp);
+      console.log(`Successfully deleted Firebase Auth account for ${email}`);
+    } catch (e) {
+      console.warn("Could not delete Firebase Auth account (it might not exist or password changed):", e);
     }
   };
 
