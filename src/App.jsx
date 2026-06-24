@@ -2986,9 +2986,9 @@ function App() {
 
       // Auto-sync merchant profile doc if it does not exist
       try {
-        const merchantDocRef = doc(db, "merchants", merchantId);
-        const merchSnap = await getDoc(merchantDocRef);
-        if (!merchSnap.exists()) {
+        const shopExists = shops.some(s => (s.storeName || s.name || '').trim().toLowerCase() === storeName.trim().toLowerCase());
+        if (!shopExists) {
+          const merchantDocRef = doc(db, "merchants", merchantId);
           await setDoc(merchantDocRef, {
             storeName: storeName,
             category: cart[0]?.category || 'General',
@@ -4972,9 +4972,9 @@ function App() {
       const merchantId = pendingPaymentOrder.merchantId;
       const storeName = pendingPaymentOrder.merchantName;
       try {
-        const merchantDocRef = doc(db, "merchants", merchantId);
-        const merchSnap = await getDoc(merchantDocRef);
-        if (!merchSnap.exists()) {
+        const shopExists = shops.some(s => (s.storeName || s.name || '').trim().toLowerCase() === storeName.trim().toLowerCase());
+        if (!shopExists) {
+          const merchantDocRef = doc(db, "merchants", merchantId);
           await setDoc(merchantDocRef, {
             storeName: storeName,
             category: pendingPaymentOrder.items[0]?.category || 'General',
