@@ -744,11 +744,46 @@ function App() {
   const [onboardShopPhone, setOnboardShopPhone] = useState('');
   const [onboardShopEmail, setOnboardShopEmail] = useState('');
   const [onboardShopAddress, setOnboardShopAddress] = useState('');
+  const [onboardShopPassword, setOnboardShopPassword] = useState('');
 
   const [onboardRiderName, setOnboardRiderName] = useState('');
   const [onboardRiderEmail, setOnboardRiderEmail] = useState('');
   const [onboardRiderPhone, setOnboardRiderPhone] = useState('');
   const [onboardRiderVehicle, setOnboardRiderVehicle] = useState('');
+  const [onboardRiderPassword, setOnboardRiderPassword] = useState('');
+
+  const [detectedLat, setDetectedLat] = useState(null);
+  const [detectedLng, setDetectedLng] = useState(null);
+  const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+    setIsDetectingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        setDetectedLat(latitude);
+        setDetectedLng(longitude);
+        setIsDetectingLocation(false);
+        const coordsStr = ` (Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)})`;
+        setOnboardShopAddress(prev => {
+          const base = prev.replace(/\s*\(Lat:.*?, Lng:.*?\)/i, '').trim();
+          return base ? `${base}${coordsStr}` : `Chittorgarh${coordsStr}`;
+        });
+        showToast("Location auto-detected successfully!", "success");
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        setIsDetectingLocation(false);
+        alert(`Failed to detect location: ${error.message}. Please enter address manually.`);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const [shopDocAadhaar, setShopDocAadhaar] = useState(false);
   const [shopDocPan, setShopDocPan] = useState(false);
@@ -2664,7 +2699,7 @@ function App() {
     }
 
     const finalCategory = adminNewProductCategory === 'custom' ? adminCustomCategory.trim() : adminNewProductCategory;
-    const finalStore = adminNewProductStore === 'custom' ? adminCustomStore.trim() : adminNewProductStore || (shops[0]?.storeName || shops[0]?.name || 'PixoGo Store');
+    const finalStore = adminNewProductStore || (shops[0]?.storeName || shops[0]?.name || 'PixoGo Store');
 
     if (!finalCategory) return alert("Please specify a category!");
     if (!finalStore) return alert("Please specify a shop!");
@@ -3564,11 +3599,24 @@ function App() {
 
   const handleMerchantOnboardSubmit = async (e) => {
     e.preventDefault();
-    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress) {
+    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress || !onboardShopPassword) {
       alert("Please fill in all the details for the onboarding request.");
       return;
     }
     const cleanEmail = onboardShopEmail.trim().toLowerCase();
+    if (!cleanEmail.endsWith('@gmail.com')) {
+      alert("Please provide a valid Gmail address ending with @gmail.com.");
+      return;
+    }
+    const phoneClean = onboardShopPhone.replace(/\D/g, '');
+    if (phoneClean.length !== 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (onboardShopPassword.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
     const existingRole = getRoleForEmail(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
@@ -3580,10 +3628,16 @@ function App() {
         id: newShopId,
         storeName: onboardShopName.trim(),
         category: onboardShopCategory,
-        phone: onboardShopPhone.trim(),
+        phone: "+91" + phoneClean,
         address: onboardShopAddress.trim(),
-        email: onboardShopEmail.trim().toLowerCase(),
+        email: cleanEmail,
+        password: onboardShopPassword,
         verified: false,
+        status: 'active',
+        isAcceptingOrders: true,
+        commissionPercent: 10,
+        lat: detectedLat || 24.8887,
+        lng: detectedLng || 74.6269,
         docs: 'Pending',
         createdAt: new Date().toISOString()
       }));
@@ -3592,6 +3646,9 @@ function App() {
       setOnboardShopPhone('');
       setOnboardShopEmail('');
       setOnboardShopAddress('');
+      setOnboardShopPassword('');
+      setDetectedLat(null);
+      setDetectedLng(null);
       setIsSignUp(false); // Switch back to sign in
     } catch (err) {
       console.error("Error submitting shop onboarding request:", err);
@@ -3601,11 +3658,24 @@ function App() {
 
   const handleRiderOnboardSubmit = async (e) => {
     e.preventDefault();
-    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle) {
+    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle || !onboardRiderPassword) {
       alert("Please fill in all the details for the rider onboarding request.");
       return;
     }
     const cleanEmail = onboardRiderEmail.trim().toLowerCase();
+    if (!cleanEmail.endsWith('@gmail.com')) {
+      alert("Please provide a valid Gmail address ending with @gmail.com.");
+      return;
+    }
+    const phoneClean = onboardRiderPhone.replace(/\D/g, '');
+    if (phoneClean.length !== 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (onboardRiderPassword.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
     const existingRole = getRoleForEmail(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
@@ -3616,9 +3686,10 @@ function App() {
       await setDoc(doc(db, "delivery_boys", newRiderId), deepSanitize({
         id: newRiderId,
         name: onboardRiderName.trim(),
-        email: onboardRiderEmail.trim().toLowerCase(),
-        phone: onboardRiderPhone.trim(),
+        email: cleanEmail,
+        phone: "+91" + phoneClean,
         vehicle: onboardRiderVehicle.trim(),
+        password: onboardRiderPassword,
         active: true,
         verified: false, // Pending verification
         totalDeliveries: 0,
@@ -3630,6 +3701,7 @@ function App() {
       setOnboardRiderEmail('');
       setOnboardRiderPhone('');
       setOnboardRiderVehicle('');
+      setOnboardRiderPassword('');
       setIsSignUp(false); // Switch back to sign in
     } catch (err) {
       console.error("Error submitting rider onboarding request:", err);
@@ -5638,102 +5710,6 @@ function App() {
       return (
         <div className={`portal-auth-scene ${portalThemeClass} fade-in`} style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
 
-          {isRider && riderAnnouncement && (
-            <div className="rider-announcement-banner" style={{
-              width: '100%',
-              maxWidth: '450px',
-              padding: '8px 16px',
-              background: hexToRgba(riderAnnouncementColor, 0.05),
-              border: `1px solid ${hexToRgba(riderAnnouncementColor, 0.15)}`,
-              borderRadius: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              overflow: 'hidden',
-              boxShadow: `0 0 10px ${hexToRgba(riderAnnouncementColor, 0.05)}`,
-              marginBottom: '10px'
-            }}>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: '800',
-                color: riderAnnouncementColor,
-                background: hexToRgba(riderAnnouncementColor, 0.15),
-                padding: '3px 8px',
-                borderRadius: '10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center'
-              }}>
-                📢 Notice
-              </span>
-              <marquee
-                behavior="scroll"
-                direction="left"
-                scrollamount="4"
-                style={{
-                  fontSize: '12px',
-                  color: riderAnnouncementColor,
-                  textShadow: `0 0 4px ${hexToRgba(riderAnnouncementColor, 0.3)}`,
-                  fontWeight: '600',
-                  margin: 0,
-                  padding: 0
-                }}
-              >
-                {riderAnnouncement}
-              </marquee>
-            </div>
-          )}
-
-          {isMerchant && merchantAnnouncement && (
-            <div className="merchant-announcement-banner" style={{
-              width: '100%',
-              maxWidth: '450px',
-              padding: '8px 16px',
-              background: hexToRgba(merchantAnnouncementColor, 0.05),
-              border: `1px solid ${hexToRgba(merchantAnnouncementColor, 0.15)}`,
-              borderRadius: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              overflow: 'hidden',
-              boxShadow: `0 0 10px ${hexToRgba(merchantAnnouncementColor, 0.05)}`,
-              marginBottom: '10px'
-            }}>
-              <span style={{
-                fontSize: '11px',
-                fontWeight: '800',
-                color: merchantAnnouncementColor,
-                background: hexToRgba(merchantAnnouncementColor, 0.15),
-                padding: '3px 8px',
-                borderRadius: '10px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center'
-              }}>
-                📢 Notice
-              </span>
-              <marquee
-                behavior="scroll"
-                direction="left"
-                scrollamount="4"
-                style={{
-                  fontSize: '12px',
-                  color: merchantAnnouncementColor,
-                  textShadow: `0 0 4px ${hexToRgba(merchantAnnouncementColor, 0.3)}`,
-                  fontWeight: '600',
-                  margin: 0,
-                  padding: 0
-                }}
-              >
-                {merchantAnnouncement}
-              </marquee>
-            </div>
-          )}
-
           <div className="portal-bg-orbs">
             <div className="orb orb-1"></div>
             <div className="orb orb-2"></div>
@@ -5744,10 +5720,9 @@ function App() {
           </div>
           <div className="portal-auth-card-dark">
             <div className="portal-card-glow-ring"></div>
-            <div className="auth-icon-badge-dark">
+            <div className="auth-icon-badge-dark logo-badge-premium">
               {portalName === 'Admin Console' ? <Shield size={36} className="auth-icon-svg" /> :
-                portalName === 'Delivery Rider' ? <Bike size={36} className="auth-icon-svg" /> :
-                  <Store size={36} className="auth-icon-svg" />}
+                <img src="/logo.jpg" alt="PIXIgo Logo" className="auth-icon-img-premium" />}
             </div>
             <h2 className="auth-portal-title-dark">{portalName}</h2>
             <p className="auth-portal-subtitle-dark">Authentication Required to Access Staff Panel</p>
@@ -5760,26 +5735,34 @@ function App() {
             )}
 
             {portalName === 'Merchant Dashboard' && showSignUpForm ? (
-              <form onSubmit={handleMerchantOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <form onSubmit={handleMerchantOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} autoComplete="off">
+                <div className="onboard-note-premium">
+                  <span className="info-icon">ℹ️</span>
+                  <span>Please fill the details properly. This will be used for business purposes.</span>
+                </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Shop Name</label>
                   <input
                     type="text"
+                    name="pixigo_onboard_shopname"
                     placeholder="e.g. Bake House"
                     value={onboardShopName}
                     onChange={(e) => setOnboardShopName(e.target.value)}
                     className="custom-input-premium"
                     required
+                    autoComplete="off"
                   />
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Category</label>
                   <select
+                    name="pixigo_onboard_category"
                     value={onboardShopCategory}
                     onChange={(e) => setOnboardShopCategory(e.target.value)}
                     className="custom-input-premium"
                     required
                     style={{ width: '100%', padding: '10px', borderRadius: '6px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', color: 'var(--color-text-main)' }}
+                    autoComplete="off"
                   >
                     {categories.slice(1).map(cat => (
                       <option key={cat} value={cat}>{cat}</option>
@@ -5788,35 +5771,85 @@ function App() {
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Phone Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 9251054064"
-                    value={onboardShopPhone}
-                    onChange={(e) => setOnboardShopPhone(e.target.value)}
-                    className="custom-input-premium"
-                    required
-                  />
+                  <div className="prefixed-phone-container-premium">
+                    <span className="phone-prefix-badge-premium">+91</span>
+                    <input
+                      type="text"
+                      name="pixigo_onboard_shopphone"
+                      maxLength={10}
+                      placeholder="9251054064"
+                      value={onboardShopPhone}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setOnboardShopPhone(val);
+                      }}
+                      className="phone-numeric-input-premium"
+                      required
+                      autoComplete="off"
+                    />
+                  </div>
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Merchant Login Email</label>
                   <input
                     type="email"
+                    name="pixigo_onboard_shopemail"
                     placeholder="e.g. owner@gmail.com"
                     value={onboardShopEmail}
                     onChange={(e) => setOnboardShopEmail(e.target.value)}
                     className="custom-input-premium"
                     required
+                    autoComplete="off"
                   />
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Shop Address</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <input
+                      type="text"
+                      name="pixigo_onboard_shopaddress"
+                      placeholder="e.g. C-Scheme, Jaipur"
+                      value={onboardShopAddress}
+                      onChange={(e) => setOnboardShopAddress(e.target.value)}
+                      className="custom-input-premium"
+                      required
+                      autoComplete="off"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleDetectLocation}
+                      disabled={isDetectingLocation}
+                      className="neon-btn small-btn"
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid var(--color-accent-yellow)',
+                        color: 'var(--color-accent-yellow)',
+                        alignSelf: 'center',
+                        minWidth: 'unset',
+                        width: 'auto'
+                      }}
+                    >
+                      📍 {isDetectingLocation ? 'Detecting Location...' : 'Detect Current Location'}
+                    </button>
+                  </div>
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Password</label>
                   <input
-                    type="text"
-                    placeholder="e.g. C-Scheme, Jaipur"
-                    value={onboardShopAddress}
-                    onChange={(e) => setOnboardShopAddress(e.target.value)}
+                    type="password"
+                    name="pixigo_onboard_shoppassword"
+                    placeholder="Choose password (min 6 chars)"
+                    value={onboardShopPassword}
+                    onChange={(e) => setOnboardShopPassword(e.target.value)}
                     className="custom-input-premium"
                     required
+                    autoComplete="new-password"
                   />
                 </div>
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
@@ -5824,49 +5857,81 @@ function App() {
                 </button>
               </form>
             ) : portalName === 'Delivery Rider' && showSignUpForm ? (
-              <form onSubmit={handleRiderOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <form onSubmit={handleRiderOnboardSubmit} className="auth-form-premium" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }} autoComplete="off">
+                <div className="onboard-note-premium">
+                  <span className="info-icon">ℹ️</span>
+                  <span>Please fill the details properly. This will be used for business purposes.</span>
+                </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Rider Name</label>
                   <input
                     type="text"
+                    name="pixigo_onboard_ridername"
                     placeholder="e.g. JohnDoe"
                     value={onboardRiderName}
                     onChange={(e) => setOnboardRiderName(e.target.value)}
                     className="custom-input-premium"
                     required
+                    autoComplete="off"
                   />
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Email ID</label>
                   <input
                     type="email"
-                    placeholder="e.g. john@example.com"
+                    name="pixigo_onboard_rideremail"
+                    placeholder="e.g. john@gmail.com"
                     value={onboardRiderEmail}
                     onChange={(e) => setOnboardRiderEmail(e.target.value)}
                     className="custom-input-premium"
                     required
+                    autoComplete="off"
                   />
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Phone Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 9251054064"
-                    value={onboardRiderPhone}
-                    onChange={(e) => setOnboardRiderPhone(e.target.value)}
-                    className="custom-input-premium"
-                    required
-                  />
+                  <div className="prefixed-phone-container-premium">
+                    <span className="phone-prefix-badge-premium">+91</span>
+                    <input
+                      type="text"
+                      name="pixigo_onboard_riderphone"
+                      maxLength={10}
+                      placeholder="9251054064"
+                      value={onboardRiderPhone}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '');
+                        setOnboardRiderPhone(val);
+                      }}
+                      className="phone-numeric-input-premium"
+                      required
+                      autoComplete="off"
+                    />
+                  </div>
                 </div>
                 <div className="form-group-premium">
                   <label className="form-label-premium">Vehicle Details</label>
                   <input
                     type="text"
+                    name="pixigo_onboard_ridervehicle"
                     placeholder="e.g. Splendor (RJ-14-SG-2024)"
                     value={onboardRiderVehicle}
                     onChange={(e) => setOnboardRiderVehicle(e.target.value)}
                     className="custom-input-premium"
                     required
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Password</label>
+                  <input
+                    type="password"
+                    name="pixigo_onboard_riderpassword"
+                    placeholder="Choose password (min 6 chars)"
+                    value={onboardRiderPassword}
+                    onChange={(e) => setOnboardRiderPassword(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                    autoComplete="new-password"
                   />
                 </div>
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
@@ -8158,18 +8223,7 @@ function App() {
                           {shops.map(s => (
                             <option key={s.id} value={s.storeName || s.name}>{s.storeName || s.name}</option>
                           ))}
-                          <option value="custom">[+ Custom Shop]</option>
                         </select>
-                        {adminNewProductStore === 'custom' && (
-                          <input
-                            type="text"
-                            value={adminCustomStore}
-                            onChange={(e) => setAdminCustomStore(e.target.value)}
-                            className="custom-input"
-                            style={{ marginTop: '8px' }}
-                            placeholder="Enter Custom Shop Name"
-                          />
-                        )}
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
