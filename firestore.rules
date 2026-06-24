@@ -52,7 +52,7 @@ service cloud.firestore {
     // 3. Merchants Collection
     match /merchants/{merchantId} {
       allow read: if true; // Publicly readable for customer browsing
-      allow create: if isAuthenticated(); // Allow self-onboarding/registration request
+      allow create: if true; // Allow self-onboarding/registration request
       allow update: if isAdmin() || (isAuthenticated() && (
         resource.data.authUid == request.auth.uid || 
         resource.data.email == request.auth.token.email
