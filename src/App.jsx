@@ -6695,7 +6695,7 @@ function App() {
             {selectedCategory === 'All' && searchQuery.trim() === '' && (
               <div className="custom-brand-banner-wrap">
                 <img
-                  src="/pixigo_banner.png?v=4.0"
+                  src="/pixigo_banner.png?v=5.0"
                   alt="PIXIgo Delivery Banner"
                   className="custom-brand-banner-img"
                 />

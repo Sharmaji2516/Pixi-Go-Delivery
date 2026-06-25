@@ -6496,9 +6496,10 @@
 
 @media (min-width: 768px) {
   .custom-brand-banner-img {
-    max-width: 500px;
+    max-width: 100%;
     height: auto;
     margin: 0 auto;
+    box-shadow: 0 12px 35px rgba(31, 78, 61, 0.15);
   }
 }
 
