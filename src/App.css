@@ -7216,3 +7216,25 @@
     max-width: 260px !important;
   }
 }
+
+/* Make storefront banner background bleed edge-to-edge on mobile screens */
+@media (max-width: 768px) {
+  .custom-brand-banner-wrap {
+    background: linear-gradient(to right, #1F4E3D 50%, #ffffff 50%) !important;
+    margin: 0 -12px 16px -12px !important;
+    padding: 0 !important;
+    width: calc(100% + 24px) !important;
+    max-width: calc(100% + 24px) !important;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  
+  .custom-brand-banner-img {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    display: block;
+  }
+}
