@@ -2584,8 +2584,8 @@ function App() {
       'Icecream and dessert': 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=150&auto=format&fit=crop&q=60',
       'Medical and fitness': 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=150&auto=format&fit=crop&q=60',
       'Juice and drink': 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=150&auto=format&fit=crop&q=60',
-      'Snacks and breakfast': 'https://images.unsplash.com/photo-1558961309-dbdf0f02b6be?w=150&auto=format&fit=crop&q=60',
-      'Sweets': 'https://images.unsplash.com/photo-1601356616077-695728ecf769?w=150&auto=format&fit=crop&q=60',
+      'Snacks and breakfast': 'https://images.unsplash.com/photo-1544982503-9f984c14501a?w=150&auto=format&fit=crop&q=60',
+      'Sweets': 'https://images.unsplash.com/photo-1605333396915-47ed6b68a00e?w=150&auto=format&fit=crop&q=60',
       'Gifts': 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=150&auto=format&fit=crop&q=60'
     };
     return mapping[category] || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=150&auto=format&fit=crop&q=60';
