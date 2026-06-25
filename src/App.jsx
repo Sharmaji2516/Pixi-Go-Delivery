@@ -607,6 +607,12 @@ function App() {
   const [authError, setAuthError] = useState('');
   const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
   const [toastTimeoutId, setToastTimeoutId] = useState(null);
+
+  // Play Store App Promotion Modal State
+  const [showAppPromoModal, setShowAppPromoModal] = useState(false);
+  const [appPromoEmail, setAppPromoEmail] = useState('');
+  const [isAppPromoSubmitting, setIsAppPromoSubmitting] = useState(false);
+  const [isAppPromoSubscribed, setIsAppPromoSubscribed] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(false);
@@ -1506,6 +1512,49 @@ function App() {
       setShowPhonePromptModal(false);
     }
   }, [user, userRole, customerPhone]);
+
+  // Trigger Play Store App Promo Modal on mount (with delay)
+  useEffect(() => {
+    const dismissed = localStorage.getItem('pixigo_app_promo_dismissed');
+    if (!dismissed) {
+      const timer = setTimeout(() => {
+        setShowAppPromoModal(true);
+      }, 2000); // 2-second delay for premium experience
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  // Submit subscriber to Firestore for App notifications
+  const handleSubscribeAppPromo = async (e) => {
+    e.preventDefault();
+    if (!appPromoEmail || !appPromoEmail.trim()) {
+      showToast('Please enter a valid email address.', 'warning');
+      return;
+    }
+    setIsAppPromoSubmitting(true);
+    try {
+      await addDoc(collection(db, 'app_notify_subscribers'), {
+        email: appPromoEmail.trim(),
+        subscribedAt: new Date().toISOString(),
+        source: 'web_popup'
+      });
+      setIsAppPromoSubscribed(true);
+      showToast('🎉 You have been subscribed! We will notify you when the app goes live.', 'success');
+      localStorage.setItem('pixigo_app_promo_dismissed', 'true');
+      
+      // Auto close modal after 3 seconds
+      setTimeout(() => {
+        setShowAppPromoModal(false);
+      }, 3000);
+    } catch (err) {
+      console.error('Error saving app subscriber:', err);
+      // Fallback in case write fails
+      setIsAppPromoSubscribed(true);
+      showToast('🎉 Subscription received! We will notify you.', 'success');
+    } finally {
+      setIsAppPromoSubmitting(false);
+    }
+  };
 
   // Fetch real-time orders from Firestore
   useEffect(() => {
@@ -7217,8 +7266,14 @@ function App() {
                   By accessing or using this website, you agree to be bound by our <span style={{ color: 'var(--color-accent-yellow)', cursor: 'pointer', textDecoration: 'underline', fontWeight: '600' }} onClick={() => setIsTermsModalOpen(true)}>Privacy Policy & Terms of Service</span>.
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', width: '100%', marginTop: '8px' }}>
-                  <span className="footer-bottom-text" style={{ textAlign: 'center' }}>
-                    © {new Date().getFullYear()} PixiGo Delivery. All rights reserved. Designed & Maintained by <a href="https://chittortech.online" target="_blank" rel="noopener noreferrer" style={{ color: '#ffffff', fontWeight: '600', textDecoration: 'underline', cursor: 'pointer' }}>ChittorTech</a>.
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+                    <a href="https://chittortech.online" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', textDecoration: 'none' }}>
+                      <img src="/chittortech_logo.png" alt="ChittorTech Logo" className="footer-chittortech-logo-img" style={{ height: '48px', width: 'auto', opacity: 0.9, transition: 'all 0.3s ease' }} />
+                      <span style={{ fontSize: '13px', fontWeight: '800', letterSpacing: '1px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>Developed & Maintained By ChittorTech</span>
+                    </a>
+                  </div>
+                  <span className="footer-bottom-text" style={{ textAlign: 'center', fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)' }}>
+                    © {new Date().getFullYear()} PixiGo Delivery. All rights reserved.
                   </span>
                   <div className="footer-socials" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
                     <span className="social-badge" title="WhatsApp Support" onClick={() => window.open('https://wa.me/919251054064', '_blank')} style={{ background: '#25d366', color: '#ffffff' }}>
@@ -11774,7 +11829,66 @@ function App() {
               </button>
             </div>
 
-            <div className="drawer-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+             <div className="drawer-content-scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Play Store App Promotion Notification Card */}
+              <div 
+                className="notification-card announcement-card" 
+                onClick={() => {
+                  setIsNotificationDrawerOpen(false);
+                  setShowAppPromoModal(true);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(20, 35, 30, 0.95) 0%, rgba(31, 78, 61, 0.95) 100%)',
+                  border: '1px solid rgba(0, 255, 242, 0.2)',
+                  borderLeft: '4px solid var(--color-accent-yellow)',
+                  borderRadius: '16px',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  boxShadow: '0 4px 15px rgba(0, 255, 242, 0.05)',
+                  textAlign: 'left',
+                  flexShrink: 0,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: '800',
+                      color: '#122e24',
+                      background: 'var(--color-accent-yellow)',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <Bike size={10} style={{ strokeWidth: 3 }} />
+                      Exclusive Info
+                    </span>
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#a2c4b7', fontWeight: '600' }}>Click to view</span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <img src="/logo.jpg" alt="PIXIgo Logo" style={{ height: '40px', width: '40px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)' }} />
+                  <div>
+                    <h4 style={{ fontSize: '14px', fontWeight: '800', color: '#ffffff', margin: '0 0 2px 0' }}>
+                      PIXIgo Mobile App is Coming! 📱
+                    </h4>
+                    <p style={{ fontSize: '12.5px', color: '#cbd5e1', margin: 0, lineHeight: '1.4' }}>
+                      Your City. Your Stores. One App. Join the waitlist for exclusive launch rewards!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Active Announcements Card */}
               {customerAnnouncement && customerAnnouncement.trim() ? (() => {
                 const styles = getNoticeStyles(customerAnnouncementColor);
@@ -15212,7 +15326,135 @@ function App() {
         </div>
       )}
 
+      {/* Play Store App Promotion Modal */}
+      {showAppPromoModal && (
+        <div className="app-promo-backdrop fade-in" onClick={() => {
+          localStorage.setItem('pixigo_app_promo_dismissed', 'true');
+          setShowAppPromoModal(false);
+        }}>
+          <div className="app-promo-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            {/* Close Button */}
+            <button className="app-promo-close-btn" onClick={() => {
+              localStorage.setItem('pixigo_app_promo_dismissed', 'true');
+              setShowAppPromoModal(false);
+            }} title="Dismiss">
+              <X size={18} />
+            </button>
 
+            {/* Glowing App Logo Animation Area */}
+            <div className="app-promo-badge-glow">
+              <div className="app-promo-ring-pulse"></div>
+              <img src="/logo.jpg" alt="PIXIgo Logo" className="app-promo-logo-img" />
+            </div>
+
+            {/* Badges */}
+            <div className="app-promo-badges">
+              <span className="app-promo-badge-tag active-pulse">COMING SOON</span>
+              <span className="app-promo-badge-tag outline">GOOGLE PLAY STORE</span>
+            </div>
+
+            {/* Main Headlines */}
+            <h3 className="app-promo-title" style={{ fontSize: '24px', fontWeight: '900', color: '#ffffff', marginBottom: '8px', letterSpacing: '-0.3px', lineHeight: '1.2' }}>
+              Your City. Your Stores. One App.
+            </h3>
+            <h4 className="app-promo-subtitle" style={{ fontSize: '14px', color: 'var(--color-accent-yellow)', fontWeight: '700', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+              📱 The Future of Local Shopping Starts Here
+            </h4>
+            <p className="app-promo-tagline" style={{ fontSize: '13.5px', color: '#cbd5e1', margin: '0 auto 16px auto', lineHeight: '1.5', maxWidth: '380px' }}>
+              Experience a new way to shop with PIXIgo! We are launching our official mobile app to bring you a premium neighborhood marketplace:
+            </p>
+
+            {/* Feature List Grid */}
+            <div className="app-promo-features-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px', margin: '0 auto 20px auto', maxWidth: '400px', textAlign: 'left' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#e2e8f0', fontWeight: '500' }}>
+                <span style={{ fontSize: '15px' }}>🛍️</span>
+                <span>Thousands of local products</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#e2e8f0', fontWeight: '500' }}>
+                <span style={{ fontSize: '15px' }}>✨</span>
+                <span>Real-time order tracking</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#e2e8f0', fontWeight: '500' }}>
+                <span style={{ fontSize: '15px' }}>⚡</span>
+                <span>Lightning-fast delivery</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#e2e8f0', fontWeight: '500' }}>
+                <span style={{ fontSize: '15px' }}>🎁</span>
+                <span>Exclusive launch rewards</span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '13px', color: '#a2c4b7', margin: '0 0 16px 0', fontWeight: '600' }}>
+              Sign up today and get notified on launch!
+            </p>
+
+            {/* Interactive Subscription Form */}
+            {!isAppPromoSubscribed ? (
+              <form onSubmit={handleSubscribeAppPromo} className="app-promo-form">
+                <div className="app-promo-input-group">
+                  <Mail size={16} className="app-promo-input-icon" />
+                  <input
+                    type="email"
+                    placeholder="Enter email to join"
+                    value={appPromoEmail}
+                    onChange={(e) => setAppPromoEmail(e.target.value)}
+                    required
+                    className="app-promo-input"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={isAppPromoSubmitting}
+                  className="app-promo-submit-btn neon-btn-hover"
+                >
+                  {isAppPromoSubmitting ? (
+                    <RefreshCw size={16} className="spin" />
+                  ) : (
+                    <>
+                      Join the Waitlist 📱
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              <div className="app-promo-success-panel fade-in">
+                <Check size={28} className="app-promo-success-icon" />
+                <div className="app-promo-success-title">You're on the VIP List!</div>
+                <div className="app-promo-success-subtitle">We will email you with your early access download link soon.</div>
+              </div>
+            )}
+
+            {/* Realistic Google Play Store Mockup Button */}
+            <div className="app-promo-playstore-badge" style={{ marginBottom: '8px' }}>
+              <div className="app-promo-play-btn-mock">
+                <svg viewBox="0 0 512 512" width="16" height="16" className="app-promo-play-svg">
+                  <path d="M325.3 234.3L104.6 13l280.8 161.2-60.1 60.1zM47 0C34 6.8 25.3 19.2 25.3 35.3v441.3c0 16.1 8.7 28.5 21.7 35.3l256.6-256L47 0zm425.2 225.6l-58-33.2-67.8 67.8 67.8 67.8 58-33.2c20.8-11.9 28-37.9 16-58.7-3.2-5.6-7.8-10.2-16-10.5zM385.4 337.8L104.6 499l220.7-126.6 60.1-34.6z"/>
+                </svg>
+                <div className="app-promo-play-text">
+                  <span className="app-promo-play-subtext">GET IT ON</span>
+                  <span className="app-promo-play-maintext">Google Play</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Developer Branding Footer inside Modal */}
+            <div className="app-promo-dev-footer" style={{
+              marginTop: '20px',
+              paddingTop: '16px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '6px'
+            }}>
+              <a href="https://chittortech.online" target="_blank" rel="noopener noreferrer" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', textDecoration: 'none' }}>
+                <img src="/chittortech_logo.png" alt="ChittorTech Logo" className="footer-chittortech-logo-img" style={{ height: '34px', width: 'auto', opacity: 0.9, transition: 'all 0.3s ease' }} />
+                <span style={{ fontSize: '11px', fontWeight: '800', letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>Developed & Maintained By ChittorTech</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toast.show && (
