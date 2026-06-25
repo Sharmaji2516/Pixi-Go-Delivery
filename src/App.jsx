@@ -1610,7 +1610,29 @@ function App() {
       });
       // Sort merged orders locally
       mergedOrders.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-      setOrders(mergedOrders);
+
+      // Preserve any local status changes that are more final than what Firestore returned.
+      // This prevents optimistic updates (cancel, accept, etc.) from being overwritten
+      // by a stale snapshot that fires before the Firestore write round-trip completes.
+      setOrders(prev => {
+        const localStatusMap = {};
+        prev.forEach(o => { localStatusMap[o.id] = o.status; });
+        return mergedOrders.map(o => {
+          const localStatus = localStatusMap[o.id];
+          // If local state already has a "more final" status for this order, keep it
+          if (localStatus && localStatus !== o.status) {
+            const localIsFinal = localStatus?.startsWith('CANCELLED') ||
+              localStatus === 'ACCEPTED' ||
+              localStatus === 'COMPLETED' ||
+              localStatus === 'OUT_FOR_DELIVERY' ||
+              localStatus === 'READY_FOR_PICKUP';
+            if (localIsFinal && o.status === 'PLACED') {
+              return { ...o, status: localStatus };
+            }
+          }
+          return o;
+        });
+      });
     }, (error) => {
       console.error("Firestore order subscription error/warning:", error.message);
       setDbError(error.message);
@@ -3214,27 +3236,39 @@ function App() {
       return;
     }
 
-    // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'CANCELLED_BY_ADMIN' } : o));
+    if (!order.firestoreId) {
+      // Local/mock order — just update local state
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED_BY_ADMIN' } : o));
+      if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
+        setSelectedOrderDetails(prev => prev ? { ...prev, status: 'CANCELLED_BY_ADMIN' } : null);
+      }
+      showToast(`Order ${orderId} Cancelled.`);
+      return;
+    }
+
+    // Optimistic local update immediately so UI feels instant
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED_BY_ADMIN' } : o));
     if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
       setSelectedOrderDetails(prev => prev ? { ...prev, status: 'CANCELLED_BY_ADMIN' } : null);
     }
 
-    if (order.firestoreId) {
-      try {
-        const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, {
-          status: 'CANCELLED_BY_ADMIN',
-          cancelledBy: 'Admin',
-          cancelledAt: new Date().toISOString()
-        });
-        showToast(`Order ${orderId} Cancelled by Admin.`);
-      } catch (err) {
-        console.error("Error updating order status in Firestore:", err);
-        alert(`Failed to cancel order in database: ${err.message}`);
+    try {
+      const orderRef = doc(db, "orders", order.firestoreId);
+      await updateDoc(orderRef, {
+        status: 'CANCELLED_BY_ADMIN',
+        cancelledBy: 'Admin',
+        cancelledAt: new Date().toISOString()
+      });
+      // onSnapshot will fire and re-sync state from Firestore automatically
+      showToast(`Order ${orderId} Cancelled by Admin.`);
+    } catch (err) {
+      console.error("Error updating order status in Firestore:", err);
+      // Revert optimistic update on failure
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: order.status } : o));
+      if (selectedOrderDetails && selectedOrderDetails.id === orderId) {
+        setSelectedOrderDetails(prev => prev ? { ...prev, status: order.status } : null);
       }
-    } else {
-      showToast(`Order ${orderId} Cancelled.`);
+      alert(`Failed to cancel order in database: ${err.message}`);
     }
   };
 
@@ -8098,6 +8132,16 @@ function App() {
                                   <span style={{ fontSize: '11px', color: 'var(--color-warning)', fontWeight: '600' }}>
                                     Awaiting Merchant...
                                   </span>
+                                )}
+                                {/* Admin Cancel button — available for ALL active (non-cancelled, non-completed) statuses */}
+                                {!o.status?.toUpperCase().startsWith('CANCEL') && o.status !== 'COMPLETED' && (
+                                  <button
+                                    className="neon-btn small-btn"
+                                    onClick={(e) => { e.stopPropagation(); handleAdminCancelOrder(o.id); }}
+                                    style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: '#fff' }}
+                                  >
+                                    Cancel Order
+                                  </button>
                                 )}
                                 <a
                                   href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
