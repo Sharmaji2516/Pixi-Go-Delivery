@@ -2571,6 +2571,26 @@ function App() {
     return mapping[category] || '📦';
   };
 
+  const getCategoryPhoto = (category) => {
+    const mapping = {
+      'All': 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=150&auto=format&fit=crop&q=60',
+      'PixiGo Store': 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=150&auto=format&fit=crop&q=60',
+      'General Store': 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=150&auto=format&fit=crop&q=60',
+      'Vegetable': 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=150&auto=format&fit=crop&q=60',
+      'Dairy': 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=150&auto=format&fit=crop&q=60',
+      'Bakery': 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=150&auto=format&fit=crop&q=60',
+      'Fast Food': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=150&auto=format&fit=crop&q=60',
+      'Restaurant Cafe': 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=150&auto=format&fit=crop&q=60',
+      'Icecream and dessert': 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=150&auto=format&fit=crop&q=60',
+      'Medical and fitness': 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=150&auto=format&fit=crop&q=60',
+      'Juice and drink': 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=150&auto=format&fit=crop&q=60',
+      'Snacks and breakfast': 'https://images.unsplash.com/photo-1531113417409-1a934ae257c2?w=150&auto=format&fit=crop&q=60',
+      'Sweets': 'https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=150&auto=format&fit=crop&q=60',
+      'Gifts': 'https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=150&auto=format&fit=crop&q=60'
+    };
+    return mapping[category] || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=150&auto=format&fit=crop&q=60';
+  };
+
   const getCategoryProductCount = (category) => {
     if (category === 'All') {
       return products.filter(p => p.approved !== false).length;
@@ -6716,7 +6736,9 @@ function App() {
                         className={`category-sidebar-item ${selectedCategory === cat ? 'active' : ''}`}
                         onClick={() => handleSelectCategory(cat)}
                       >
-                        <span className="category-item-icon">{emoji}</span>
+                        <span className="category-item-icon" style={{ marginRight: '8px', display: 'flex', alignItems: 'center' }}>
+                          <img src={getCategoryPhoto(cat)} alt={cat} className="category-sidebar-img" style={{ width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', border: '1px solid rgba(0,0,0,0.06)' }} />
+                        </span>
                         <span className="category-item-name">{cat}</span>
                         <span className="category-item-count">{count}</span>
                       </button>
@@ -6825,8 +6847,8 @@ function App() {
                             className={`custom-category-card ${selectedCategory === cat ? 'active' : ''}`}
                             onClick={() => handleSelectCategory(cat)}
                           >
-                            <div className={`custom-category-icon-wrap ${bgClass}`}>
-                              {emoji}
+                            <div className="custom-category-image-wrap">
+                              <img src={getCategoryPhoto(cat)} alt={cat} className="custom-category-img" />
                             </div>
                             <span className="custom-category-name">{cat}</span>
                           </div>
