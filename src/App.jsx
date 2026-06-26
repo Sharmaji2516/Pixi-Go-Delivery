@@ -1595,12 +1595,40 @@ function App() {
         where("status", "==", "READY_FOR_PICKUP")
       ));
     } else if (userRole === 'customer' && user) {
-      q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"), limit(50));
+      const emailVal = (user.email || customerEmail || '').trim().toLowerCase();
+      const phoneVal = (customerPhone || '').trim();
+      
+      const conditions = [
+        where("customerId", "==", user.uid)
+      ];
+      if (emailVal && emailVal !== 'pixigodelivery@gmail.com') {
+        conditions.push(where("customerEmail", "==", emailVal));
+      }
+      if (phoneVal && phoneVal !== '9251054064') {
+        conditions.push(where("customerPhone", "==", phoneVal));
+      }
+      
+      q = query(ordersRef, or(...conditions), orderBy("createdAt", "desc"), limit(50));
     } else {
       // Guest / Anonymous user
+      const conditions = [];
       if (guestOrderIds && guestOrderIds.length > 0) {
         const sliceIds = guestOrderIds.slice(0, 30);
-        q = query(ordersRef, where("id", "in", sliceIds));
+        conditions.push(where("id", "in", sliceIds));
+      }
+      
+      const emailVal = (customerEmail || '').trim().toLowerCase();
+      if (emailVal && emailVal !== 'pixigodelivery@gmail.com') {
+        conditions.push(where("customerEmail", "==", emailVal));
+      }
+      
+      const phoneVal = (customerPhone || '').trim();
+      if (phoneVal && phoneVal !== '9251054064') {
+        conditions.push(where("customerPhone", "==", phoneVal));
+      }
+      
+      if (conditions.length > 0) {
+        q = query(ordersRef, or(...conditions), orderBy("createdAt", "desc"), limit(50));
       }
     }
 
