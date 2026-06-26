@@ -902,9 +902,9 @@ function App() {
       netProfit: todayOrders.reduce((acc, o) => {
         const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
         if (isCancelled) return acc;
-        const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
-        const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
-        return acc + ((o.commissionAmount || 0) - riderPayout - discountPixigo);
+        const riderPayoutVal = o.riderPayout !== undefined ? o.riderPayout : (o.deliveryCharge || 0);
+        const netMerchEarning = o.netMerchantEarning !== undefined ? o.netMerchantEarning : ((o.totalAmount || 0) - (o.deliveryCharge || 0) - (o.commissionAmount || 0));
+        return acc + ((o.totalAmount || 0) - netMerchEarning - riderPayoutVal);
       }, 0)
     };
 
@@ -2692,10 +2692,9 @@ function App() {
     netProfit: orders.reduce((acc, o) => {
       const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
       if (isCancelled) return acc;
-      // Net Profit = Total Commission - Total Delivery Boy Payouts - PixiGo Sponsored discounts
-      const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
-      const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
-      return acc + (o.commissionAmount - riderPayout - discountPixigo);
+      const riderPayoutVal = o.riderPayout !== undefined ? o.riderPayout : (o.deliveryCharge || 0);
+      const netMerchEarning = o.netMerchantEarning !== undefined ? o.netMerchantEarning : ((o.totalAmount || 0) - (o.deliveryCharge || 0) - (o.commissionAmount || 0));
+      return acc + ((o.totalAmount || 0) - netMerchEarning - riderPayoutVal);
     }, 0)
   };
 
