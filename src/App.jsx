@@ -3838,7 +3838,7 @@ function App() {
 
   const handleMerchantOnboardSubmit = async (e) => {
     e.preventDefault();
-    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress || !onboardShopPassword) {
+    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress) {
       alert("Please fill in all the details for the onboarding request.");
       return;
     }
@@ -3850,10 +3850,6 @@ function App() {
     const phoneClean = onboardShopPhone.replace(/\D/g, '');
     if (phoneClean.length !== 10) {
       alert("Please enter a valid 10-digit phone number.");
-      return;
-    }
-    if (onboardShopPassword.length < 6) {
-      alert("Password must be at least 6 characters long.");
       return;
     }
     const existingRole = getRoleForEmail(cleanEmail);
@@ -3870,7 +3866,7 @@ function App() {
         phone: "+91" + phoneClean,
         address: onboardShopAddress.trim(),
         email: cleanEmail,
-        password: onboardShopPassword,
+        password: '',
         verified: false,
         status: 'active',
         isAcceptingOrders: true,
@@ -3897,7 +3893,7 @@ function App() {
 
   const handleRiderOnboardSubmit = async (e) => {
     e.preventDefault();
-    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle || !onboardRiderPassword) {
+    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle) {
       alert("Please fill in all the details for the rider onboarding request.");
       return;
     }
@@ -3909,10 +3905,6 @@ function App() {
     const phoneClean = onboardRiderPhone.replace(/\D/g, '');
     if (phoneClean.length !== 10) {
       alert("Please enter a valid 10-digit phone number.");
-      return;
-    }
-    if (onboardRiderPassword.length < 6) {
-      alert("Password must be at least 6 characters long.");
       return;
     }
     const existingRole = getRoleForEmail(cleanEmail);
@@ -3928,7 +3920,7 @@ function App() {
         email: cleanEmail,
         phone: "+91" + phoneClean,
         vehicle: onboardRiderVehicle.trim(),
-        password: onboardRiderPassword,
+        password: '',
         active: true,
         verified: false, // Pending verification
         totalDeliveries: 0,
@@ -6211,18 +6203,11 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <div className="form-group-premium">
-                  <label className="form-label-premium">Password</label>
-                  <input
-                    type="password"
-                    name="pixigo_onboard_shoppassword"
-                    placeholder="Choose password (min 6 chars)"
-                    value={onboardShopPassword}
-                    onChange={(e) => setOnboardShopPassword(e.target.value)}
-                    className="custom-input-premium"
-                    required
-                    autoComplete="new-password"
-                  />
+                <div className="onboard-note-premium" style={{ marginTop: '12px', background: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-accent-yellow)' }}>
+                  <span className="info-icon">🔑</span>
+                  <span style={{ color: 'var(--color-accent-yellow)', fontSize: '12px' }}>
+                    The login email and password for this console will be sent to you via WhatsApp or Email after approval by the admin.
+                  </span>
                 </div>
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
                   Submit Onboarding Request
@@ -6293,18 +6278,11 @@ function App() {
                     autoComplete="off"
                   />
                 </div>
-                <div className="form-group-premium">
-                  <label className="form-label-premium">Password</label>
-                  <input
-                    type="password"
-                    name="pixigo_onboard_riderpassword"
-                    placeholder="Choose password (min 6 chars)"
-                    value={onboardRiderPassword}
-                    onChange={(e) => setOnboardRiderPassword(e.target.value)}
-                    className="custom-input-premium"
-                    required
-                    autoComplete="new-password"
-                  />
+                <div className="onboard-note-premium" style={{ marginTop: '12px', background: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-accent-yellow)' }}>
+                  <span className="info-icon">🔑</span>
+                  <span style={{ color: 'var(--color-accent-yellow)', fontSize: '12px' }}>
+                    The login email and password for this console will be sent to you via WhatsApp or Email after approval by the admin.
+                  </span>
                 </div>
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
                   Submit Onboarding Request
