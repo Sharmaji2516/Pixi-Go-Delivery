@@ -5924,35 +5924,64 @@ function App() {
                     {/* Payment Instruction Blocks */}
                     {selectedPayment === 'UPI' && (
                       <div className="payment-instructions-card upi border-glow fade-in" style={{ marginTop: '12px' }}>
-                        <p className="payment-instruction-text warning-text" style={{ fontSize: '12px', color: '#ff7043', lineHeight: '1.45', margin: '0 0 10px 0', background: 'rgba(255, 112, 67, 0.06)', border: '1px solid rgba(255, 112, 67, 0.15)', padding: '10px 12px', borderRadius: '8px' }}>
+                        <p className="payment-instruction-text warning-text" style={{ fontSize: '12px', color: '#ff5252', lineHeight: '1.45', margin: '0 0 10px 0', background: 'rgba(255, 82, 82, 0.08)', border: '1px solid rgba(255, 82, 82, 0.18)', padding: '10px 12px', borderRadius: '8px' }}>
                           ⚠️ <strong>Crucial Instruction:</strong> You have to pay the amount <strong>only after</strong> the delivery partner arrives at your home. Do not pay/transfer any amount before they reach your location.
                         </p>
                         
-                        <div className="upi-payment-details-box" style={{ background: 'rgba(0, 0, 0, 0.2)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.03)' }}>
-                          <div className="upi-details-header" style={{ fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '10px', textAlign: 'center', borderBottom: '1px dashed rgba(255,255,255,0.06)', paddingBottom: '6px' }}>
+                        <div className="upi-payment-details-box" style={{ background: '#0a110e', padding: '14px', borderRadius: '12px', border: '1px solid rgba(31, 78, 61, 0.3)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
+                          <div className="upi-details-header" style={{ fontSize: '12px', fontWeight: '800', color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '12px', textAlign: 'center', borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
                             Scan to Pay on Delivery
                           </div>
-                          <div className="upi-details-body" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                            <div className="upi-qr-code-container" style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                          <div className="upi-details-body" style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                            <div className="upi-qr-code-container" style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
                               <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=pixigodelivery@paytm&pn=Pixo%20Go%20Hub%20(${encodeURIComponent(storeName)})&am=${totalAmount.toFixed(2)}&cu=INR`)}`} 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=paytm.s27imms@pty&pn=SHAKTI%20SINGH%20RATHOR&am=${totalAmount.toFixed(2)}&cu=INR`)}`} 
                                 alt="UPI Payment QR Code"
                                 style={{ width: '100px', height: '100px', display: 'block' }}
                               />
                             </div>
-                            <div className="upi-text-details" style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                            <div className="upi-text-details" style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: 0 }}>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>Receiver:</span>
-                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#ffffff' }}>Pixo Go Hub ({storeName})</span>
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Receiver:</span>
+                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title="SHAKTI SINGH RATHOR">SHAKTI SINGH RATHOR</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>UPI ID:</span>
-                                <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#00fff2', fontFamily: 'monospace' }}>pixigodelivery@paytm</span>
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Phone Number:</span>
+                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#ffffff' }}>7357681538</span>
                               </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px', marginTop: '2px' }}>
-                                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>Amount:</span>
-                                <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--color-accent-yellow)' }}>₹{totalAmount}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>UPI ID:</span>
+                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#00fff2', fontFamily: 'monospace', overflowWrap: 'anywhere' }}>paytm.s27imms@pty</span>
                               </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '6px', marginTop: '2px' }}>
+                                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Amount:</span>
+                                <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--color-accent-yellow)' }}>₹{totalAmount}</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText('paytm.s27imms@pty');
+                                  showToast("📋 UPI ID copied to clipboard!", "success");
+                                }}
+                                style={{
+                                  marginTop: '4px',
+                                  background: 'rgba(0, 255, 242, 0.08)',
+                                  border: '1px solid rgba(0, 255, 242, 0.2)',
+                                  color: '#00fff2',
+                                  fontSize: '10px',
+                                  fontWeight: '700',
+                                  padding: '4px 8px',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  width: 'fit-content',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                📋 Copy UPI ID
+                              </button>
                             </div>
                           </div>
                         </div>
