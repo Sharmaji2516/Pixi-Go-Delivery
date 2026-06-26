@@ -4944,6 +4944,25 @@ function App() {
       targetEmail = `${targetEmail.toLowerCase().replace(/\s+/g, '')}@pixigo.com`;
     }
 
+    const existingRole = getRoleForEmail(targetEmail);
+    let isSameUser = false;
+    if (type === 'merchant') {
+      const merchant = shops.find(s => s.id === id);
+      if (merchant && existingRole === 'merchant' && (merchant.email || '').trim().toLowerCase() === targetEmail.toLowerCase()) {
+        isSameUser = true;
+      }
+    } else if (type === 'rider') {
+      const rider = deliveryPartners.find(d => d.id === id);
+      if (rider && existingRole === 'rider' && (rider.email || '').trim().toLowerCase() === targetEmail.toLowerCase()) {
+        isSameUser = true;
+      }
+    }
+
+    if (existingRole && !isSameUser) {
+      alert(`Cannot create account: This email address is already registered as a ${existingRole}. Each email can only have one role.`);
+      return;
+    }
+
     try {
       showToast("Creating auth account... Please wait.");
 
@@ -6390,31 +6409,29 @@ function App() {
         </div>
       );
     }
-    if (portalName === 'Delivery Rider') {
-      const currentRider = deliveryPartners.find(d => d.id === user.uid || d.email === user.email);
-
-      if (!currentRider) {
-        if (userRole !== 'admin') {
-          return (
-            <div className="portal-auth-scene portal-theme-delivery fade-in">
-              <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
-              <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
-                <div className="portal-card-glow-ring"></div>
-                <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
-                  <AlertCircle size={36} style={{ color: '#ef4444' }} />
-                </div>
-                <h2 className="auth-portal-title-dark">Access Denied</h2>
-                <p className="auth-portal-subtitle-dark">
-                  You are not registered as an authorized Delivery Rider. Please contact the Admin.
-                </p>
-                <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-                  Logout & Sign In Again
-                </button>
-              </div>
+    if (portalName === 'Admin Console' && userRole !== 'admin') {
+      return (
+        <div className="portal-auth-scene portal-theme-admin fade-in">
+          <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+          <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+            <div className="portal-card-glow-ring"></div>
+            <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
+              <AlertCircle size={36} style={{ color: '#ef4444' }} />
             </div>
-          );
-        }
-      } else if (currentRider.isActive === false) {
+            <h2 className="auth-portal-title-dark">Access Denied</h2>
+            <p className="auth-portal-subtitle-dark">
+              You are not registered as an authorized Administrator. Please contact support.
+            </p>
+            <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
+              Logout & Sign In Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    if (portalName === 'Delivery Rider') {
+      if (userRole !== 'rider') {
         return (
           <div className="portal-auth-scene portal-theme-delivery fade-in">
             <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
@@ -6425,52 +6442,97 @@ function App() {
               </div>
               <h2 className="auth-portal-title-dark">Access Denied</h2>
               <p className="auth-portal-subtitle-dark">
-                Your Rider account (<strong>{currentRider.name}</strong>) is currently deactivated/blocked by the Administrator. Please contact support.
+                You are not registered as an authorized Delivery Rider. Please contact the Admin.
               </p>
               <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-                Logout
-              </button>
-            </div>
-          </div>
-        );
-      } else if (!currentRider.verified) {
-        return (
-          <div className="portal-auth-scene portal-theme-delivery fade-in">
-            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
-            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
-              <div className="portal-card-glow-ring"></div>
-              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245,158,11,0.4)' }}>
-                <Activity size={36} style={{ color: '#f59e0b' }} />
-              </div>
-              <h2 className="auth-portal-title-dark">Approval Pending</h2>
-              <p className="auth-portal-subtitle-dark">
-                Your Rider account (<strong>{currentRider.name}</strong>) is currently pending admin verification. Your account verification is in process, please wait some time.
-              </p>
-              <div className="divider" style={{ margin: '20px 0' }}></div>
-              <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.65)', marginBottom: '16px' }}>
-                Please message the Administrator to authorize your account:
-              </p>
-              <button
-                className="neon-btn"
-                onClick={() => {
-                  const adminPhone = '919251054064';
-                  const message = `Hello Admin, I have registered as a rider (${currentRider.name}). Please verify my account on the PixiGo console.`;
-                  window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                }}
-                style={{ background: '#25D366', color: '#fff', border: 'none', width: '100%', marginBottom: '12px' }}
-              >
-                Message Admin on WhatsApp
-              </button>
-              <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%', color: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
-                Logout
+                Logout & Sign In Again
               </button>
             </div>
           </div>
         );
       }
+
+      const currentRider = deliveryPartners.find(d => d.id === user.uid || d.email === user.email);
+      if (currentRider) {
+        if (currentRider.isActive === false) {
+          return (
+            <div className="portal-auth-scene portal-theme-delivery fade-in">
+              <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+              <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+                <div className="portal-card-glow-ring"></div>
+                <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
+                  <AlertCircle size={36} style={{ color: '#ef4444' }} />
+                </div>
+                <h2 className="auth-portal-title-dark">Access Denied</h2>
+                <p className="auth-portal-subtitle-dark">
+                  Your Rider account (<strong>{currentRider.name}</strong>) is currently deactivated/blocked by the Administrator. Please contact support.
+                </p>
+                <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
+                  Logout
+                </button>
+              </div>
+            </div>
+          );
+        } else if (!currentRider.verified) {
+          return (
+            <div className="portal-auth-scene portal-theme-delivery fade-in">
+              <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+              <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+                <div className="portal-card-glow-ring"></div>
+                <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245,158,11,0.4)' }}>
+                  <Activity size={36} style={{ color: '#f59e0b' }} />
+                </div>
+                <h2 className="auth-portal-title-dark">Approval Pending</h2>
+                <p className="auth-portal-subtitle-dark">
+                  Your Rider account (<strong>{currentRider.name}</strong>) is currently pending admin verification. Your account verification is in process, please wait some time.
+                </p>
+                <div className="divider" style={{ margin: '20px 0' }}></div>
+                <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.65)', marginBottom: '16px' }}>
+                  Please message the Administrator to authorize your account:
+                </p>
+                <button
+                  className="neon-btn"
+                  onClick={() => {
+                    const adminPhone = '919251054064';
+                    const message = `Hello Admin, I have registered as a rider (${currentRider.name}). Please verify my account on the PixiGo console.`;
+                    window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                  }}
+                  style={{ background: '#25D366', color: '#fff', border: 'none', width: '100%', marginBottom: '12px' }}
+                >
+                  Message Admin on WhatsApp
+                </button>
+                <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%', color: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
+                  Logout
+                </button>
+              </div>
+            </div>
+          );
+        }
+      }
     }
 
     if (portalName === 'Merchant Dashboard') {
+      if (userRole !== 'merchant') {
+        return (
+          <div className="portal-auth-scene portal-theme-merchant fade-in">
+            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+              <div className="portal-card-glow-ring"></div>
+              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
+                <AlertCircle size={36} style={{ color: '#ef4444' }} />
+              </div>
+              <h2 className="auth-portal-title-dark">Access Denied</h2>
+              <p className="auth-portal-subtitle-dark">
+                You are not registered as an authorized Merchant Partner. Please contact the Admin.
+              </p>
+              <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
+                Logout & Sign In Again
+              </button>
+            </div>
+          </div>
+        );
+      }
+
       const currentMerchant = shops.find(s => (s.email && s.email.toLowerCase() === user.email.toLowerCase()) || (s.id === user.uid));
       if (currentMerchant && !currentMerchant.verified) {
         return (
