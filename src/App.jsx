@@ -584,7 +584,9 @@ function App() {
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('COD');
-  const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
+  const [currentOrderTracking, setCurrentOrderTracking] = useState(() => {
+    return localStorage.getItem('pixigo_last_tracked_order_id') || null;
+  });
   const [uploadStatus, setUploadStatus] = useState({});
   const [reroutingOrderId, setReroutingOrderId] = useState(null);
   const [rerouteSelectedShop, setRerouteSelectedShop] = useState('');
@@ -616,7 +618,9 @@ function App() {
   const [isAppPromoSubscribed, setIsAppPromoSubscribed] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(false);
+  const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(() => {
+    return localStorage.getItem('pixigo_is_tracking_drawer_open') === 'true';
+  });
   const [activeQrModalOrder, setActiveQrModalOrder] = useState(null);
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
@@ -1223,6 +1227,19 @@ function App() {
   };
 
   // --- SIDE EFFECTS (useEffect) ---
+
+  // Persist tracking states in localStorage
+  useEffect(() => {
+    if (currentOrderTracking) {
+      localStorage.setItem('pixigo_last_tracked_order_id', currentOrderTracking);
+    } else {
+      localStorage.removeItem('pixigo_last_tracked_order_id');
+    }
+  }, [currentOrderTracking]);
+
+  useEffect(() => {
+    localStorage.setItem('pixigo_is_tracking_drawer_open', isTrackingDrawerOpen);
+  }, [isTrackingDrawerOpen]);
 
   // Automatically trigger auto-detect location on load
   useEffect(() => {
@@ -2289,7 +2306,7 @@ function App() {
           showToast(`🔔 New order received for your shop! Order ID: ${latestOrder.id}`);
 
           setTimeout(() => {
-            alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nAmount: ${formatINR(latestOrder.totalAmount)}\nPlease accept the order to prepare it.`);
+            alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nNet Earning: ${formatINR(latestOrder.netMerchantEarning ?? latestOrder.totalAmount)}\nPlease accept the order to prepare it.`);
           }, 100);
         }
       }
