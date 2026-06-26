@@ -3,7 +3,7 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag,
   MessageCircle, AlertCircle, AlertTriangle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell
+  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell, CheckCircle2, XCircle
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
@@ -1596,15 +1596,46 @@ function App() {
       ));
     } else if (userRole === 'customer' && user) {
       const emailVal = (user.email || customerEmail || '').trim().toLowerCase();
-      q = query(ordersRef, where("customerEmail", "==", emailVal));
+      if (currentOrderTracking) {
+        q = query(ordersRef, or(
+          where("customerEmail", "==", emailVal),
+          where("id", "==", currentOrderTracking)
+        ));
+      } else {
+        q = query(ordersRef, where("customerEmail", "==", emailVal));
+      }
     } else {
       // Guest / Anonymous user
       const emailVal = (customerEmail || '').trim().toLowerCase();
-      if (emailVal && emailVal !== 'pixigodelivery@gmail.com') {
-        q = query(ordersRef, where("customerEmail", "==", emailVal));
-      } else if (guestOrderIds && guestOrderIds.length > 0) {
-        const sliceIds = guestOrderIds.slice(0, 30);
-        q = query(ordersRef, where("id", "in", sliceIds));
+      const hasEmail = emailVal && emailVal !== 'pixigodelivery@gmail.com';
+      const hasGuestOrders = guestOrderIds && guestOrderIds.length > 0;
+
+      if (currentOrderTracking) {
+        if (hasEmail) {
+          q = query(ordersRef, or(
+            where("customerEmail", "==", emailVal),
+            where("id", "==", currentOrderTracking)
+          ));
+        } else if (hasGuestOrders) {
+          const sliceIds = guestOrderIds.slice(0, 29);
+          if (!sliceIds.includes(currentOrderTracking)) {
+            q = query(ordersRef, or(
+              where("id", "in", sliceIds),
+              where("id", "==", currentOrderTracking)
+            ));
+          } else {
+            q = query(ordersRef, where("id", "in", sliceIds));
+          }
+        } else {
+          q = query(ordersRef, where("id", "==", currentOrderTracking));
+        }
+      } else {
+        if (hasEmail) {
+          q = query(ordersRef, where("customerEmail", "==", emailVal));
+        } else if (hasGuestOrders) {
+          const sliceIds = guestOrderIds.slice(0, 30);
+          q = query(ordersRef, where("id", "in", sliceIds));
+        }
       }
     }
 
@@ -1669,7 +1700,7 @@ function App() {
     });
 
     return () => unsubscribe();
-  }, [userRole, user, guestOrderIds]);
+  }, [userRole, user, guestOrderIds, customerEmail, currentOrderTracking]);
 
   // Fetch real-time products from Firestore
   useEffect(() => {
@@ -2961,6 +2992,15 @@ function App() {
       setCart([...cart, cartItem]);
     }
     showToast(`${product.name}${variant ? ` (${variant.specs})` : ''} added to cart!`, 'success');
+  };
+
+  const handleReorderItems = (items) => {
+    const confirmReorder = window.confirm("Do you want to clear your current cart and reorder these items?");
+    if (!confirmReorder) return;
+    setCart(items.map(item => ({ ...item, quantity: item.quantity || 1 })));
+    setIsPastOrdersOpen(false);
+    setIsCartDrawerOpen(true);
+    showToast("Reordered items successfully added to your cart!", "success");
   };
 
   // Update Cart Quantity
@@ -12475,27 +12515,61 @@ function App() {
                 orders.filter(o => {
                   const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
                   return isUserOrder(o) && isFinished;
-                }).map(o => (
-                  <div key={o.id} className="past-order-card-premium border-glow">
-                    <div className="past-order-header-premium">
-                      <span className="order-id-premium">Order ID: <strong>{o.id}</strong></span>
-                      {o.status && o.status.toUpperCase().startsWith('CANCEL') ? (
-                        <span className="badge badge-danger">Cancelled</span>
-                      ) : (
-                        <span className="badge badge-success">Delivered</span>
-                      )}
-                    </div>
-                    <div className="past-order-body-premium">
-                      <p className="order-items-summary-premium">
-                        {o.items.map(item => `${item.name}${item.specs ? ` (${item.specs})` : ''} (x${item.quantity})`).join(', ')}
-                      </p>
-                      <div className="order-meta-info-premium">
-                        <span>Paid: <strong>₹{o.totalAmount}</strong></span>
-                        <span>{new Date(o.createdAt).toLocaleDateString()}</span>
+                }).map(o => {
+                  const isCancelled = o.status && o.status.toUpperCase().startsWith('CANCEL');
+                  return (
+                    <div key={o.id} className={`past-order-card-premium border-glow ${isCancelled ? 'cancelled' : ''}`}>
+                      <div className="past-order-header-premium">
+                        <div className="past-order-title-section">
+                          <span className="past-order-store-name">🏪 {o.merchantName || o.items?.[0]?.store || 'Pixo Go Hub'}</span>
+                          <span className="order-id-premium">ID: #{o.id}</span>
+                        </div>
+                        {isCancelled ? (
+                          <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <XCircle size={12} /> Cancelled
+                          </span>
+                        ) : (
+                          <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle2 size={12} /> Delivered
+                          </span>
+                        )}
+                      </div>
+                      <div className="past-order-body-premium">
+                        <div className="past-order-items-list">
+                          {o.items.map((item, idx) => (
+                            <div key={idx} className="past-order-item-row">
+                              <span className="past-order-item-bullet">🟢</span>
+                              <span className="past-order-item-name">
+                                {item.name}{item.specs ? ` (${item.specs})` : ''}
+                              </span>
+                              <span className="past-order-item-qty">x{item.quantity}</span>
+                            </div>
+                          ))}
+                        </div>
+                        
+                        <div className="order-meta-info-premium">
+                          <div className="meta-left">
+                            <span className="meta-date">📅 {new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            <span className="meta-payment-method">💳 {o.paymentMethod || 'ONLINE'}</span>
+                          </div>
+                          <div className="meta-right">
+                            <span className="meta-amount-label">Paid: </span>
+                            <span className="meta-amount">₹{o.totalAmount}</span>
+                          </div>
+                        </div>
+
+                        <div className="past-order-actions">
+                          <button
+                            className="past-order-reorder-btn neon-btn"
+                            onClick={() => handleReorderItems(o.items)}
+                          >
+                            🔄 Reorder Items
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
