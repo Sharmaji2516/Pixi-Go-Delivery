@@ -2278,21 +2278,21 @@ function App() {
   const riderActiveJobs = user ? orders.filter(o => o.deliveryPartnerId === user.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')) : [];
 
   useEffect(() => {
-    if (riderActiveJobs.length > prevActiveJobsCount.current) {
+    if (user && userRole === 'rider' && riderActiveJobs.length > prevActiveJobsCount.current) {
       if (prevActiveJobsCount.current > 0 || (activeTab === 'delivery' && riderActiveJobs.length > 0)) {
         playNotificationSound();
         showToast("🔔 New delivery run assigned! Check details below.");
       }
     }
     prevActiveJobsCount.current = riderActiveJobs.length;
-  }, [riderActiveJobs.length, activeTab]);
+  }, [riderActiveJobs.length, activeTab, user, userRole]);
 
   const prevPoolJobsCount = useRef(0);
   const availablePoolJobs = orders.filter(o => (o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId);
 
   useEffect(() => {
-    if (activeTab === 'delivery') {
-      const currentRider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
+    if (activeTab === 'delivery' && user && userRole === 'rider') {
+      const currentRider = deliveryPartners.find(d => d.id === user.uid || (d.email && user.email && d.email.toLowerCase() === user.email.toLowerCase()));
       const isOnline = currentRider?.isOnline !== false;
       if (isOnline && availablePoolJobs.length > prevPoolJobsCount.current) {
         play30SecondBeepAlert();
@@ -2300,7 +2300,7 @@ function App() {
       }
     }
     prevPoolJobsCount.current = availablePoolJobs.length;
-  }, [availablePoolJobs.length, activeTab, deliveryPartners, user]);
+  }, [availablePoolJobs.length, activeTab, deliveryPartners, user, userRole]);
 
   // Get active merchant shop based on email or phone
   const loggedInMerchantShop = user ? shops.find(s =>
@@ -2332,7 +2332,7 @@ function App() {
 
   // New Order Alerts for Merchant
   useEffect(() => {
-    if (activeTab === 'merchant' && user && myMerchantShopNames.length > 0) {
+    if (activeTab === 'merchant' && user && userRole === 'merchant' && myMerchantShopNames.length > 0) {
       // Find orders for this merchant shop that are pending acceptance
       const merchantPendingOrders = orders.filter(o => {
         const orderMName = (o.merchantName || '').trim().toLowerCase();
@@ -2354,7 +2354,7 @@ function App() {
       }
       prevMerchantOrdersCount.current = merchantPendingOrders.length;
     }
-  }, [orders, myMerchantShopNames, activeTab, user]);
+  }, [orders, myMerchantShopNames, activeTab, user, userRole]);
 
   const getRoleForEmail = (email) => {
     if (!email) return null;
