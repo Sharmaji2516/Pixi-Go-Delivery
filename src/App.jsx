@@ -5989,9 +5989,9 @@ function App() {
                     )}
 
                     {selectedPayment === 'COD' && (
-                      <div className="payment-instructions-card cod border-glow fade-in" style={{ marginTop: '12px', background: 'rgba(16, 185, 129, 0.04)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
-                        <p className="payment-instruction-text" style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.85)', lineHeight: '1.45', margin: 0 }}>
-                          ℹ️ <strong>Cash on Delivery (COD) Instruction:</strong> Please keep the exact amount of <strong style={{ color: 'var(--color-accent-yellow)' }}>₹{totalAmount}</strong> ready in cash. You have to pay the amount only after the delivery partner arrives at your home. Do not pay any amount before that.
+                      <div className="payment-instructions-card cod border-glow fade-in" style={{ marginTop: '12px', background: 'rgba(16, 185, 129, 0.08)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                        <p className="payment-instruction-text" style={{ fontSize: '12.5px', color: '#155724', lineHeight: '1.45', margin: 0 }}>
+                          ℹ️ <strong>Cash on Delivery (COD) Instruction:</strong> Please keep the exact amount of <strong style={{ color: '#0f5132', fontWeight: 'bold' }}>₹{totalAmount}</strong> ready in cash. You have to pay the amount only after the delivery partner arrives at your home. Do not pay any amount before that.
                         </p>
                       </div>
                     )}
