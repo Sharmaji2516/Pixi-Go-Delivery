@@ -5840,7 +5840,6 @@ function App() {
                       Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
                     </p>
                   </div>
-                  </div>
                 </>
               );
             })()}
