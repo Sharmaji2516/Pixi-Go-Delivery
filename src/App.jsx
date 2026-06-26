@@ -581,7 +581,6 @@ function App() {
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
   const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
   const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || '');
-  const [customerAddressText, setCustomerAddressText] = useState(() => localStorage.getItem('pixigo_customerAddressText') || '');
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('COD');
@@ -1068,7 +1067,6 @@ function App() {
     localStorage.setItem('pixigo_customerPhone', customerPhone);
     localStorage.setItem('pixigo_customerEmail', customerEmail);
     localStorage.setItem('pixigo_customerAddress', customerAddress);
-    localStorage.setItem('pixigo_customerAddressText', customerAddressText);
 
     // Save profile to Firestore /customers Collection (fallback to guest ID for unauthenticated testers)
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
@@ -1079,7 +1077,6 @@ function App() {
         phone: customerPhone,
         email: customerEmail,
         address: customerAddress,
-        addressText: customerAddressText,
         updatedAt: new Date().toISOString()
       }, { merge: true });
     } catch (err) {
@@ -1356,19 +1353,16 @@ function App() {
               const dbPhone = data.phone || localPhone;
               const dbEmail = data.email || localEmail;
               const dbAddress = data.address || localAddress;
-              const dbAddressText = data.addressText || localStorage.getItem('pixigo_customerAddressText') || '';
 
               localStorage.setItem('pixigo_customerName', dbName);
               localStorage.setItem('pixigo_customerPhone', dbPhone);
               localStorage.setItem('pixigo_customerEmail', dbEmail);
               localStorage.setItem('pixigo_customerAddress', dbAddress);
-              localStorage.setItem('pixigo_customerAddressText', dbAddressText);
 
               setCustomerName(dbName);
               setCustomerPhone(dbPhone);
               setCustomerEmail(dbEmail);
               setCustomerAddress(dbAddress);
-              setCustomerAddressText(dbAddressText);
             } else {
               // Create the document if it doesn't exist yet
               await setDoc(customerDocRef, {
@@ -1376,20 +1370,17 @@ function App() {
                 email: localEmail,
                 phone: localPhone,
                 address: localAddress,
-                addressText: localStorage.getItem('pixigo_customerAddressText') || '',
                 createdAt: timestamp
               });
               localStorage.setItem('pixigo_customerName', localName);
               localStorage.setItem('pixigo_customerPhone', localPhone);
               localStorage.setItem('pixigo_customerEmail', localEmail);
               localStorage.setItem('pixigo_customerAddress', localAddress);
-              localStorage.setItem('pixigo_customerAddressText', localStorage.getItem('pixigo_customerAddressText') || '');
 
               setCustomerName(localName);
               setCustomerPhone(localPhone);
               setCustomerEmail(localEmail);
               setCustomerAddress(localAddress);
-              setCustomerAddressText(localStorage.getItem('pixigo_customerAddressText') || '');
             }
           });
 
@@ -3147,17 +3138,12 @@ function App() {
       ['Bakery', 'Fast Food', 'Restaurant Cafe', 'Icecream and dessert'].includes(cart[0]?.category);
     const routingOption = isShopDirect ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)';
 
-    const parsedCoords = parseCoords(customerAddress);
-    const finalLocation = parsedCoords 
-      ? `${customerAddressText || 'Detected Location'} (Lat: ${parsedCoords.lat.toFixed(6)}, Lng: ${parsedCoords.lng.toFixed(6)})`
-      : (customerAddressText || customerAddress || 'Customer Location');
-
     const newOrder = {
       id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName,
       customerPhone,
       customerEmail,
-      customerLocation: finalLocation,
+      customerLocation: customerAddress,
       items: [...cart],
       totalAmount: total,
       deliveryCharge: delCharge,
@@ -5804,20 +5790,12 @@ function App() {
               />
               <input
                 type="text"
-                placeholder="GPS / Location Pin (Auto-Detect or Coordinates)"
+                placeholder="Delivery Location (Auto-Detected Coordinates)"
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
                 className="custom-input"
-              />
-              <input
-                type="text"
-                placeholder="Detailed Manual Address (Flat, Street, Landmark)"
-                value={customerAddressText}
-                onChange={(e) => {
-                  setCustomerAddressText(e.target.value);
-                  localStorage.setItem('pixigo_customerAddressText', e.target.value);
-                }}
-                className="custom-input"
+                readOnly={true}
+                style={{ cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.02)' }}
               />
               <button
                 type="button"
@@ -12393,6 +12371,8 @@ function App() {
                   onChange={(e) => setCustomerAddress(e.target.value)}
                   className="custom-input-premium address-textarea-premium"
                   rows="1"
+                  readOnly={true}
+                  style={{ cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.02)' }}
                   required
                 />
                 <button
@@ -12405,20 +12385,6 @@ function App() {
                   <Compass size={14} className={isLocating ? "spin" : ""} />
                   {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
                 </button>
-              </div>
-              <div className="form-group-premium">
-                <label className="form-label-premium">Manual Delivery Address (Failure Fallback)</label>
-                <textarea
-                  value={customerAddressText}
-                  onChange={(e) => {
-                    setCustomerAddressText(e.target.value);
-                    localStorage.setItem('pixigo_customerAddressText', e.target.value);
-                  }}
-                  className="custom-input-premium address-textarea-premium"
-                  rows="2"
-                  placeholder="Type your manual/descriptive delivery address here..."
-                  required
-                />
                 <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '130px', marginTop: '8px' }}>
                   <LeafletMap
                     merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
