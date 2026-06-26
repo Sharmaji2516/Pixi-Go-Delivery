@@ -1596,12 +1596,12 @@ function App() {
       ));
     } else if (userRole === 'customer' && user) {
       const emailVal = (user.email || customerEmail || '').trim().toLowerCase();
-      q = query(ordersRef, where("customerEmail", "==", emailVal), orderBy("createdAt", "desc"), limit(50));
+      q = query(ordersRef, where("customerEmail", "==", emailVal));
     } else {
       // Guest / Anonymous user
       const emailVal = (customerEmail || '').trim().toLowerCase();
       if (emailVal && emailVal !== 'pixigodelivery@gmail.com') {
-        q = query(ordersRef, where("customerEmail", "==", emailVal), orderBy("createdAt", "desc"), limit(50));
+        q = query(ordersRef, where("customerEmail", "==", emailVal));
       } else if (guestOrderIds && guestOrderIds.length > 0) {
         const sliceIds = guestOrderIds.slice(0, 30);
         q = query(ordersRef, where("id", "in", sliceIds));
