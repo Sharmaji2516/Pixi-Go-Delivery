@@ -5840,115 +5840,184 @@ function App() {
                       Orders cannot be cancelled once packed for delivery. In case of unexpected delays, a refund will be provided, if applicable.
                     </p>
                   </div>
+                  </div>
                 </>
               );
             })()}
 
             <div className="divider"></div>
 
-            {/* Delivery Form Info */}
-            <div className="delivery-info-form">
-              <h3 className="sub-header-title">Delivery Coordinates</h3>
-              <input
-                type="text"
-                placeholder="Name"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="custom-input"
-              />
-              <input
-                type="text"
-                placeholder="Delivery Location (Auto-Detected Coordinates)"
-                value={customerAddress}
-                onChange={(e) => setCustomerAddress(e.target.value)}
-                className="custom-input"
-                readOnly={true}
-                style={{ cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.02)' }}
-              />
-              <button
-                type="button"
-                className="auto-detect-btn"
-                onClick={() => handleAutoDetectLocation(setCustomerAddress)}
-                disabled={isLocating}
-                style={{ marginBottom: '6px' }}
-              >
-                <Compass size={14} className={isLocating ? "spin" : ""} />
-                {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
-              </button>
+            {/* Pricing wrapper IIFE ends and wraps the remaining delivery form/payment select logic */}
+            {(() => {
+              const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
+              let fee = 33;
+              const activeDeliveryPromos = coupons.filter(c => c.isDeliveryPromo && c.isActive);
+              const cartWeight = getCartTotalWeight(cart);
+              const heavySurcharge = cartWeight > 10 ? (cartWeight - 10) * 2 : 0;
 
-              {/* Interactive map adjustment for Customer */}
-              <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
-                <LeafletMap
-                  merchantCoords={cartShop ? { lat: cartShop.lat || 24.8887, lng: cartShop.lng || 74.6269 } : { lat: 26.9015, lng: 75.7482 }}
-                  customerCoords={customerCoords}
-                  customerName={customerName || 'Customer'}
-                  merchantName={storeName || "Store"}
-                  isInteractive={true}
-                  onLocationChange={handleMapLocationChange}
-                />
-              </div>
+              if (dist !== null) {
+                const rates = calculateDeliveryRates(dist);
+                fee = getPromotionalDeliveryFee(subtotal, cart, rates.customerCharge, activeDeliveryPromos) + heavySurcharge;
+              } else {
+                fee = getPromotionalDeliveryFee(subtotal, cart, 33, activeDeliveryPromos) + heavySurcharge;
+              }
+              const totalAmount = subtotal + fee - appliedDiscount;
 
-              <div className="payment-select-grid">
-                <button
-                  className={`pay-btn ${selectedPayment === 'UPI' ? 'active' : ''}`}
-                  onClick={() => setSelectedPayment('UPI')}
-                >
-                  <DollarSign size={16} /> Pay via UPI on Delivery
-                </button>
-                <button
-                  className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
-                  onClick={() => setSelectedPayment('COD')}
-                >
-                  <MapPin size={16} /> Cash on Delivery (COD)
-                </button>
-              </div>
-            </div>
+              return (
+                <>
+                  {/* Delivery Form Info */}
+                  <div className="delivery-info-form">
+                    <h3 className="sub-header-title">Delivery Coordinates</h3>
+                    <input
+                      type="text"
+                      placeholder="Name"
+                      value={customerName}
+                      onChange={(e) => setCustomerName(e.target.value)}
+                      className="custom-input"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Delivery Location (Auto-Detected Coordinates)"
+                      value={customerAddress}
+                      onChange={(e) => setCustomerAddress(e.target.value)}
+                      className="custom-input"
+                      readOnly={true}
+                      style={{ cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.02)' }}
+                    />
+                    <button
+                      type="button"
+                      className="auto-detect-btn"
+                      onClick={() => handleAutoDetectLocation(setCustomerAddress)}
+                      disabled={isLocating}
+                      style={{ marginBottom: '6px' }}
+                    >
+                      <Compass size={14} className={isLocating ? "spin" : ""} />
+                      {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
+                    </button>
 
-            {/* Checkout Button */}
-            <button
-              className="neon-btn checkout-btn"
-              disabled={isOutOfRange || isDistanceLoading || isUnderMinimumOrder}
-              onClick={() => {
-                if (!user) {
-                  showToast("🔐 Please sign in or register to place your order!", "warning");
-                  setIsAuthModalOpen(true);
-                  return;
-                }
-                if (isOutOfRange) {
-                  showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
-                  return;
-                }
-                if (isUnderMinimumOrder) {
-                  showToast(`⚠️ Minimum cart value of ₹${MIN_ORDER_VALUE} is required to place an order.`);
-                  return;
-                }
-                handlePlaceOrder();
-                if (isDrawer) setIsCartDrawerOpen(false);
-              }}
-              style={{
-                width: '100%',
-                padding: '14px',
-                borderRadius: '12px',
-                fontSize: '15px',
-                fontWeight: 'bold',
-                textAlign: 'center',
-                transition: 'all 0.2s',
-                background: (isOutOfRange || isUnderMinimumOrder) ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
-                color: (isOutOfRange || isUnderMinimumOrder) ? 'var(--color-text-muted)' : '#000',
-                border: (isOutOfRange || isUnderMinimumOrder) ? '1px solid var(--color-border)' : 'none',
-                cursor: (isOutOfRange || isUnderMinimumOrder) ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isOutOfRange ? (
-                <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
-              ) : isUnderMinimumOrder ? (
-                <>Min. Order ₹{MIN_ORDER_VALUE} Required (Current: ₹{cartSubtotal}) <X size={18} /></>
-              ) : isDistanceLoading ? (
-                <>Calculating Route... <RefreshCw size={18} className="spin" /></>
-              ) : (
-                <>Confirm & Place Order <ArrowRight size={18} /></>
-              )}
-            </button>
+                    {/* Interactive map adjustment for Customer */}
+                    <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
+                      <LeafletMap
+                        merchantCoords={cartShop ? { lat: cartShop.lat || 24.8887, lng: cartShop.lng || 74.6269 } : { lat: 26.9015, lng: 75.7482 }}
+                        customerCoords={customerCoords}
+                        customerName={customerName || 'Customer'}
+                        merchantName={storeName || "Store"}
+                        isInteractive={true}
+                        onLocationChange={handleMapLocationChange}
+                      />
+                    </div>
+
+                    <div className="payment-select-grid">
+                      <button
+                        className={`pay-btn ${selectedPayment === 'UPI' ? 'active' : ''}`}
+                        onClick={() => setSelectedPayment('UPI')}
+                      >
+                        <DollarSign size={16} /> Pay via UPI on Delivery
+                      </button>
+                      <button
+                        className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
+                        onClick={() => setSelectedPayment('COD')}
+                      >
+                        <MapPin size={16} /> Cash on Delivery (COD)
+                      </button>
+                    </div>
+
+                    {/* Payment Instruction Blocks */}
+                    {selectedPayment === 'UPI' && (
+                      <div className="payment-instructions-card upi border-glow fade-in" style={{ marginTop: '12px' }}>
+                        <p className="payment-instruction-text warning-text" style={{ fontSize: '12px', color: '#ff7043', lineHeight: '1.45', margin: '0 0 10px 0', background: 'rgba(255, 112, 67, 0.06)', border: '1px solid rgba(255, 112, 67, 0.15)', padding: '10px 12px', borderRadius: '8px' }}>
+                          ⚠️ <strong>Crucial Instruction:</strong> You have to pay the amount <strong>only after</strong> the delivery partner arrives at your home. Do not pay/transfer any amount before they reach your location.
+                        </p>
+                        
+                        <div className="upi-payment-details-box" style={{ background: 'rgba(0, 0, 0, 0.2)', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                          <div className="upi-details-header" style={{ fontSize: '12px', fontWeight: 'bold', color: '#ffffff', marginBottom: '10px', textAlign: 'center', borderBottom: '1px dashed rgba(255,255,255,0.06)', paddingBottom: '6px' }}>
+                            Scan to Pay on Delivery
+                          </div>
+                          <div className="upi-details-body" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                            <div className="upi-qr-code-container" style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=pixigodelivery@paytm&pn=Pixo%20Go%20Hub%20(${encodeURIComponent(storeName)})&am=${totalAmount.toFixed(2)}&cu=INR`)}`} 
+                                alt="UPI Payment QR Code"
+                                style={{ width: '100px', height: '100px', display: 'block' }}
+                              />
+                            </div>
+                            <div className="upi-text-details" style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>Receiver:</span>
+                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#ffffff' }}>Pixo Go Hub ({storeName})</span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)' }}>UPI ID:</span>
+                                <span style={{ fontSize: '12.5px', fontWeight: '600', color: '#00fff2', fontFamily: 'monospace' }}>pixigodelivery@paytm</span>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '4px', marginTop: '2px' }}>
+                                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.45)' }}>Amount:</span>
+                                <span style={{ fontSize: '14px', fontWeight: '800', color: 'var(--color-accent-yellow)' }}>₹{totalAmount}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedPayment === 'COD' && (
+                      <div className="payment-instructions-card cod border-glow fade-in" style={{ marginTop: '12px', background: 'rgba(16, 185, 129, 0.04)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.15)' }}>
+                        <p className="payment-instruction-text" style={{ fontSize: '12.5px', color: 'rgba(255,255,255,0.85)', lineHeight: '1.45', margin: 0 }}>
+                          ℹ️ <strong>Cash on Delivery (COD) Instruction:</strong> Please keep the exact amount of <strong style={{ color: 'var(--color-accent-yellow)' }}>₹{totalAmount}</strong> ready in cash. You have to pay the amount only after the delivery partner arrives at your home. Do not pay any amount before that.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Checkout Button */}
+                  <button
+                    className="neon-btn checkout-btn"
+                    disabled={isOutOfRange || isDistanceLoading || isUnderMinimumOrder}
+                    onClick={() => {
+                      if (!user) {
+                        showToast("🔐 Please sign in or register to place your order!", "warning");
+                        setIsAuthModalOpen(true);
+                        return;
+                      }
+                      if (isOutOfRange) {
+                        showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
+                        return;
+                      }
+                      if (isUnderMinimumOrder) {
+                        showToast(`⚠️ Minimum cart value of ₹${MIN_ORDER_VALUE} is required to place an order.`);
+                        return;
+                      }
+                      handlePlaceOrder();
+                      if (isDrawer) setIsCartDrawerOpen(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '14px',
+                      borderRadius: '12px',
+                      fontSize: '15px',
+                      fontWeight: 'bold',
+                      textAlign: 'center',
+                      transition: 'all 0.2s',
+                      background: (isOutOfRange || isUnderMinimumOrder) ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
+                      color: (isOutOfRange || isUnderMinimumOrder) ? 'var(--color-text-muted)' : '#000',
+                      border: (isOutOfRange || isUnderMinimumOrder) ? '1px solid var(--color-border)' : 'none',
+                      cursor: (isOutOfRange || isUnderMinimumOrder) ? 'not-allowed' : 'pointer',
+                      marginTop: '12px'
+                    }}
+                  >
+                    {isOutOfRange ? (
+                      <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
+                    ) : isUnderMinimumOrder ? (
+                      <>Min. Order ₹{MIN_ORDER_VALUE} Required (Current: ₹{cartSubtotal}) <X size={18} /></>
+                    ) : isDistanceLoading ? (
+                      <>Calculating Route... <RefreshCw size={18} className="spin" /></>
+                    ) : (
+                      <>Confirm & Place Order <ArrowRight size={18} /></>
+                    )}
+                  </button>
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
