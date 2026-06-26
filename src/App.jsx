@@ -518,6 +518,7 @@ function App() {
   const [shops, setShops] = useState(INITIAL_SHOPS);
   const [deliveryPartners, setDeliveryPartners] = useState(INITIAL_DELIVERY_PARTNERS);
   const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [isOrdersLoading, setIsOrdersLoading] = useState(true);
   const [commissionPercent, setCommissionPercent] = useState(10);
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
   const [perKmCharge, setPerKmCharge] = useState(5);
@@ -810,6 +811,9 @@ function App() {
 
   // --- HELPER FUNCTIONS ---
   const isUserOrder = (o) => {
+    if (guestOrderIds.includes(o.id)) {
+      return true;
+    }
     if (user) {
       const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
       const targetEmail = (user.email || customerEmail || '').trim().toLowerCase();
@@ -817,9 +821,8 @@ function App() {
       const isUidMatch = o.userId && o.userId === user.uid;
       const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
       return isEmailMatch || isUidMatch || isPhoneMatch;
-    } else {
-      return guestOrderIds.includes(o.id);
     }
+    return false;
   };
 
   const saveGuestOrder = (orderId) => {
@@ -1578,6 +1581,7 @@ function App() {
   useEffect(() => {
     const ordersRef = collection(db, "orders");
     let q = null;
+    setIsOrdersLoading(true);
 
     if (userRole === 'admin') {
       q = query(ordersRef, orderBy("createdAt", "desc"), limit(200));
@@ -1602,6 +1606,7 @@ function App() {
 
     if (!q) {
       setOrders(INITIAL_ORDERS);
+      setIsOrdersLoading(false);
       return;
     }
 
@@ -1651,10 +1656,12 @@ function App() {
           return o;
         });
       });
+      setIsOrdersLoading(false);
     }, (error) => {
       console.error("Firestore order subscription error/warning:", error.message);
       setDbError(error.message);
       setOrders(INITIAL_ORDERS);
+      setIsOrdersLoading(false);
     });
 
     return () => unsubscribe();
@@ -12358,6 +12365,18 @@ function App() {
               </div>
               <h3 className="section-title-premium">Edit Profile Settings</h3>
               <p className="profile-sub">{user ? customerEmail : "Guest Account (Not Synced)"}</p>
+              
+              <button
+                type="button"
+                className="past-orders-trigger-btn-profile neon-btn"
+                onClick={() => {
+                  setIsProfileOpen(false);
+                  setIsPastOrdersOpen(true);
+                }}
+                style={{ marginTop: '12px', padding: '6px 12px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+              >
+                <FileText size={14} /> View Order History
+              </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="profile-form-premium">
@@ -12435,7 +12454,12 @@ function App() {
             </div>
 
             <div className="past-orders-list-premium">
-              {orders.filter(o => {
+              {isOrdersLoading ? (
+                <div className="no-past-orders-premium" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '20px' }}>
+                  <RefreshCw className="spin text-neon" size={30} />
+                  <p>Loading your order history...</p>
+                </div>
+              ) : orders.filter(o => {
                 const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
                 return isUserOrder(o) && isFinished;
               }).length === 0 ? (
@@ -13225,6 +13249,14 @@ function App() {
             </div>
 
             {(() => {
+              if (isOrdersLoading) {
+                return (
+                  <div className="flex flex-col items-center justify-center p-8 text-center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px' }}>
+                    <RefreshCw className="spin text-neon" size={32} />
+                    <p className="text-muted">Loading your order details...</p>
+                  </div>
+                );
+              }
               const trackedOrder = orders.find(o => o.id === currentOrderTracking);
               if (!trackedOrder) return <p className="text-muted">Order not found.</p>;
 
