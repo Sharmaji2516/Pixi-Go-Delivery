@@ -9,7 +9,7 @@ import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth, updatePassword, deleteUser } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, limit, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
 import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
 
@@ -371,6 +371,7 @@ const getNoticeStyles = (color) => {
 };
 
 const MAX_DELIVERY_RADIUS_KM = 10.0;
+const MIN_ORDER_VALUE = 0; // Removed/disabled minimum cart threshold (set to 0)
 
 const ProductThumbnail = ({ src, name, emoji, className, style }) => {
   const [hasError, setHasError] = useState(false);
@@ -580,6 +581,7 @@ function App() {
   const [customerPhone, setCustomerPhone] = useState(() => localStorage.getItem('pixigo_customerPhone') || '9251054064');
   const [customerEmail, setCustomerEmail] = useState(() => localStorage.getItem('pixigo_customerEmail') || 'pixigodelivery@gmail.com');
   const [customerAddress, setCustomerAddress] = useState(() => localStorage.getItem('pixigo_customerAddress') || '');
+  const [customerAddressText, setCustomerAddressText] = useState(() => localStorage.getItem('pixigo_customerAddressText') || '');
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('COD');
@@ -1066,6 +1068,7 @@ function App() {
     localStorage.setItem('pixigo_customerPhone', customerPhone);
     localStorage.setItem('pixigo_customerEmail', customerEmail);
     localStorage.setItem('pixigo_customerAddress', customerAddress);
+    localStorage.setItem('pixigo_customerAddressText', customerAddressText);
 
     // Save profile to Firestore /customers Collection (fallback to guest ID for unauthenticated testers)
     const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
@@ -1076,6 +1079,7 @@ function App() {
         phone: customerPhone,
         email: customerEmail,
         address: customerAddress,
+        addressText: customerAddressText,
         updatedAt: new Date().toISOString()
       }, { merge: true });
     } catch (err) {
@@ -1352,16 +1356,19 @@ function App() {
               const dbPhone = data.phone || localPhone;
               const dbEmail = data.email || localEmail;
               const dbAddress = data.address || localAddress;
+              const dbAddressText = data.addressText || localStorage.getItem('pixigo_customerAddressText') || '';
 
               localStorage.setItem('pixigo_customerName', dbName);
               localStorage.setItem('pixigo_customerPhone', dbPhone);
               localStorage.setItem('pixigo_customerEmail', dbEmail);
               localStorage.setItem('pixigo_customerAddress', dbAddress);
+              localStorage.setItem('pixigo_customerAddressText', dbAddressText);
 
               setCustomerName(dbName);
               setCustomerPhone(dbPhone);
               setCustomerEmail(dbEmail);
               setCustomerAddress(dbAddress);
+              setCustomerAddressText(dbAddressText);
             } else {
               // Create the document if it doesn't exist yet
               await setDoc(customerDocRef, {
@@ -1369,17 +1376,20 @@ function App() {
                 email: localEmail,
                 phone: localPhone,
                 address: localAddress,
+                addressText: localStorage.getItem('pixigo_customerAddressText') || '',
                 createdAt: timestamp
               });
               localStorage.setItem('pixigo_customerName', localName);
               localStorage.setItem('pixigo_customerPhone', localPhone);
               localStorage.setItem('pixigo_customerEmail', localEmail);
               localStorage.setItem('pixigo_customerAddress', localAddress);
+              localStorage.setItem('pixigo_customerAddressText', localStorage.getItem('pixigo_customerAddressText') || '');
 
               setCustomerName(localName);
               setCustomerPhone(localPhone);
               setCustomerEmail(localEmail);
               setCustomerAddress(localAddress);
+              setCustomerAddressText(localStorage.getItem('pixigo_customerAddressText') || '');
             }
           });
 
@@ -1562,9 +1572,9 @@ function App() {
     let q = null;
 
     if (userRole === 'admin') {
-      q = query(ordersRef, orderBy("createdAt", "desc"));
+      q = query(ordersRef, orderBy("createdAt", "desc"), limit(200));
     } else if (userRole === 'merchant' && user) {
-      q = query(ordersRef, orderBy("createdAt", "desc"));
+      q = query(ordersRef, orderBy("createdAt", "desc"), limit(200));
     } else if (userRole === 'rider' && user) {
       q = query(ordersRef, or(
         where("deliveryPartnerId", "==", user.uid),
@@ -1573,7 +1583,7 @@ function App() {
         where("status", "==", "READY_FOR_PICKUP")
       ));
     } else if (userRole === 'customer' && user) {
-      q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"));
+      q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"), limit(50));
     } else {
       // Guest / Anonymous user
       if (guestOrderIds && guestOrderIds.length > 0) {
@@ -2624,8 +2634,8 @@ function App() {
   const stats = {
     totalOrders: orders.length,
     activeCustomers: new Set(orders.map(o => o.customerEmail)).size,
-    activeMerchants: shops.filter(s => s.verified).length,
-    activeRiders: deliveryPartners.filter(d => d.verified).length,
+    activeMerchants: shops.filter(s => !deletedShopIds.includes(s.id) && s.verified).length,
+    activeRiders: deliveryPartners.filter(d => !deletedUserIds.includes(d.id) && d.verified).length,
     totalSales: orders.reduce((acc, o) => acc + o.totalAmount, 0),
     totalDiscounts: orders.reduce((acc, o) => acc + o.discountAmount, 0),
     totalDeliveryFee: orders.reduce((acc, o) => acc + o.deliveryCharge, 0),
@@ -3080,8 +3090,8 @@ function App() {
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
 
-    if (cartSubtotal < 149) {
-      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹149 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
+    if (MIN_ORDER_VALUE > 0 && cartSubtotal < MIN_ORDER_VALUE) {
+      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹${MIN_ORDER_VALUE} is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
       return;
     }
 
@@ -3137,12 +3147,17 @@ function App() {
       ['Bakery', 'Fast Food', 'Restaurant Cafe', 'Icecream and dessert'].includes(cart[0]?.category);
     const routingOption = isShopDirect ? 'Option 1 (Shop-Direct)' : 'Option 2 (Managed)';
 
+    const parsedCoords = parseCoords(customerAddress);
+    const finalLocation = parsedCoords 
+      ? `${customerAddressText || 'Detected Location'} (Lat: ${parsedCoords.lat.toFixed(6)}, Lng: ${parsedCoords.lng.toFixed(6)})`
+      : (customerAddressText || customerAddress || 'Customer Location');
+
     const newOrder = {
       id: `PG-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName,
       customerPhone,
       customerEmail,
-      customerLocation: customerAddress,
+      customerLocation: finalLocation,
       items: [...cart],
       totalAmount: total,
       deliveryCharge: delCharge,
@@ -5156,12 +5171,18 @@ function App() {
   };
 
   const getUniqueProductNames = () => {
-    const approved = products.filter(p => p.approved !== false);
+    const approved = products.filter(p => p.approved !== false).filter(p => {
+      const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+      return pShop && pShop.verified !== false && pShop.isActive !== false && !deletedShopIds.includes(pShop.id);
+    });
     return [...new Set(approved.map(p => p.name))].sort();
   };
 
   const getUniqueStoreNames = () => {
-    const approved = products.filter(p => p.approved !== false);
+    const approved = products.filter(p => p.approved !== false).filter(p => {
+      const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
+      return pShop && pShop.verified !== false && pShop.isActive !== false && !deletedShopIds.includes(pShop.id);
+    });
     return [...new Set(approved.map(p => p.store))].sort();
   };
 
@@ -5180,7 +5201,7 @@ function App() {
     if (p.approved === false) return false;
     // Hide products from deleted, deactivated, or unverified shops
     const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-    if (!pShop || pShop.verified === false || pShop.isActive === false) return false;
+    if (!pShop || pShop.verified === false || pShop.isActive === false || deletedShopIds.includes(pShop.id)) return false;
     let matchQuery = true;
     if (searchQuery.trim() !== '') {
       const queryLower = searchQuery.toLowerCase();
@@ -5435,7 +5456,7 @@ function App() {
     const customerCoords = parseCoords(customerAddress);
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-    const isUnderMinimumOrder = cart.length > 0 && cartSubtotal < 149;
+    const isUnderMinimumOrder = cart.length > 0 && MIN_ORDER_VALUE > 0 && cartSubtotal < MIN_ORDER_VALUE;
 
     let dist = null;
     let isOutOfRange = false;
@@ -5592,7 +5613,7 @@ function App() {
               }}>
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
                 <span>
-                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹149 is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
+                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹{MIN_ORDER_VALUE} is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
                 </span>
               </div>
             )}
@@ -5783,9 +5804,19 @@ function App() {
               />
               <input
                 type="text"
-                placeholder="Delivery Location Pin / Address"
+                placeholder="GPS / Location Pin (Auto-Detect or Coordinates)"
                 value={customerAddress}
                 onChange={(e) => setCustomerAddress(e.target.value)}
+                className="custom-input"
+              />
+              <input
+                type="text"
+                placeholder="Detailed Manual Address (Flat, Street, Landmark)"
+                value={customerAddressText}
+                onChange={(e) => {
+                  setCustomerAddressText(e.target.value);
+                  localStorage.setItem('pixigo_customerAddressText', e.target.value);
+                }}
                 className="custom-input"
               />
               <button
@@ -5842,13 +5873,20 @@ function App() {
                   return;
                 }
                 if (isUnderMinimumOrder) {
-                  showToast(`⚠️ Minimum cart value of ₹149 is required to place an order.`);
+                  showToast(`⚠️ Minimum cart value of ₹${MIN_ORDER_VALUE} is required to place an order.`);
                   return;
                 }
                 handlePlaceOrder();
                 if (isDrawer) setIsCartDrawerOpen(false);
               }}
               style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '12px',
+                fontSize: '15px',
+                fontWeight: 'bold',
+                textAlign: 'center',
+                transition: 'all 0.2s',
                 background: (isOutOfRange || isUnderMinimumOrder) ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
                 color: (isOutOfRange || isUnderMinimumOrder) ? 'var(--color-text-muted)' : '#000',
                 border: (isOutOfRange || isUnderMinimumOrder) ? '1px solid var(--color-border)' : 'none',
@@ -5858,7 +5896,7 @@ function App() {
               {isOutOfRange ? (
                 <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
               ) : isUnderMinimumOrder ? (
-                <>Min. Order ₹149 Required (Current: ₹{cartSubtotal}) <X size={18} /></>
+                <>Min. Order ₹{MIN_ORDER_VALUE} Required (Current: ₹{cartSubtotal}) <X size={18} /></>
               ) : isDistanceLoading ? (
                 <>Calculating Route... <RefreshCw size={18} className="spin" /></>
               ) : (
@@ -8077,7 +8115,7 @@ function App() {
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
                                         <option value="">Select Shop...</option>
-                                        {shops.filter(s => s.verified).map(s => (
+                                        {shops.filter(s => !deletedShopIds.includes(s.id) && s.verified).map(s => (
                                           <option key={s.id} value={s.id}>{s.storeName || s.name}</option>
                                         ))}
                                       </select>
@@ -8091,7 +8129,7 @@ function App() {
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
                                         <option value="">Select Rider (Optional)...</option>
-                                        {deliveryPartners.filter(d => d.verified && d.isOnline !== false).map(d => (
+                                        {deliveryPartners.filter(d => !deletedUserIds.includes(d.id) && d.verified && d.isOnline !== false).map(d => (
                                           <option key={d.id} value={d.id}>{d.name}</option>
                                         ))}
                                       </select>
@@ -8411,7 +8449,7 @@ function App() {
                           style={{ height: '38px' }}
                         >
                           <option value="">-- Select Shop --</option>
-                          {shops.map(s => (
+                          {shops.filter(s => !deletedShopIds.includes(s.id)).map(s => (
                             <option key={s.id} value={s.storeName || s.name}>{s.storeName || s.name}</option>
                           ))}
                         </select>
@@ -8808,7 +8846,7 @@ function App() {
                 {/* Document Onboarding Applications (Merchants) */}
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Merchant Verification Applications ({shops.filter(s => s.docs === 'Pending').length})</h2>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Merchant Verification Applications ({shops.filter(s => !deletedShopIds.includes(s.id) && s.docs === 'Pending').length})</h2>
                     <button
                       className="neon-btn small-btn"
                       onClick={() => setIsMerchantApprovalsOpen(!isMerchantApprovalsOpen)}
@@ -8819,7 +8857,7 @@ function App() {
                   </div>
                   {isMerchantApprovalsOpen && (
                     <div className="approval-list fade-in">
-                      {shops.map(s => (
+                      {shops.filter(s => !deletedShopIds.includes(s.id)).map(s => (
                         <div key={s.id} className="approval-item">
                           <div className="approval-meta">
                             <h4>{s.name}</h4>
@@ -8855,15 +8893,15 @@ function App() {
                 {/* Pending Merchant Commission Requests */}
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Pending Commission Rate Requests ({shops.filter(s => s.commissionRequestStatus === 'pending').length})</h2>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Pending Commission Rate Requests ({shops.filter(s => !deletedShopIds.includes(s.id) && s.commissionRequestStatus === 'pending').length})</h2>
                   </div>
                   <div className="approval-list fade-in">
-                    {shops.filter(s => s.commissionRequestStatus === 'pending').length === 0 ? (
+                    {shops.filter(s => !deletedShopIds.includes(s.id) && s.commissionRequestStatus === 'pending').length === 0 ? (
                       <p style={{ color: 'var(--color-text-muted)', margin: 0, padding: '12px 0', fontSize: '13px' }}>
                         No pending commission rate change requests.
                       </p>
                     ) : (
-                      shops.filter(s => s.commissionRequestStatus === 'pending').map(s => {
+                      shops.filter(s => !deletedShopIds.includes(s.id) && s.commissionRequestStatus === 'pending').map(s => {
                         const currentComm = s.commissionPercent !== undefined ? s.commissionPercent : commissionPercent;
                         return (
                           <div key={s.id} className="approval-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', marginBottom: '8px' }}>
@@ -9147,7 +9185,7 @@ function App() {
                 {/* Delivery Boy Onboarding Verification list */}
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Delivery Boy Onboarding Verification ({deliveryPartners.filter(d => !d.verified).length})</h2>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Delivery Boy Onboarding Verification ({deliveryPartners.filter(d => !deletedUserIds.includes(d.id) && !d.verified).length})</h2>
                     <button
                       className="neon-btn small-btn"
                       onClick={() => setIsRiderApprovalsOpen(!isRiderApprovalsOpen)}
@@ -9158,7 +9196,7 @@ function App() {
                   </div>
                   {isRiderApprovalsOpen && (
                     <div className="approval-list fade-in">
-                      {deliveryPartners.map(d => (
+                      {deliveryPartners.filter(d => !deletedUserIds.includes(d.id)).map(d => (
                         <div key={d.id} className="approval-item">
                           <div className="approval-meta">
                             <h4>{d.name}</h4>
@@ -9761,12 +9799,12 @@ function App() {
                               >
                                 <option value="" style={{ background: '#1c1c24' }}>-- Select Payee --</option>
                                 {payoutType === 'merchant'
-                                  ? shops.map(s => (
+                                  ? shops.filter(s => !deletedShopIds.includes(s.id)).map(s => (
                                     <option key={s.id} value={s.id} style={{ background: '#1c1c24' }}>
                                       {s.storeName || s.name}
                                     </option>
                                   ))
-                                  : deliveryPartners.map(r => (
+                                  : deliveryPartners.filter(r => !deletedUserIds.includes(r.id)).map(r => (
                                     <option key={r.id} value={r.id} style={{ background: '#1c1c24' }}>
                                       {r.name}
                                     </option>
@@ -12349,12 +12387,12 @@ function App() {
                 />
               </div>
               <div className="form-group-premium">
-                <label className="form-label-premium">Delivery Address Coordinates</label>
+                <label className="form-label-premium">GPS Location Coordinates</label>
                 <textarea
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
                   className="custom-input-premium address-textarea-premium"
-                  rows="3"
+                  rows="1"
                   required
                 />
                 <button
@@ -12362,11 +12400,25 @@ function App() {
                   className="auto-detect-btn"
                   onClick={() => handleAutoDetectLocation(setCustomerAddress)}
                   disabled={isLocating}
-                  style={{ marginTop: '8px' }}
+                  style={{ marginTop: '8px', marginBottom: '8px' }}
                 >
                   <Compass size={14} className={isLocating ? "spin" : ""} />
                   {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
                 </button>
+              </div>
+              <div className="form-group-premium">
+                <label className="form-label-premium">Manual Delivery Address (Failure Fallback)</label>
+                <textarea
+                  value={customerAddressText}
+                  onChange={(e) => {
+                    setCustomerAddressText(e.target.value);
+                    localStorage.setItem('pixigo_customerAddressText', e.target.value);
+                  }}
+                  className="custom-input-premium address-textarea-premium"
+                  rows="2"
+                  placeholder="Type your manual/descriptive delivery address here..."
+                  required
+                />
                 <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '130px', marginTop: '8px' }}>
                   <LeafletMap
                     merchantCoords={{ lat: 26.9015, lng: 75.7482 }}
