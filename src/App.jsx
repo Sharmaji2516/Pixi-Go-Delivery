@@ -301,25 +301,27 @@ const getShopOpenStatus = (shop) => {
     return { isOpen: false, reason: 'MANUAL_CLOSED' };
   }
 
-  // 2. Check automatic operating hours scheduler
-  const openTime = shop.openTime || "09:00";
-  const closeTime = shop.closeTime || "22:00";
+  // 2. Check if automatic operating hours scheduler is enabled
+  if (shop.useOperatingHours === true) {
+    const openTime = shop.openTime || "09:00";
+    const closeTime = shop.closeTime || "22:00";
 
-  const now = new Date();
-  const currentHour = now.getHours();
-  const currentMinute = now.getMinutes();
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
 
-  const [openH, openM] = openTime.split(':').map(Number);
-  const [closeH, closeM] = closeTime.split(':').map(Number);
+    const [openH, openM] = openTime.split(':').map(Number);
+    const [closeH, closeM] = closeTime.split(':').map(Number);
 
-  const currentTotalMinutes = currentHour * 60 + currentMinute;
-  const openTotalMinutes = openH * 60 + openM;
-  const closeTotalMinutes = closeH * 60 + closeM;
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    const openTotalMinutes = openH * 60 + openM;
+    const closeTotalMinutes = closeH * 60 + closeM;
 
-  const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
+    const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
 
-  if (!isWithinHours) {
-    return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
+    if (!isWithinHours) {
+      return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
+    }
   }
 
   return { isOpen: true, reason: 'OPEN' };
@@ -630,6 +632,7 @@ function App() {
   const [merchantEditAddress, setMerchantEditAddress] = useState('');
   const [merchantEditOpenTime, setMerchantEditOpenTime] = useState('09:00');
   const [merchantEditCloseTime, setMerchantEditCloseTime] = useState('22:00');
+  const [merchantEditUseHours, setMerchantEditUseHours] = useState(false);
   const [isSavingMerchantEdit, setIsSavingMerchantEdit] = useState(false);
   const [merchantEditError, setMerchantEditError] = useState('');
 
@@ -1176,7 +1179,8 @@ function App() {
         address: merchantEditAddress.trim(),
         email: merchantEditEmail.trim().toLowerCase(),
         openTime: merchantEditOpenTime,
-        closeTime: merchantEditCloseTime
+        closeTime: merchantEditCloseTime,
+        useOperatingHours: merchantEditUseHours
       });
 
       // Update state
@@ -1188,7 +1192,8 @@ function App() {
               address: merchantEditAddress.trim(), 
               email: merchantEditEmail.trim().toLowerCase(),
               openTime: merchantEditOpenTime,
-              closeTime: merchantEditCloseTime
+              closeTime: merchantEditCloseTime,
+              useOperatingHours: merchantEditUseHours
             } 
           : s
       ));
@@ -11903,6 +11908,7 @@ function App() {
                             setMerchantEditEmail(loggedInMerchantShop.email || '');
                             setMerchantEditOpenTime(loggedInMerchantShop.openTime || '09:00');
                             setMerchantEditCloseTime(loggedInMerchantShop.closeTime || '22:00');
+                            setMerchantEditUseHours(loggedInMerchantShop.useOperatingHours || false);
                             setIsMerchantShopSettingsOpen(true);
                           }}
                         >
@@ -12982,32 +12988,48 @@ function App() {
                 />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                <div className="form-group-premium">
-                  <label className="form-label-premium">Opening Time</label>
-                  <input
-                    type="time"
-                    value={merchantEditOpenTime}
-                    onChange={(e) => setMerchantEditOpenTime(e.target.value)}
-                    className="custom-input-premium"
-                    required
-                    disabled={isSavingMerchantEdit}
-                    style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
-                  />
-                </div>
-                <div className="form-group-premium">
-                  <label className="form-label-premium">Closing Time</label>
-                  <input
-                    type="time"
-                    value={merchantEditCloseTime}
-                    onChange={(e) => setMerchantEditCloseTime(e.target.value)}
-                    className="custom-input-premium"
-                    required
-                    disabled={isSavingMerchantEdit}
-                    style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
-                  />
-                </div>
+              <div className="form-group-premium" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', marginTop: '6px' }}>
+                <input
+                  type="checkbox"
+                  id="merchantEditUseHours"
+                  checked={merchantEditUseHours}
+                  onChange={(e) => setMerchantEditUseHours(e.target.checked)}
+                  disabled={isSavingMerchantEdit}
+                  style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
+                />
+                <label htmlFor="merchantEditUseHours" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)', cursor: 'pointer', margin: 0 }}>
+                  Enable Automatic Operating Hours Scheduler
+                </label>
               </div>
+
+              {merchantEditUseHours && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                  <div className="form-group-premium">
+                    <label className="form-label-premium">Opening Time</label>
+                    <input
+                      type="time"
+                      value={merchantEditOpenTime}
+                      onChange={(e) => setMerchantEditOpenTime(e.target.value)}
+                      className="custom-input-premium"
+                      required
+                      disabled={isSavingMerchantEdit}
+                      style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
+                    />
+                  </div>
+                  <div className="form-group-premium">
+                    <label className="form-label-premium">Closing Time</label>
+                    <input
+                      type="time"
+                      value={merchantEditCloseTime}
+                      onChange={(e) => setMerchantEditCloseTime(e.target.value)}
+                      className="custom-input-premium"
+                      required
+                      disabled={isSavingMerchantEdit}
+                      style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
+                    />
+                  </div>
+                </div>
+              )}
 
               <button
                 type="submit"
