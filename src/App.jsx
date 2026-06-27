@@ -628,6 +628,8 @@ function App() {
   const [merchantEditPhone, setMerchantEditPhone] = useState('');
   const [merchantEditEmail, setMerchantEditEmail] = useState('');
   const [merchantEditAddress, setMerchantEditAddress] = useState('');
+  const [merchantEditOpenTime, setMerchantEditOpenTime] = useState('09:00');
+  const [merchantEditCloseTime, setMerchantEditCloseTime] = useState('22:00');
   const [isSavingMerchantEdit, setIsSavingMerchantEdit] = useState(false);
   const [merchantEditError, setMerchantEditError] = useState('');
 
@@ -1172,13 +1174,22 @@ function App() {
       await updateDoc(docRef, {
         phone: fullPhone,
         address: merchantEditAddress.trim(),
-        email: merchantEditEmail.trim().toLowerCase()
+        email: merchantEditEmail.trim().toLowerCase(),
+        openTime: merchantEditOpenTime,
+        closeTime: merchantEditCloseTime
       });
 
       // Update state
       setShops(prevShops => prevShops.map(s => 
         s.id === loggedInMerchantShop.id 
-          ? { ...s, phone: fullPhone, address: merchantEditAddress.trim(), email: merchantEditEmail.trim().toLowerCase() } 
+          ? { 
+              ...s, 
+              phone: fullPhone, 
+              address: merchantEditAddress.trim(), 
+              email: merchantEditEmail.trim().toLowerCase(),
+              openTime: merchantEditOpenTime,
+              closeTime: merchantEditCloseTime
+            } 
           : s
       ));
 
@@ -11890,6 +11901,8 @@ function App() {
                             setMerchantEditAddress(loggedInMerchantShop.address || '');
                             setMerchantEditPhone(loggedInMerchantShop.phone ? loggedInMerchantShop.phone.replace(/^\+91/, '') : '');
                             setMerchantEditEmail(loggedInMerchantShop.email || '');
+                            setMerchantEditOpenTime(loggedInMerchantShop.openTime || '09:00');
+                            setMerchantEditCloseTime(loggedInMerchantShop.closeTime || '22:00');
                             setIsMerchantShopSettingsOpen(true);
                           }}
                         >
@@ -12967,6 +12980,33 @@ function App() {
                   required
                   disabled={isSavingMerchantEdit}
                 />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Opening Time</label>
+                  <input
+                    type="time"
+                    value={merchantEditOpenTime}
+                    onChange={(e) => setMerchantEditOpenTime(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                    disabled={isSavingMerchantEdit}
+                    style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
+                  />
+                </div>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Closing Time</label>
+                  <input
+                    type="time"
+                    value={merchantEditCloseTime}
+                    onChange={(e) => setMerchantEditCloseTime(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                    disabled={isSavingMerchantEdit}
+                    style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
+                  />
+                </div>
               </div>
 
               <button
