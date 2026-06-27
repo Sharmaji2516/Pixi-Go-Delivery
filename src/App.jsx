@@ -301,30 +301,40 @@ const getShopOpenStatus = (shop) => {
     return { isOpen: false, reason: 'MANUAL_CLOSED' };
   }
 
-  // 2. Check if automatic operating hours scheduler is enabled
-  if (shop.useOperatingHours === true) {
-    const openTime = shop.openTime || "09:00";
-    const closeTime = shop.closeTime || "22:00";
+  // 2. Check automatic operating hours scheduler (10:00 AM to 10:00 PM)
+  const openTime = "10:00";
+  const closeTime = "22:00";
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
+  const now = new Date();
+  
+  // Format local date string: YYYY-MM-DD
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const date = String(now.getDate()).padStart(2, '0');
+  const todayDateString = `${year}-${month}-${date}`;
 
-    const [openH, openM] = openTime.split(':').map(Number);
-    const [closeH, closeM] = closeTime.split(':').map(Number);
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
 
-    const currentTotalMinutes = currentHour * 60 + currentMinute;
-    const openTotalMinutes = openH * 60 + openM;
-    const closeTotalMinutes = closeH * 60 + closeM;
+  const [openH, openM] = openTime.split(':').map(Number);
+  const [closeH, closeM] = closeTime.split(':').map(Number);
 
-    const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
+  const currentTotalMinutes = currentHour * 60 + currentMinute;
+  const openTotalMinutes = openH * 60 + openM;
+  const closeTotalMinutes = closeH * 60 + closeM;
 
-    if (!isWithinHours) {
-      return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
-    }
+  const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
+
+  if (isWithinHours) {
+    return { isOpen: true, reason: 'OPEN' };
   }
 
-  return { isOpen: true, reason: 'OPEN' };
+  // Outside operating hours: check manual override date
+  if (shop.manualForceOpenDate === todayDateString) {
+    return { isOpen: true, reason: 'FORCE_OPEN' };
+  }
+
+  return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
 };
 
 const getCategoryBgClass = (cat) => {
@@ -3661,13 +3671,24 @@ function App() {
     if (!shop) return;
     const newStatus = !currentStatus;
 
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const date = String(now.getDate()).padStart(2, '0');
+    const todayDateString = `${year}-${month}-${date}`;
+
+    const currentHour = now.getHours();
+    const isOutsideHours = currentHour < 10 || currentHour >= 22;
+
+    const manualForceOpenDate = (newStatus && isOutsideHours) ? todayDateString : "";
+
     // Update local state first
-    setShops(prevShops => prevShops.map(s => s.id === shop.id ? { ...s, isAcceptingOrders: newStatus } : s));
+    setShops(prevShops => prevShops.map(s => s.id === shop.id ? { ...s, isAcceptingOrders: newStatus, manualForceOpenDate } : s));
 
     if (shop.firestoreId) {
       try {
         const docRef = doc(db, "merchants", shop.firestoreId);
-        await updateDoc(docRef, { isAcceptingOrders: newStatus });
+        await updateDoc(docRef, { isAcceptingOrders: newStatus, manualForceOpenDate });
       } catch (err) {
         console.error("Error updating shop order acceptance in Firestore:", err);
       }
@@ -11924,6 +11945,8 @@ function App() {
                   {(() => {
                     const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                     if (!matchedShop) return null;
+                    const statusInfo = getShopOpenStatus(matchedShop);
+                    const isOpen = statusInfo.isOpen;
                     return (
                       <div className="glass-panel" style={{
                         marginTop: '16px',
@@ -11931,14 +11954,12 @@ function App() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: matchedShop.isAcceptingOrders !== false ? 'rgba(104, 166, 0, 0.05)' : 'rgba(239, 68, 68, 0.05)',
-                        border: '1px solid ' + (matchedShop.isAcceptingOrders !== false ? 'rgba(104, 166, 0, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
+                        background: isOpen ? 'rgba(104, 166, 0, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                        border: '1px solid ' + (isOpen ? 'rgba(104, 166, 0, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
                         borderRadius: '8px'
                       }}>
                         <div style={{ textAlign: 'left' }}>
                           {(() => {
-                            const statusInfo = getShopOpenStatus(matchedShop);
-                            const isOpen = statusInfo.isOpen;
                             const isManuallyClosed = matchedShop.isAcceptingOrders === false;
                             
                             return (
@@ -11957,9 +11978,12 @@ function App() {
                                   {isManuallyClosed 
                                     ? 'Your shop is manually closed. Customers cannot place new orders.' 
                                     : (!isOpen && statusInfo.reason === 'OUTSIDE_HOURS')
-                                      ? `Your shop is currently closed as it is outside operating hours (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
-                                      : `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
+                                      ? 'Your shop is currently closed as it is outside operating hours (Hours: 10:00 AM - 10:00 PM).'
+                                      : 'Your shop is open and actively accepting orders from customers (Hours: 10:00 AM - 10:00 PM).'
                                   }
+                                </p>
+                                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: 'var(--color-primary)', fontWeight: '600', lineHeight: '1.4' }}>
+                                  💡 Notice: Your shop operates automatically between 10:00 AM and 10:00 PM. If you need to manually open or close your shop at any time, please use the button on the right.
                                 </p>
                               </>
                             );
@@ -12987,49 +13011,6 @@ function App() {
                   disabled={isSavingMerchantEdit}
                 />
               </div>
-
-              <div className="form-group-premium" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', marginTop: '6px' }}>
-                <input
-                  type="checkbox"
-                  id="merchantEditUseHours"
-                  checked={merchantEditUseHours}
-                  onChange={(e) => setMerchantEditUseHours(e.target.checked)}
-                  disabled={isSavingMerchantEdit}
-                  style={{ cursor: 'pointer', width: '16px', height: '16px', accentColor: 'var(--color-primary)' }}
-                />
-                <label htmlFor="merchantEditUseHours" style={{ fontSize: '13px', fontWeight: '600', color: 'var(--color-text-main)', cursor: 'pointer', margin: 0 }}>
-                  Enable Automatic Operating Hours Scheduler
-                </label>
-              </div>
-
-              {merchantEditUseHours && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-                  <div className="form-group-premium">
-                    <label className="form-label-premium">Opening Time</label>
-                    <input
-                      type="time"
-                      value={merchantEditOpenTime}
-                      onChange={(e) => setMerchantEditOpenTime(e.target.value)}
-                      className="custom-input-premium"
-                      required
-                      disabled={isSavingMerchantEdit}
-                      style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
-                    />
-                  </div>
-                  <div className="form-group-premium">
-                    <label className="form-label-premium">Closing Time</label>
-                    <input
-                      type="time"
-                      value={merchantEditCloseTime}
-                      onChange={(e) => setMerchantEditCloseTime(e.target.value)}
-                      className="custom-input-premium"
-                      required
-                      disabled={isSavingMerchantEdit}
-                      style={{ background: 'rgba(255, 255, 255, 0.05)', color: 'var(--color-text-main)', border: '1px solid var(--color-border)', borderRadius: '6px', padding: '10px' }}
-                    />
-                  </div>
-                </div>
-              )}
 
               <button
                 type="submit"
