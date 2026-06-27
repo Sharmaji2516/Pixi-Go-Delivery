@@ -3239,6 +3239,50 @@
   gap: 24px;
 }
 
+.profile-edit-modal-card .section-title-premium {
+  color: var(--color-text-main) !important;
+}
+
+.profile-edit-modal-card .profile-sub {
+  color: var(--color-text-muted) !important;
+}
+
+.profile-edit-modal-card .prefixed-phone-container-premium {
+  background: rgba(30, 41, 59, 0.08) !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: none !important;
+}
+
+.profile-edit-modal-card .prefixed-phone-container-premium:hover {
+  background: rgba(30, 41, 59, 0.12) !important;
+  border-color: rgba(30, 41, 59, 0.2) !important;
+}
+
+.profile-edit-modal-card .prefixed-phone-container-premium:focus-within {
+  background: rgba(30, 41, 59, 0.12) !important;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 10px var(--color-primary-glow-strong) !important;
+}
+
+.profile-edit-modal-card .phone-prefix-badge-premium {
+  color: var(--color-text-main) !important;
+  border-right: 1px solid var(--color-border) !important;
+}
+
+.profile-edit-modal-card .phone-numeric-input-premium {
+  color: var(--color-text-main) !important;
+  background: transparent !important;
+}
+
+.profile-edit-modal-card .custom-input-premium:disabled {
+  background: rgba(30, 41, 59, 0.08) !important;
+  color: var(--color-text-muted) !important;
+  cursor: not-allowed !important;
+  opacity: 0.8 !important;
+  border-color: var(--color-border) !important;
+}
+
+
 .profile-form-premium {
   display: flex;
   flex-direction: column;

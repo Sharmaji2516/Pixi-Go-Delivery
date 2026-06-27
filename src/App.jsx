@@ -483,6 +483,10 @@ function App() {
   const [riderVehicleInput, setRiderVehicleInput] = useState('');
   const [riderEmailInput, setRiderEmailInput] = useState('');
   const [userRole, setUserRole] = useState(null); // admin | rider | customer | null
+  const [isRoleChecking, setIsRoleChecking] = useState(false);
+  const [authAdminData, setAuthAdminData] = useState(null);
+  const [authMerchantData, setAuthMerchantData] = useState(null);
+  const [authRiderData, setAuthRiderData] = useState(null);
   const [newRiderName, setNewRiderName] = useState('');
   const [newRiderEmail, setNewRiderEmail] = useState('');
   const [newRiderPassword, setNewRiderPassword] = useState('');
@@ -618,6 +622,22 @@ function App() {
   const [isAppPromoSubmitting, setIsAppPromoSubmitting] = useState(false);
   const [isAppPromoSubscribed, setIsAppPromoSubscribed] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+
+  // Merchant Profile Edit States
+  const [isMerchantShopSettingsOpen, setIsMerchantShopSettingsOpen] = useState(false);
+  const [merchantEditPhone, setMerchantEditPhone] = useState('');
+  const [merchantEditEmail, setMerchantEditEmail] = useState('');
+  const [merchantEditAddress, setMerchantEditAddress] = useState('');
+  const [isSavingMerchantEdit, setIsSavingMerchantEdit] = useState(false);
+  const [merchantEditError, setMerchantEditError] = useState('');
+
+  // Rider Profile Edit States
+  const [isRiderEditModalOpen, setIsRiderEditModalOpen] = useState(false);
+  const [riderEditPhone, setRiderEditPhone] = useState('');
+  const [riderEditEmail, setRiderEditEmail] = useState('');
+  const [isSavingRiderEdit, setIsSavingRiderEdit] = useState(false);
+  const [riderEditError, setRiderEditError] = useState('');
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(() => {
     return localStorage.getItem('pixigo_is_tracking_drawer_open') === 'true';
@@ -1132,6 +1152,96 @@ function App() {
     }
   };
 
+  const handleSaveMerchantSettings = async (e) => {
+    e.preventDefault();
+    if (!loggedInMerchantShop) return;
+    setIsSavingMerchantEdit(true);
+    setMerchantEditError('');
+
+    const phoneClean = merchantEditPhone.replace(/\D/g, '');
+    if (phoneClean.length !== 10) {
+      setMerchantEditError('Please enter a valid 10-digit mobile number.');
+      setIsSavingMerchantEdit(false);
+      return;
+    }
+
+    try {
+      const fullPhone = "+91" + phoneClean;
+      const docRef = doc(db, "merchants", loggedInMerchantShop.firestoreId);
+      
+      await updateDoc(docRef, {
+        phone: fullPhone,
+        address: merchantEditAddress.trim(),
+        email: merchantEditEmail.trim().toLowerCase()
+      });
+
+      // Update state
+      setShops(prevShops => prevShops.map(s => 
+        s.id === loggedInMerchantShop.id 
+          ? { ...s, phone: fullPhone, address: merchantEditAddress.trim(), email: merchantEditEmail.trim().toLowerCase() } 
+          : s
+      ));
+
+      showToast("Shop settings updated successfully!");
+      setIsMerchantShopSettingsOpen(false);
+    } catch (err) {
+      console.error("Error saving merchant shop settings:", err);
+      setMerchantEditError(`Failed to save settings: ${err.message}`);
+    } finally {
+      setIsSavingMerchantEdit(false);
+    }
+  };
+
+  const handleSaveRiderSettings = async (e) => {
+    e.preventDefault();
+    const currentRider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
+    if (!currentRider) return;
+
+    setIsSavingRiderEdit(true);
+    setRiderEditError('');
+
+    const phoneClean = riderEditPhone.replace(/\D/g, '');
+    if (phoneClean.length !== 10) {
+      setRiderEditError('Please enter a valid 10-digit mobile number.');
+      setIsSavingRiderEdit(false);
+      return;
+    }
+
+    try {
+      const fullPhone = "+91" + phoneClean;
+      const docRef = doc(db, "delivery_boys", currentRider.firestoreId || currentRider.id);
+      
+      const updatedData = {
+        phone: fullPhone,
+        email: riderEditEmail.trim().toLowerCase()
+      };
+
+      await updateDoc(docRef, updatedData);
+
+      // Update the active local session if there is one
+      const savedRider = localStorage.getItem('pixigo_rider_session');
+      if (savedRider) {
+        const sessionData = JSON.parse(savedRider);
+        if (sessionData.uid === currentRider.id) {
+          const newSession = {
+            ...sessionData,
+            email: updatedData.email
+          };
+          localStorage.setItem('pixigo_rider_session', JSON.stringify(newSession));
+          setUser(newSession);
+        }
+      }
+
+      showToast("Rider profile settings updated successfully!");
+      setIsRiderEditModalOpen(false);
+    } catch (err) {
+      console.error("Error saving rider settings:", err);
+      setRiderEditError(`Failed to save settings: ${err.message}`);
+    } finally {
+      setIsSavingRiderEdit(false);
+    }
+  };
+
   const handleAutoDetectLocation = (setAddressCallback, isAutomatic = false) => {
     if (!navigator.geolocation) {
       if (!isAutomatic) alert("Geolocation is not supported by your browser.");
@@ -1322,6 +1432,7 @@ function App() {
           const riderData = JSON.parse(savedRider);
           setUser(riderData);
           setUserRole('rider');
+          setIsRoleChecking(false);
           return; // Skip Firebase Auth override
         } catch (e) {
           console.error("Error parsing rider session on auth state change:", e);
@@ -1329,6 +1440,7 @@ function App() {
       }
 
       if (currentUser) {
+        setIsRoleChecking(true);
         const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
         setUser({
           uid: currentUser.uid,
@@ -1349,60 +1461,7 @@ function App() {
           const emailClean = localEmail.trim().toLowerCase();
           const existingRole = getRoleForEmail(emailClean);
 
-          // 1. Sync with Customer collection for all logged-in users to load/create their customer profiles
-          const customerDocRef = doc(db, "customers", currentUser.uid);
-
-          // Clean up any existing customer snapshot subscription first
-          if (customerSnapshotUnsubscribe.current) {
-            customerSnapshotUnsubscribe.current();
-            customerSnapshotUnsubscribe.current = null;
-          }
-
-          // Subscribe to live customer document updates
-          customerSnapshotUnsubscribe.current = onSnapshot(customerDocRef, async (custSnap) => {
-            if (custSnap.exists()) {
-              const data = custSnap.data();
-              if (data.isActive === false) {
-                // If deactivated, sign out immediately
-                await signOut(auth);
-                setUser(null);
-                alert("Your account has been temporarily deactivated by the Administrator.");
-                return;
-              }
-              const dbName = data.name || localName;
-              const dbPhone = data.phone || localPhone;
-              const dbEmail = data.email || localEmail;
-              const dbAddress = data.address || localAddress;
-
-              localStorage.setItem('pixigo_customerName', dbName);
-              localStorage.setItem('pixigo_customerPhone', dbPhone);
-              localStorage.setItem('pixigo_customerEmail', dbEmail);
-              localStorage.setItem('pixigo_customerAddress', dbAddress);
-
-              setCustomerName(dbName);
-              setCustomerPhone(dbPhone);
-              setCustomerEmail(dbEmail);
-              setCustomerAddress(dbAddress);
-            } else {
-              // Create the document if it doesn't exist yet
-              await setDoc(customerDocRef, {
-                name: localName,
-                email: localEmail,
-                phone: localPhone,
-                address: localAddress,
-                createdAt: timestamp
-              });
-              localStorage.setItem('pixigo_customerName', localName);
-              localStorage.setItem('pixigo_customerPhone', localPhone);
-              localStorage.setItem('pixigo_customerEmail', localEmail);
-              localStorage.setItem('pixigo_customerAddress', localAddress);
-
-              setCustomerName(localName);
-              setCustomerPhone(localPhone);
-              setCustomerEmail(localEmail);
-              setCustomerAddress(localAddress);
-            }
-          });
+          // Customer sync will be initialized below after fetching staff status
 
           // 2. Sync with Admin collection if on admin page AND not already another role
           if (currentTab === 'admin') {
@@ -1428,8 +1487,109 @@ function App() {
           const adminSnap = await getDoc(adminDocRef);
           const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
           const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
+          const isAdmin = adminSnap.exists() || isHardcodedAdmin;
 
-          if (adminSnap.exists() || isHardcodedAdmin) {
+          // Fetch rider info to see if user has a rider document (case-insensitive query)
+          const ridersRef = collection(db, "delivery_boys");
+          const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
+          const riderQuery2 = query(ridersRef, where("email", "==", currentUser.email ? currentUser.email.toLowerCase() : ''));
+          const [riderSnap1, riderSnap2] = await Promise.all([getDocs(riderQuery1), getDocs(riderQuery2)]);
+
+          let riderDoc = null;
+          if (!riderSnap1.empty) riderDoc = riderSnap1.docs[0];
+          else if (!riderSnap2.empty) riderDoc = riderSnap2.docs[0];
+
+          // Fetch merchant info to see if user has a merchant document (case-insensitive query)
+          const merchantsRef = collection(db, "merchants");
+          const merchQuery1 = query(merchantsRef, where("authUid", "==", currentUser.uid));
+          const merchQuery2 = query(merchantsRef, where("email", "==", currentUser.email ? currentUser.email.toLowerCase() : ''));
+          const [merchSnap1, merchSnap2] = await Promise.all([getDocs(merchQuery1), getDocs(merchQuery2)]);
+
+          let merchDoc = null;
+          if (!merchSnap1.empty) merchDoc = merchSnap1.docs[0];
+          else if (!merchSnap2.empty) merchDoc = merchSnap2.docs[0];
+
+          // Cache roles in state variables
+          setAuthAdminData(adminSnap.exists() ? adminSnap.data() : (isHardcodedAdmin ? { isHardcoded: true } : null));
+          setAuthMerchantData(merchDoc ? { firestoreId: merchDoc.id, ...merchDoc.data() } : null);
+          setAuthRiderData(riderDoc ? { firestoreId: riderDoc.id, ...riderDoc.data() } : null);
+
+          // 1. Sync with Customer collection for all logged-in users to load/create their customer profiles (only if they are NOT staff)
+          const isStaff = merchDoc || riderDoc || isAdmin;
+          if (!isStaff) {
+            const customerDocRef = doc(db, "customers", currentUser.uid);
+
+            // Clean up any existing customer snapshot subscription first
+            if (customerSnapshotUnsubscribe.current) {
+              customerSnapshotUnsubscribe.current();
+              customerSnapshotUnsubscribe.current = null;
+            }
+
+            // Subscribe to live customer document updates
+            customerSnapshotUnsubscribe.current = onSnapshot(customerDocRef, async (custSnap) => {
+              if (custSnap.exists()) {
+                const data = custSnap.data();
+                if (data.isActive === false) {
+                  // If deactivated, sign out immediately
+                  await signOut(auth);
+                  setUser(null);
+                  alert("Your account has been temporarily deactivated by the Administrator.");
+                  return;
+                }
+                const dbName = data.name || localName;
+                const dbPhone = data.phone || localPhone;
+                const dbEmail = data.email || localEmail;
+                const dbAddress = data.address || localAddress;
+
+                localStorage.setItem('pixigo_customerName', dbName);
+                localStorage.setItem('pixigo_customerPhone', dbPhone);
+                localStorage.setItem('pixigo_customerEmail', dbEmail);
+                localStorage.setItem('pixigo_customerAddress', dbAddress);
+
+                setCustomerName(dbName);
+                setCustomerPhone(dbPhone);
+                setCustomerEmail(dbEmail);
+                setCustomerAddress(dbAddress);
+              } else {
+                // Create the document if it doesn't exist yet
+                await setDoc(customerDocRef, {
+                  name: localName,
+                  email: localEmail,
+                  phone: localPhone,
+                  address: localAddress,
+                  createdAt: timestamp
+                });
+                localStorage.setItem('pixigo_customerName', localName);
+                localStorage.setItem('pixigo_customerPhone', localPhone);
+                localStorage.setItem('pixigo_customerEmail', localEmail);
+                localStorage.setItem('pixigo_customerAddress', localAddress);
+
+                setCustomerName(localName);
+                setCustomerPhone(localPhone);
+                setCustomerEmail(localEmail);
+                setCustomerAddress(localAddress);
+              }
+            });
+          }
+
+          // Determine active user role dynamically based on current portal path
+          if ((currentTab === 'merchant' || currentTab === 'shop') && merchDoc) {
+            setUserRole('merchant');
+            const merchData = merchDoc.data();
+            setUser({
+              uid: merchData.id || merchDoc.id,
+              email: currentUser.email,
+              name: merchData.storeName || nameVal
+            });
+          } else if ((currentTab === 'delivery' || currentTab === 'rider') && riderDoc) {
+            setUserRole('rider');
+            const riderData = riderDoc.data();
+            setUser({
+              uid: riderData.id || riderDoc.id,
+              email: currentUser.email,
+              name: riderData.name || nameVal
+            });
+          } else if (isAdmin) {
             setUserRole('admin');
             if (!adminSnap.exists()) {
               try {
@@ -1444,46 +1604,24 @@ function App() {
                 console.error("Error creating missing admin doc:", e);
               }
             }
+          } else if (riderDoc) {
+            setUserRole('rider');
+            const riderData = riderDoc.data();
+            setUser({
+              uid: riderData.id || riderDoc.id,
+              email: currentUser.email,
+              name: riderData.name || nameVal
+            });
+          } else if (merchDoc) {
+            setUserRole('merchant');
+            const merchData = merchDoc.data();
+            setUser({
+              uid: merchData.id || merchDoc.id,
+              email: currentUser.email,
+              name: merchData.storeName || nameVal
+            });
           } else {
-            const ridersRef = collection(db, "delivery_boys");
-            const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
-            const riderQuery2 = query(ridersRef, where("email", "==", currentUser.email));
-            const [riderSnap1, riderSnap2] = await Promise.all([getDocs(riderQuery1), getDocs(riderQuery2)]);
-
-            let riderDoc = null;
-            if (!riderSnap1.empty) riderDoc = riderSnap1.docs[0];
-            else if (!riderSnap2.empty) riderDoc = riderSnap2.docs[0];
-
-            if (riderDoc) {
-              setUserRole('rider');
-              const riderData = riderDoc.data();
-              setUser({
-                uid: riderData.id || riderDoc.id,
-                email: currentUser.email,
-                name: riderData.name || nameVal
-              });
-            } else {
-              const merchantsRef = collection(db, "merchants");
-              const merchQuery1 = query(merchantsRef, where("authUid", "==", currentUser.uid));
-              const merchQuery2 = query(merchantsRef, where("email", "==", currentUser.email));
-              const [merchSnap1, merchSnap2] = await Promise.all([getDocs(merchQuery1), getDocs(merchQuery2)]);
-
-              let merchDoc = null;
-              if (!merchSnap1.empty) merchDoc = merchSnap1.docs[0];
-              else if (!merchSnap2.empty) merchDoc = merchSnap2.docs[0];
-
-              if (merchDoc) {
-                setUserRole('merchant');
-                const merchData = merchDoc.data();
-                setUser({
-                  uid: merchData.id || merchDoc.id,
-                  email: currentUser.email,
-                  name: merchData.storeName || nameVal
-                });
-              } else {
-                setUserRole('customer');
-              }
-            }
+            setUserRole('customer');
           }
         } catch (e) {
           console.error("Error auto-syncing Firestore user profiles:", e);
@@ -1493,7 +1631,12 @@ function App() {
         setCustomerEmail(localEmail);
         setCustomerName(localName);
         setCustomerPhone(localPhone);
+        setIsRoleChecking(false);
       } else {
+        setIsRoleChecking(false);
+        setAuthAdminData(null);
+        setAuthMerchantData(null);
+        setAuthRiderData(null);
         const savedRider = localStorage.getItem('pixigo_rider_session');
         if (savedRider) {
           try {
@@ -1522,6 +1665,83 @@ function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Dynamically sync userRole and user info based on activeTab and verified profile documents
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const currentUser = auth.currentUser;
+    const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
+
+    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
+    const isAdmin = authAdminData || isHardcodedAdmin;
+
+    if ((activeTab === 'merchant' || activeTab === 'shop') && authMerchantData) {
+      setUserRole('merchant');
+      setUser({
+        uid: authMerchantData.id || authMerchantData.firestoreId,
+        email: currentUser.email,
+        name: authMerchantData.storeName || nameVal
+      });
+    } else if ((activeTab === 'delivery' || activeTab === 'rider') && authRiderData) {
+      setUserRole('rider');
+      setUser({
+        uid: authRiderData.id || authRiderData.firestoreId,
+        email: currentUser.email,
+        name: authRiderData.name || nameVal
+      });
+    } else if (activeTab === 'admin' && isAdmin) {
+      setUserRole('admin');
+      setUser({
+        uid: currentUser.uid,
+        email: currentUser.email,
+        name: (authAdminData && authAdminData.name) || nameVal
+      });
+    } else {
+      // Fallback/default roles when on non-staff page (customer pages)
+      if (isAdmin) {
+        setUserRole('admin');
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          name: (authAdminData && authAdminData.name) || nameVal
+        });
+      } else if (authRiderData) {
+        setUserRole('rider');
+        setUser({
+          uid: authRiderData.id || authRiderData.firestoreId,
+          email: currentUser.email,
+          name: authRiderData.name || nameVal
+        });
+      } else if (authMerchantData) {
+        setUserRole('merchant');
+        setUser({
+          uid: authMerchantData.id || authMerchantData.firestoreId,
+          email: currentUser.email,
+          name: authMerchantData.storeName || nameVal
+        });
+      } else {
+        setUserRole('customer');
+        setUser({
+          uid: currentUser.uid,
+          email: currentUser.email,
+          name: nameVal
+        });
+      }
+    }
+  }, [activeTab, authAdminData, authMerchantData, authRiderData]);
+
+  // Prevent staff users from logging in/browsing customer pages
+  useEffect(() => {
+    if (!user) return;
+    const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+    const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
+    if (!isStaffTab && (userRole === 'admin' || userRole === 'merchant' || userRole === 'rider')) {
+      alert("This email is registered as an Admin/Merchant/Rider account and cannot be used to access the Customer portal. Please log in on the appropriate staff portal.");
+      handleLogout();
+    }
+  }, [user, userRole, activeTab]);
 
   // Handle customer mobile phone prompt modal overlay if phone number is missing
   useEffect(() => {
@@ -2356,6 +2576,36 @@ function App() {
     }
   }, [orders, myMerchantShopNames, activeTab, user, userRole]);
 
+  const checkEmailRoleInFirestore = async (email) => {
+    if (!email) return null;
+    const cleanEmail = email.trim().toLowerCase();
+
+    // 1. Hardcoded Admins Check
+    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    if (hardcodedAdmins.includes(cleanEmail)) {
+      return 'admin';
+    }
+
+    try {
+      // 2. Query Firestore collections
+      const adminsSnap = await getDocs(query(collection(db, "admins"), where("email", "==", cleanEmail)));
+      if (!adminsSnap.empty) return 'admin';
+
+      const merchantsSnap = await getDocs(query(collection(db, "merchants"), where("email", "==", cleanEmail)));
+      if (!merchantsSnap.empty) return 'merchant';
+
+      const ridersSnap = await getDocs(query(collection(db, "delivery_boys"), where("email", "==", cleanEmail)));
+      if (!ridersSnap.empty) return 'rider';
+
+      const customersSnap = await getDocs(query(collection(db, "customers"), where("email", "==", cleanEmail)));
+      if (!customersSnap.empty) return 'customer';
+    } catch (e) {
+      console.error("Error checking email role in Firestore:", e);
+    }
+
+    return null;
+  };
+
   const getRoleForEmail = (email) => {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
@@ -2491,7 +2741,7 @@ function App() {
         }
       }
       const emailClean = targetEmail.trim().toLowerCase();
-      const existingRole = getRoleForEmail(emailClean);
+      const existingRole = await checkEmailRoleInFirestore(emailClean);
       if (existingRole) {
         setAuthError(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
         return;
@@ -2747,22 +2997,22 @@ function App() {
   };
 
   // 1. Add Admins
-  allAdmins.forEach(u => {
+  allAdmins.filter(a => !deletedUserIds.includes(a.id)).forEach(u => {
     mergeUser(u.id, u.name, u.email, 'admin', u.firestoreId || u.id, u);
   });
 
   // 2. Add Merchants
-  shops.forEach(u => {
+  shops.filter(s => !deletedShopIds.includes(s.id)).forEach(u => {
     mergeUser(u.id, u.name || u.storeName, u.email, 'merchant', u.firestoreId || u.id, u);
   });
 
   // 3. Add Riders
-  deliveryPartners.forEach(u => {
+  deliveryPartners.filter(d => !deletedUserIds.includes(d.id)).forEach(u => {
     mergeUser(u.id, u.name, u.email, 'rider', u.firestoreId || u.id, u);
   });
 
   // 4. Add Customers
-  allCustomers.forEach(u => {
+  allCustomers.filter(c => !deletedUserIds.includes(c.id)).forEach(u => {
     mergeUser(u.id, u.name, u.email, 'customer', u.firestoreId || u.id, u);
   });
 
@@ -3745,7 +3995,7 @@ function App() {
     }
 
     const cleanEmail = newRiderEmail.trim().toLowerCase();
-    const existingRole = getRoleForEmail(cleanEmail);
+    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -3798,7 +4048,7 @@ function App() {
     }
 
     const cleanEmail = newShopEmail.trim().toLowerCase();
-    const existingRole = getRoleForEmail(cleanEmail);
+    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -3852,7 +4102,7 @@ function App() {
       alert("Please enter a valid 10-digit phone number.");
       return;
     }
-    const existingRole = getRoleForEmail(cleanEmail);
+    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -3907,7 +4157,7 @@ function App() {
       alert("Please enter a valid 10-digit phone number.");
       return;
     }
-    const existingRole = getRoleForEmail(cleanEmail);
+    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -4402,6 +4652,60 @@ function App() {
     } catch (error) {
       console.error("Error deleting user:", error);
       alert(`Failed to delete user: ${error.message}`);
+    }
+  };
+
+  const handleAdminDeleteUserRole = async (user, roleToDelete) => {
+    const roleDocIds = user.roleDocIds || { [user.role]: user.firestoreId || user.id };
+    const docId = roleDocIds[roleToDelete];
+    if (!docId) {
+      alert("No database record found for this role.");
+      return;
+    }
+
+    const label =
+      roleToDelete === 'admin' ? 'Admin' :
+        roleToDelete === 'merchant' ? 'Merchant' :
+          roleToDelete === 'rider' ? 'Rider' :
+            'Customer';
+
+    if (!window.confirm(`Are you sure you want to permanently delete the "${label}" role for "${user.name}"? This will delete the role record in database, but preserve their other roles.`)) return;
+
+    try {
+      let collectionName = '';
+      if (roleToDelete === 'admin') collectionName = 'admins';
+      else if (roleToDelete === 'merchant') collectionName = 'merchants';
+      else if (roleToDelete === 'rider') collectionName = 'delivery_boys';
+      else if (roleToDelete === 'customer') collectionName = 'customers';
+
+      if (collectionName) {
+        await deleteDoc(doc(db, collectionName, docId));
+      }
+
+      // Add to deleted lists so mock data and compiled directories filter it out immediately
+      if (roleToDelete === 'merchant') {
+        const updated = [...deletedShopIds, docId];
+        setDeletedShopIds(updated);
+        localStorage.setItem('pixigo_deleted_shops', JSON.stringify(updated));
+      } else {
+        const updated = [...deletedUserIds, docId];
+        setDeletedUserIds(updated);
+        localStorage.setItem('pixigo_deleted_users', JSON.stringify(updated));
+      }
+
+      const updatedRoles = user.roles.filter(r => r !== roleToDelete);
+      setSelectedUserDetails(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          roles: updatedRoles
+        };
+      });
+
+      showToast(`Role "${label}" successfully removed from "${user.name}".`);
+    } catch (error) {
+      console.error("Error deleting role:", error);
+      alert(`Failed to delete role: ${error.message}`);
     }
   };
 
@@ -4936,7 +5240,7 @@ function App() {
       targetEmail = `${targetEmail.toLowerCase().replace(/\s+/g, '')}@pixigo.com`;
     }
 
-    const existingRole = getRoleForEmail(targetEmail);
+    const existingRole = await checkEmailRoleInFirestore(targetEmail);
     let isSameUser = false;
     if (type === 'merchant') {
       const merchant = shops.find(s => s.id === id);
@@ -6063,6 +6367,28 @@ function App() {
   };
 
   const renderPortalGuard = (portalName, children) => {
+    if (isRoleChecking) {
+      const portalThemeClass = portalName === 'Admin Console' ? 'portal-theme-admin' :
+        portalName === 'Delivery Rider' ? 'portal-theme-delivery' :
+          'portal-theme-merchant';
+      return (
+        <div className={`portal-auth-scene ${portalThemeClass} fade-in`} style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
+          <div className="portal-bg-orbs">
+            <div className="orb orb-1"></div>
+            <div className="orb orb-2"></div>
+          </div>
+          <div className="portal-auth-card-dark" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '40px' }}>
+            <div className="portal-card-glow-ring"></div>
+            <div className="auth-icon-badge-dark logo-badge-premium" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <RefreshCw className="spin" size={32} style={{ color: 'var(--color-primary)' }} />
+            </div>
+            <h3 style={{ color: '#fff', fontSize: '18px', margin: 0, fontFamily: 'var(--font-heading)' }}>Verifying credentials...</h3>
+            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', margin: 0 }}>Checking role authorizations, please wait a moment.</p>
+          </div>
+        </div>
+      );
+    }
+
     if (!user) {
       const isRider = portalName === 'Delivery Rider';
       const isMerchant = portalName === 'Merchant Dashboard';
@@ -10977,8 +11303,20 @@ function App() {
                       Welcome, {currentRider?.name || user?.name || user?.email}
                     </h2>
                     <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                      Logged in as: <strong>{user?.email}</strong> | UID: <strong>{user?.uid}</strong>
+                      Logged in as: <strong>{user?.email}</strong> | Contact: <strong>{currentRider?.phone || 'Not Set'}</strong>
                     </p>
+                    <button
+                      type="button"
+                      className="neon-btn"
+                      style={{ padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}
+                      onClick={() => {
+                        setRiderEditPhone(currentRider?.phone ? currentRider.phone.replace(/^\+91/, '') : '');
+                        setRiderEditEmail(currentRider?.email || '');
+                        setIsRiderEditModalOpen(true);
+                      }}
+                    >
+                      <Edit size={12} /> Edit Settings
+                    </button>
                   </div>
 
                   <div style={{
@@ -11540,9 +11878,24 @@ function App() {
                     const activeShopCommission = (matchedShop && matchedShop.commissionPercent !== undefined) ? matchedShop.commissionPercent : commissionPercent;
 
                     return loggedInMerchantShop ? (
-                      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                        Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong> | Commission Rate: <strong>{activeShopCommission}%</strong>
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginTop: '4px' }}>
+                        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: 0 }}>
+                          Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong> | Commission Rate: <strong>{activeShopCommission}%</strong>
+                        </p>
+                        <button
+                          type="button"
+                          className="neon-btn"
+                          style={{ padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                          onClick={() => {
+                            setMerchantEditAddress(loggedInMerchantShop.address || '');
+                            setMerchantEditPhone(loggedInMerchantShop.phone ? loggedInMerchantShop.phone.replace(/^\+91/, '') : '');
+                            setMerchantEditEmail(loggedInMerchantShop.email || '');
+                            setIsMerchantShopSettingsOpen(true);
+                          }}
+                        >
+                          <Edit size={12} /> Edit Settings
+                        </button>
+                      </div>
                     ) : (
                       <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
                         Logged in as: <strong>{user?.email}</strong> | Active Commission Rate: <strong>{activeShopCommission}%</strong>. If your shop is not linked, please contact the Administrator.
@@ -12527,6 +12880,164 @@ function App() {
                 Logout & Sign In with Another Account
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merchant Edit Shop Settings Modal */}
+      {isMerchantShopSettingsOpen && loggedInMerchantShop && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsMerchantShopSettingsOpen(false)}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="modal-close-btn" onClick={() => setIsMerchantShopSettingsOpen(false)}>
+              <X size={20} />
+            </button>
+
+            <div className="profile-avatar-section">
+              <div className="profile-avatar-glow">
+                <Store size={40} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium">Edit Shop Details</h3>
+              <p className="profile-sub">{loggedInMerchantShop.storeName || loggedInMerchantShop.name}</p>
+            </div>
+
+            {merchantEditError && (
+              <div className="auth-error-banner fade-in" style={{ marginBottom: '14px' }}>
+                <AlertCircle size={16} />
+                <span>{merchantEditError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveMerchantSettings} className="profile-form-premium">
+              <div className="form-group-premium">
+                <label className="form-label-premium">Contact Number (10-Digit Mobile)</label>
+                <div className="prefixed-phone-container-premium">
+                  <span className="phone-prefix-badge-premium">+91</span>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={merchantEditPhone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setMerchantEditPhone(val);
+                    }}
+                    className="phone-numeric-input-premium"
+                    required
+                    disabled={isSavingMerchantEdit}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group-premium">
+                <label className="form-label-premium">Email Address</label>
+                <input
+                  type="email"
+                  value={merchantEditEmail}
+                  className="custom-input-premium"
+                  required
+                  disabled={true}
+                  readOnly={true}
+                  autoComplete="off"
+                />
+                <small style={{ color: 'var(--color-text-muted)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                  This email address is linked to your shop dashboard and cannot be changed.
+                </small>
+              </div>
+
+              <div className="form-group-premium">
+                <label className="form-label-premium">Shop Address</label>
+                <textarea
+                  value={merchantEditAddress}
+                  onChange={(e) => setMerchantEditAddress(e.target.value)}
+                  className="custom-input-premium address-textarea-premium"
+                  rows="2"
+                  required
+                  disabled={isSavingMerchantEdit}
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="neon-btn auth-submit-btn-premium"
+                disabled={isSavingMerchantEdit}
+                style={{ width: '100%', marginTop: '8px' }}
+              >
+                {isSavingMerchantEdit ? 'Saving Details...' : 'Save Settings'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rider Edit Settings Modal */}
+      {isRiderEditModalOpen && (
+        <div className="modal-backdrop fade-in" onClick={() => setIsRiderEditModalOpen(false)}>
+          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
+            <button type="button" className="modal-close-btn" onClick={() => setIsRiderEditModalOpen(false)}>
+              <X size={20} />
+            </button>
+
+            <div className="profile-avatar-section">
+              <div className="profile-avatar-glow">
+                <Bike size={40} style={{ color: 'var(--color-primary)' }} />
+              </div>
+              <h3 className="section-title-premium">Edit Rider Details</h3>
+              <p className="profile-sub">{user?.name || user?.email}</p>
+            </div>
+
+            {riderEditError && (
+              <div className="auth-error-banner fade-in" style={{ marginBottom: '14px' }}>
+                <AlertCircle size={16} />
+                <span>{riderEditError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRiderSettings} className="profile-form-premium">
+              <div className="form-group-premium">
+                <label className="form-label-premium">Contact Number (10-Digit Mobile)</label>
+                <div className="prefixed-phone-container-premium">
+                  <span className="phone-prefix-badge-premium">+91</span>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    value={riderEditPhone}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setRiderEditPhone(val);
+                    }}
+                    className="phone-numeric-input-premium"
+                    required
+                    disabled={isSavingRiderEdit}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group-premium">
+                <label className="form-label-premium">Email Address</label>
+                <input
+                  type="email"
+                  value={riderEditEmail}
+                  className="custom-input-premium"
+                  required
+                  disabled={true}
+                  readOnly={true}
+                  autoComplete="off"
+                />
+                <small style={{ color: 'var(--color-text-muted)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
+                  This email is linked to your rider access and cannot be changed.
+                </small>
+              </div>
+
+              <button
+                type="submit"
+                className="neon-btn auth-submit-btn-premium"
+                disabled={isSavingRiderEdit}
+                style={{ width: '100%', marginTop: '8px' }}
+              >
+                {isSavingRiderEdit ? 'Saving Details...' : 'Save Settings'}
+              </button>
+            </form>
           </div>
         </div>
       )}
@@ -14592,9 +15103,32 @@ function App() {
                                 'Customer';
 
                         return (
-                          <span key={role} className={`badge ${badgeClass}`} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                            {label}
-                          </span>
+                          <div key={role} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span className={`badge ${badgeClass}`} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                              {label}
+                            </span>
+                            {roles.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleAdminDeleteUserRole(u, role)}
+                                style={{
+                                  background: 'rgba(239, 68, 68, 0.1)',
+                                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                                  borderRadius: '4px',
+                                  color: '#ef4444',
+                                  padding: '2px 4px',
+                                  fontSize: '10px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center'
+                                }}
+                                title={`Delete ${label} Role`}
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
