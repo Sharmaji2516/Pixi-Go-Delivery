@@ -11917,21 +11917,34 @@ function App() {
                         borderRadius: '8px'
                       }}>
                         <div style={{ textAlign: 'left' }}>
-                          <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{
-                              width: '10px',
-                              height: '10px',
-                              borderRadius: '50%',
-                              background: matchedShop.isAcceptingOrders !== false ? 'var(--color-success)' : 'var(--color-danger)',
-                              boxShadow: '0 0 8px ' + (matchedShop.isAcceptingOrders !== false ? 'var(--color-success)' : 'var(--color-danger)')
-                            }}></span>
-                            Order Acceptance Status: <strong>{matchedShop.isAcceptingOrders !== false ? 'OPEN' : 'CLOSED'}</strong>
-                          </h4>
-                          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                            {matchedShop.isAcceptingOrders !== false
-                              ? `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
-                              : 'Your shop is currently closed. Customers cannot place new orders.'}
-                          </p>
+                          {(() => {
+                            const statusInfo = getShopOpenStatus(matchedShop);
+                            const isOpen = statusInfo.isOpen;
+                            const isManuallyClosed = matchedShop.isAcceptingOrders === false;
+                            
+                            return (
+                              <>
+                                <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    background: isOpen ? 'var(--color-success)' : 'var(--color-danger)',
+                                    boxShadow: '0 0 8px ' + (isOpen ? 'var(--color-success)' : 'var(--color-danger)')
+                                  }}></span>
+                                  Order Acceptance Status: <strong>{isOpen ? 'OPEN' : 'CLOSED'}</strong>
+                                </h4>
+                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                                  {isManuallyClosed 
+                                    ? 'Your shop is manually closed. Customers cannot place new orders.' 
+                                    : (!isOpen && statusInfo.reason === 'OUTSIDE_HOURS')
+                                      ? `Your shop is currently closed as it is outside operating hours (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
+                                      : `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
+                                  }
+                                </p>
+                              </>
+                            );
+                          })()}
                         </div>
                         <button
                           className="neon-btn"
