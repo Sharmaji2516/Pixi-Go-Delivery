@@ -12,6 +12,7 @@ import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithP
 import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, limit, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
 import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
+import { getOrderSlaDetails } from './slaUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -534,6 +535,7 @@ function App() {
   const [shops, setShops] = useState(INITIAL_SHOPS);
   const [deliveryPartners, setDeliveryPartners] = useState(INITIAL_DELIVERY_PARTNERS);
   const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [tick, setTick] = useState(0);
   const [isOrdersLoading, setIsOrdersLoading] = useState(true);
   const [commissionPercent, setCommissionPercent] = useState(10);
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
@@ -2601,6 +2603,50 @@ function App() {
       prevMerchantOrdersCount.current = merchantPendingOrders.length;
     }
   }, [orders, myMerchantShopNames, activeTab, user, userRole]);
+
+  // SLA Live Ticking Trigger
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTick(prev => prev + 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // SLA Watchdog for auto-cancellation (runs every 10 seconds)
+  useEffect(() => {
+    const handleTimeoutWatchdog = async () => {
+      const pendingPlacedOrders = orders.filter(o => o.status === 'PLACED');
+      if (pendingPlacedOrders.length === 0) return;
+
+      const now = Date.now();
+      for (const order of pendingPlacedOrders) {
+        if (!order.createdAt) continue;
+        const createdTime = new Date(order.createdAt).getTime();
+        const elapsedSeconds = Math.max(0, Math.floor((now - createdTime) / 1000));
+
+        if (elapsedSeconds >= 600) { // 10 minutes timeout
+          console.log(`Auto-timeout triggered for Order ${order.id}`);
+          if (order.firestoreId) {
+            try {
+              const orderRef = doc(db, "orders", order.firestoreId);
+              await updateDoc(orderRef, {
+                status: 'CANCELLED_AUTO',
+                cancelledBy: 'System Timeout',
+                cancelReason: 'Merchant failed to accept order within 10 minutes SLA.',
+                cancelledAt: new Date().toISOString()
+              });
+            } catch (err) {
+              console.error("Error auto-cancelling order:", err);
+            }
+          }
+        }
+      }
+    };
+
+    if (tick % 10 === 0) {
+      handleTimeoutWatchdog();
+    }
+  }, [tick, orders]);
 
   const checkEmailRoleInFirestore = async (email) => {
     if (!email) return null;
@@ -7934,6 +7980,41 @@ function App() {
         {/* ==================== ADMIN PORTAL ==================== */}
         {activeTab === 'admin' && renderPortalGuard('Admin Console', (
           <div className="admin-grid fade-in">
+            {(() => {
+              const criticalOrders = orders.filter(o => {
+                if (o.status !== 'PLACED' || !o.createdAt) return false;
+                const elapsed = (Date.now() - new Date(o.createdAt).getTime()) / 1000;
+                return elapsed >= 300; // 5 minutes
+              });
+              if (criticalOrders.length === 0) return null;
+              return (
+                <div className="sla-alert-banner fade-in" style={{
+                  gridColumn: '1 / -1',
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginBottom: '16px',
+                  color: '#ff3838',
+                  animation: 'pulse-bg 2s infinite alternate ease-in-out'
+                }}>
+                  <AlertTriangle size={20} className="flashing-icon" />
+                  <div style={{ flex: 1, textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>
+                    ⚠️ CRITICAL SLA WARNING: There {criticalOrders.length === 1 ? 'is 1 order' : `are ${criticalOrders.length} orders`} that have been unaccepted by merchants for more than 5 minutes! Please notify them or reassign.
+                  </div>
+                  <button 
+                    className="neon-btn small-btn" 
+                    onClick={() => setAdminSubView('orders')}
+                    style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: '#fff', fontSize: '11px', padding: '4px 8px' }}
+                  >
+                    View Orders
+                  </button>
+                </div>
+              );
+            })()}
             {/* Dynamic Dashboard Subview Content */}
             {adminSubView === 'sales' && (
               !isSalesUnlocked ? (
@@ -8576,6 +8657,23 @@ function App() {
                                       return statusUpper;
                                     })()}
                                   </span>
+                                  {o.status === 'PLACED' && (() => {
+                                    const sla = getOrderSlaDetails(o.createdAt);
+                                    return (
+                                      <span style={{ 
+                                        fontSize: '10px', 
+                                        fontWeight: 'bold', 
+                                        color: sla.color,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        marginTop: '2px',
+                                        animation: sla.flashing ? 'pulse-fast 1.2s infinite alternate ease-in-out' : 'none'
+                                      }}>
+                                        ⏱️ {sla.timerText}
+                                      </span>
+                                    );
+                                  })()}
                                 </div>
                               </td>
                               <td>
@@ -8597,9 +8695,9 @@ function App() {
                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
                                     Rejected by Store
                                   </span>
-                                ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' ? (
+                                ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' || o.status === 'CANCELLED_AUTO' ? (
                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
-                                    Cancelled by Admin
+                                    Cancelled {o.status === 'CANCELLED_AUTO' ? 'by System (Timeout)' : 'by Admin'}
                                   </span>
                                 ) : o.status === 'CANCELLED_BY_RIDER' ? (
                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
@@ -14058,6 +14156,7 @@ function App() {
                         trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
                           trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
                             trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
+                              trackedOrder.status === 'CANCELLED_AUTO' ? 'Cancelled Automatically (Timeout)' :
                               ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in few minutes' :
                                 trackedOrder.status === 'READY_FOR_PICKUP' ? 'Prepared, ready for pickup!' :
                                   trackedOrder.status === 'ACCEPTED' ? 'Preparing... (few minutes)' :
@@ -15974,7 +16073,7 @@ function App() {
             <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
 
             <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN'].includes(selectedOrderDetails.status?.toUpperCase()) && (
+              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN', 'CANCELLED_AUTO'].includes(selectedOrderDetails.status?.toUpperCase()) && (
                 <button
                   className="neon-btn"
                   onClick={() => handleAdminCancelOrder(selectedOrderDetails.id)}
