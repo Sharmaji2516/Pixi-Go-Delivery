@@ -2615,29 +2615,45 @@ function App() {
   // SLA Watchdog for auto-cancellation (runs every 10 seconds)
   useEffect(() => {
     const handleTimeoutWatchdog = async () => {
-      const pendingPlacedOrders = orders.filter(o => o.status === 'PLACED');
-      if (pendingPlacedOrders.length === 0) return;
+      const pendingSlaOrders = orders.filter(o => 
+        o.status === 'PLACED' || 
+        ((o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId)
+      );
+      if (pendingSlaOrders.length === 0) return;
 
       const now = Date.now();
-      for (const order of pendingPlacedOrders) {
+      for (const order of pendingSlaOrders) {
         if (!order.createdAt) continue;
         const createdTime = new Date(order.createdAt).getTime();
         const elapsedSeconds = Math.max(0, Math.floor((now - createdTime) / 1000));
 
-        if (elapsedSeconds >= 600) { // 10 minutes timeout
-          console.log(`Auto-timeout triggered for Order ${order.id}`);
-          if (order.firestoreId) {
-            try {
-              const orderRef = doc(db, "orders", order.firestoreId);
-              await updateDoc(orderRef, {
-                status: 'CANCELLED_AUTO',
-                cancelledBy: 'System Timeout',
-                cancelReason: 'Merchant failed to accept order within 10 minutes SLA.',
-                cancelledAt: new Date().toISOString()
-              });
-            } catch (err) {
-              console.error("Error auto-cancelling order:", err);
-            }
+        let isTimeout = false;
+        let cancelReason = '';
+
+        if (order.status === 'PLACED') {
+          if (elapsedSeconds >= 600) { // 10 minutes timeout
+            isTimeout = true;
+            cancelReason = 'Merchant failed to accept order within 10 minutes SLA.';
+          }
+        } else {
+          if (elapsedSeconds >= 900) { // 15 minutes timeout
+            isTimeout = true;
+            cancelReason = 'No delivery rider accepted the order within 15 minutes SLA.';
+          }
+        }
+
+        if (isTimeout && order.firestoreId) {
+          console.log(`Auto-timeout triggered for Order ${order.id} (Status: ${order.status})`);
+          try {
+            const orderRef = doc(db, "orders", order.firestoreId);
+            await updateDoc(orderRef, {
+              status: 'CANCELLED_AUTO',
+              cancelledBy: 'System Timeout',
+              cancelReason: cancelReason,
+              cancelledAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.error("Error auto-cancelling order:", err);
           }
         }
       }
@@ -7981,12 +7997,21 @@ function App() {
         {activeTab === 'admin' && renderPortalGuard('Admin Console', (
           <div className="admin-grid fade-in">
             {(() => {
-              const criticalOrders = orders.filter(o => {
+              const criticalMerchantOrders = orders.filter(o => {
                 if (o.status !== 'PLACED' || !o.createdAt) return false;
                 const elapsed = (Date.now() - new Date(o.createdAt).getTime()) / 1000;
                 return elapsed >= 300; // 5 minutes
               });
-              if (criticalOrders.length === 0) return null;
+
+              const criticalRiderOrders = orders.filter(o => {
+                if ((o.status !== 'ACCEPTED' && o.status !== 'READY_FOR_PICKUP') || o.deliveryPartnerId || !o.createdAt) return false;
+                const elapsed = (Date.now() - new Date(o.createdAt).getTime()) / 1000;
+                return elapsed >= 600; // 10 minutes
+              });
+
+              const totalCritical = criticalMerchantOrders.length + criticalRiderOrders.length;
+              if (totalCritical === 0) return null;
+
               return (
                 <div className="sla-alert-banner fade-in" style={{
                   gridColumn: '1 / -1',
@@ -8002,8 +8027,11 @@ function App() {
                   animation: 'pulse-bg 2s infinite alternate ease-in-out'
                 }}>
                   <AlertTriangle size={20} className="flashing-icon" />
-                  <div style={{ flex: 1, textAlign: 'left', fontSize: '13px', fontWeight: 'bold' }}>
-                    ⚠️ CRITICAL SLA WARNING: There {criticalOrders.length === 1 ? 'is 1 order' : `are ${criticalOrders.length} orders`} that have been unaccepted by merchants for more than 5 minutes! Please notify them or reassign.
+                  <div style={{ flex: 1, textAlign: 'left', fontSize: '13px', fontWeight: 'bold', lineHeight: '1.4' }}>
+                    ⚠️ CRITICAL SLA WARNING:
+                    {criticalMerchantOrders.length > 0 && ` ${criticalMerchantOrders.length} merchant unaccepted order(s) (> 5 mins).`}
+                    {criticalRiderOrders.length > 0 && ` ${criticalRiderOrders.length} unassigned rider pool order(s) (> 10 mins).`}
+                    Please notify them or manually assign riders.
                   </div>
                   <button 
                     className="neon-btn small-btn" 
@@ -8657,8 +8685,8 @@ function App() {
                                       return statusUpper;
                                     })()}
                                   </span>
-                                  {o.status === 'PLACED' && (() => {
-                                    const sla = getOrderSlaDetails(o.createdAt);
+                                  {(o.status === 'PLACED' || ((o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId)) && (() => {
+                                    const sla = getOrderSlaDetails(o.createdAt, o.status, o.deliveryPartnerId);
                                     return (
                                       <span style={{ 
                                         fontSize: '10px', 
@@ -8670,7 +8698,7 @@ function App() {
                                         marginTop: '2px',
                                         animation: sla.flashing ? 'pulse-fast 1.2s infinite alternate ease-in-out' : 'none'
                                       }}>
-                                        ⏱️ {sla.timerText}
+                                        ⏱️ {o.status === 'PLACED' ? 'SLA' : 'Pool'}: {sla.timerText}
                                       </span>
                                     );
                                   })()}
