@@ -1433,7 +1433,7 @@ function App() {
   // Simple Frontend URL Router
   useEffect(() => {
     const handleLocationChange = () => {
-      const path = window.location.pathname.replace('/', '').toLowerCase();
+      const path = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
       if (['customer', 'admin', 'delivery', 'merchant'].includes(path)) {
         setActiveTab(path);
       } else if (path === 'rider') {
@@ -1454,7 +1454,7 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       const savedRider = localStorage.getItem('pixigo_rider_session');
-      const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+      const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
       if ((currentTab === 'delivery' || currentTab === 'rider') && savedRider) {
         try {
           const riderData = JSON.parse(savedRider);
@@ -1484,7 +1484,7 @@ function App() {
 
         try {
           const timestamp = new Date().toISOString();
-          const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+          const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
 
           const emailClean = localEmail.trim().toLowerCase();
           const existingRole = getRoleForEmail(emailClean);
@@ -1763,7 +1763,7 @@ function App() {
   // Prevent staff users from logging in/browsing customer pages
   useEffect(() => {
     if (!user) return;
-    const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+    const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
     const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
     if (!isStaffTab && (userRole === 'admin' || userRole === 'merchant' || userRole === 'rider')) {
       alert("This email is registered as an Admin/Merchant/Rider account and cannot be used to access the Customer portal. Please log in on the appropriate staff portal.");
@@ -1773,7 +1773,7 @@ function App() {
 
   // Handle customer mobile phone prompt modal overlay if phone number is missing
   useEffect(() => {
-    const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+    const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
     const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
     if (user && userRole === 'customer' && !isStaffTab && (!customerPhone || customerPhone.trim() === '')) {
       setShowPhonePromptModal(true);
@@ -2819,7 +2819,7 @@ function App() {
     let targetEmail = authEmail;
 
     if (isSignUp) {
-      const currentTab = window.location.pathname.replace('/', '').toLowerCase();
+      const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
       let cleanPhone = '';
       if (currentTab !== 'admin') {
         cleanPhone = authPhone.replace(/\D/g, '');
