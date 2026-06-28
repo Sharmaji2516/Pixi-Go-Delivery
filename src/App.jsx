@@ -2631,14 +2631,14 @@ function App() {
         let cancelReason = '';
 
         if (order.status === 'PLACED') {
-          if (elapsedSeconds >= 600) { // 10 minutes timeout
+          if (elapsedSeconds >= 300) { // 5 minutes timeout
             isTimeout = true;
-            cancelReason = 'Merchant failed to accept order within 10 minutes SLA.';
+            cancelReason = 'Merchant failed to accept order within 5 minutes SLA.';
           }
         } else {
-          if (elapsedSeconds >= 900) { // 15 minutes timeout
+          if (elapsedSeconds >= 300) { // 5 minutes timeout
             isTimeout = true;
-            cancelReason = 'No delivery rider accepted the order within 15 minutes SLA.';
+            cancelReason = 'No delivery rider accepted the order within 5 minutes SLA.';
           }
         }
 

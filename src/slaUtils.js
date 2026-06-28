@@ -27,28 +27,28 @@ export function getOrderSlaDetails(createdAt, status = 'PLACED', deliveryPartner
   const isRiderPool = (status === 'ACCEPTED' || status === 'READY_FOR_PICKUP') && !deliveryPartnerId;
 
   if (isRiderPool) {
-    // Rider SLA thresholds: 5 min warning (300s), 10 min critical (600s), 15 min timeout (900s)
-    if (elapsedSeconds >= 900) {
+    // Rider SLA thresholds: 1.5 min warning (90s), 3 min critical (180s), 5 min timeout (300s)
+    if (elapsedSeconds >= 300) {
       statusLevel = 'EXPIRED';
       color = 'var(--color-danger)';
-    } else if (elapsedSeconds >= 600) {
+    } else if (elapsedSeconds >= 180) {
       statusLevel = 'CRITICAL';
       color = '#ff3838'; // flashing red
       flashing = true;
-    } else if (elapsedSeconds >= 300) {
+    } else if (elapsedSeconds >= 90) {
       statusLevel = 'WARNING';
       color = '#ff9f43'; // warning orange
     }
   } else {
-    // Merchant SLA thresholds: 2 min warning (120s), 5 min critical (300s), 10 min timeout (600s)
-    if (elapsedSeconds >= 600) {
+    // Merchant SLA thresholds: 1.5 min warning (90s), 3 min critical (180s), 5 min timeout (300s)
+    if (elapsedSeconds >= 300) {
       statusLevel = 'EXPIRED';
       color = 'var(--color-danger)';
-    } else if (elapsedSeconds >= 300) {
+    } else if (elapsedSeconds >= 180) {
       statusLevel = 'CRITICAL';
       color = '#ff3838'; // flashing red
       flashing = true;
-    } else if (elapsedSeconds >= 120) {
+    } else if (elapsedSeconds >= 90) {
       statusLevel = 'WARNING';
       color = '#ff9f43'; // warning orange
     }
