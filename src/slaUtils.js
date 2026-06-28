@@ -5,7 +5,7 @@
  * @param {string} deliveryPartnerId - Assigned rider ID (if any)
  * @returns {object} SLA details including status, elapsed seconds, timer text, and color styles
  */
-export function getOrderSlaDetails(createdAt, status = 'PLACED', deliveryPartnerId = null) {
+export function getOrderSlaDetails(createdAt, status = 'PLACED', deliveryPartnerId = null, acceptedAt = null) {
   if (!createdAt) {
     return {
       status: 'NORMAL',
@@ -16,15 +16,15 @@ export function getOrderSlaDetails(createdAt, status = 'PLACED', deliveryPartner
     };
   }
 
-  const createdTime = new Date(createdAt).getTime();
+  const isRiderPool = (status === 'ACCEPTED' || status === 'READY_FOR_PICKUP') && !deliveryPartnerId;
+  const baseTime = (isRiderPool && acceptedAt) ? acceptedAt : createdAt;
+  const createdTime = new Date(baseTime).getTime();
   const now = Date.now();
   const elapsedSeconds = Math.max(0, Math.floor((now - createdTime) / 1000));
 
   let statusLevel = 'NORMAL';
   let color = '#25D366'; // success green
   let flashing = false;
-
-  const isRiderPool = (status === 'ACCEPTED' || status === 'READY_FOR_PICKUP') && !deliveryPartnerId;
 
   if (isRiderPool) {
     // Rider SLA thresholds: 1.5 min warning (90s), 3 min critical (180s), 5 min timeout (300s)

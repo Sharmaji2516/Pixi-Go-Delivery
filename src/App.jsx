@@ -2624,7 +2624,9 @@ function App() {
       const now = Date.now();
       for (const order of pendingSlaOrders) {
         if (!order.createdAt) continue;
-        const createdTime = new Date(order.createdAt).getTime();
+        
+        const baseTime = (order.status !== 'PLACED' && order.acceptedAt) ? order.acceptedAt : order.createdAt;
+        const createdTime = new Date(baseTime).getTime();
         const elapsedSeconds = Math.max(0, Math.floor((now - createdTime) / 1000));
 
         let isTimeout = false;
@@ -3620,13 +3622,14 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    const acceptedAtTime = new Date().toISOString();
     // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED', acceptedAt: acceptedAtTime } : o));
 
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { status: 'ACCEPTED' });
+        await updateDoc(orderRef, { status: 'ACCEPTED', acceptedAt: acceptedAtTime });
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
       }
@@ -3700,6 +3703,7 @@ function App() {
 
     const updatedFields = {
       status: rider ? 'ASSIGNED' : 'ACCEPTED',
+      acceptedAt: rider ? null : new Date().toISOString(),
       merchantId: shop.id,
       merchantName: shop.storeName || shop.name,
       routingOption: 'Option 2 (Managed)', // default to managed for manual re-routing
@@ -3810,13 +3814,14 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    const acceptedAtTime = new Date().toISOString();
     // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED', acceptedAt: acceptedAtTime } : o));
 
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { status: 'ACCEPTED' });
+        await updateDoc(orderRef, { status: 'ACCEPTED', acceptedAt: acceptedAtTime });
         showToast(`Order ${orderId} Accepted!`);
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
@@ -8686,7 +8691,7 @@ function App() {
                                     })()}
                                   </span>
                                   {(o.status === 'PLACED' || ((o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId)) && (() => {
-                                    const sla = getOrderSlaDetails(o.createdAt, o.status, o.deliveryPartnerId);
+                                    const sla = getOrderSlaDetails(o.createdAt, o.status, o.deliveryPartnerId, o.acceptedAt);
                                     return (
                                       <span style={{ 
                                         fontSize: '10px', 
