@@ -15726,14 +15726,24 @@ function App() {
                       />
                       <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                         {activeShop.password ? (
-                          <button
-                            type="button"
-                            className="neon-btn small-btn"
-                            onClick={() => handleUpdateMerchantPassword(activeShop.email, activeShop.password, tempAuthPassword, activeShop.id)}
-                            style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(0, 255, 242, 0.1)', border: '1px solid var(--color-neon-cyan)', color: 'var(--color-neon-cyan)' }}
-                          >
-                            Update Password
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="neon-btn small-btn"
+                              onClick={() => handleUpdateMerchantPassword(activeShop.email, activeShop.password, tempAuthPassword, activeShop.id)}
+                              style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(0, 255, 242, 0.1)', border: '1px solid var(--color-neon-cyan)', color: 'var(--color-neon-cyan)' }}
+                            >
+                              Update Password
+                            </button>
+                            <button
+                              type="button"
+                              className="neon-btn small-btn"
+                              onClick={() => handleCreateAuthAccount('merchant', activeShop.email, tempAuthPassword || activeShop.password, activeShop.id)}
+                              style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}
+                            >
+                              Re-register Login Account
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
