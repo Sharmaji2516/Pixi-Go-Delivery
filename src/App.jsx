@@ -1513,7 +1513,7 @@ function App() {
 
           const adminDocRef = doc(db, "admins", currentUser.uid);
           const adminSnap = await getDoc(adminDocRef);
-          const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+          const hardcodedAdmins = [];
           const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
           const isAdmin = adminSnap.exists() || isHardcodedAdmin;
 
@@ -1701,7 +1701,7 @@ function App() {
     const currentUser = auth.currentUser;
     const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
 
-    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    const hardcodedAdmins = [];
     const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
     const isAdmin = authAdminData || isHardcodedAdmin;
 
@@ -2669,7 +2669,7 @@ function App() {
     const cleanEmail = email.trim().toLowerCase();
 
     // 1. Hardcoded Admins Check
-    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    const hardcodedAdmins = [];
     if (hardcodedAdmins.includes(cleanEmail)) {
       return 'admin';
     }
@@ -2697,7 +2697,7 @@ function App() {
   const getRoleForEmail = (email) => {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
-    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    const hardcodedAdmins = [];
     if (hardcodedAdmins.includes(cleanEmail)) {
       return 'admin';
     }
