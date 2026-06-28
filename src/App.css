@@ -4799,6 +4799,33 @@
   color: rgba(255, 255, 255, 0.4) !important;
 }
 
+@media (min-width: 769px) {
+  .app-header.admin-header-black {
+    flex-wrap: nowrap !important;
+  }
+  .app-header.admin-header-black .header-nav {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 460px) !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    scrollbar-width: thin !important;
+  }
+  .app-header.admin-header-black .header-nav::-webkit-scrollbar {
+    height: 4px !important;
+    display: block !important;
+  }
+  .app-header.admin-header-black .header-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2) !important;
+    border-radius: 4px !important;
+  }
+  .app-header.admin-header-black .nav-link {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+  }
+}
+
 .app-header.admin-header-black .header-nav {
   margin-right: auto !important;
   margin-left: 32px !important;
