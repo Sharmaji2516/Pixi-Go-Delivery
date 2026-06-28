@@ -14154,7 +14154,7 @@ function App() {
         <div className="drawer-backdrop fade-in" onClick={() => setIsTrackingDrawerOpen(false)}>
           <div className="cart-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
             <div className="cart-header-row">
-              <h2 className="section-title"><Compass size={20} /> Order Tracking</h2>
+              <h2 className="section-title"><Compass size={20} /> Order Details</h2>
               <button className="close-drawer-btn" onClick={() => setIsTrackingDrawerOpen(false)}>
                 <X size={20} />
               </button>
@@ -14261,23 +14261,6 @@ function App() {
                       </div>
                     </div>
                   )}
-
-                  {/* Map */}
-                  <div className="leaflet-mock-map-sidebar border-glow">
-                    {(() => {
-                      const trackedOrderShop = shops.find(s => s.name === trackedOrder.storeName || s.storeName === trackedOrder.storeName || (trackedOrder.items && s.name === trackedOrder.items[0]?.store));
-                      const merchantCoords = trackedOrderShop ? { lat: trackedOrderShop.lat || 24.8887, lng: trackedOrderShop.lng || 74.6269 } : { lat: 24.8887, lng: 74.6269 };
-                      return (
-                        <LeafletMap
-                          riderCoords={liveRiderCoords}
-                          merchantCoords={merchantCoords}
-                          customerCoords={parseCoords(trackedOrder.customerLocation)}
-                          customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
-                          merchantName={trackedOrder.items?.[0]?.store || 'Merchant'}
-                        />
-                      );
-                    })()}
-                  </div>
 
                   {/* Details Grid */}
                   <div className="sidebar-details-grid">
