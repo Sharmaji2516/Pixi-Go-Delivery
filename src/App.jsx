@@ -11746,7 +11746,7 @@ function App() {
                                       textAlign: 'center',
                                       fontWeight: '600'
                                     }}>
-                                      ⏳ Kitchen is preparing order...
+                                      ⏳ The order is preparing
                                     </div>
                                   ) : (
                                     <div style={{
