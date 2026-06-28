@@ -8094,7 +8094,7 @@ function App() {
               ) : (() => {
                 const analytics = getAnalytics();
                 return (
-                  <div className="analytics-dashboard-container fade-in">
+                  <div className="analytics-dashboard-container light-theme fade-in">
                     <div className="panel-header">
                       <h2>Sales & Operations Dashboard</h2>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -8425,14 +8425,14 @@ function App() {
                                   <h3 style={{ margin: 0 }}>📋 Detailed Orders Performance Log</h3>
 
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '20px', padding: '2px', border: '1px solid var(--color-border)' }}>
+                                    <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: '20px', padding: '2px', border: '1px solid #d1d5db' }}>
                                       <button
                                         type="button"
                                         onClick={() => setSalesLogFilter('today')}
                                         style={{
                                           background: salesLogFilter === 'today' ? 'var(--color-primary)' : 'transparent',
                                           border: 'none',
-                                          color: '#fff',
+                                          color: salesLogFilter === 'today' ? '#fff' : '#4b5563',
                                           padding: '6px 16px',
                                           borderRadius: '20px',
                                           fontSize: '12px',
@@ -8449,7 +8449,7 @@ function App() {
                                         style={{
                                           background: salesLogFilter === 'all' ? 'var(--color-primary)' : 'transparent',
                                           border: 'none',
-                                          color: '#fff',
+                                          color: salesLogFilter === 'all' ? '#fff' : '#4b5563',
                                           padding: '6px 16px',
                                           borderRadius: '20px',
                                           fontSize: '12px',
@@ -8462,14 +8462,14 @@ function App() {
                                       </button>
                                     </div>
 
-                                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '220px' }}>
-                                      <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
+                                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#ffffff', border: '1px solid #d1d5db', padding: '6px 12px', borderRadius: '8px', width: '220px' }}>
+                                      <Search size={16} style={{ color: '#6b7280' }} />
                                       <input
                                         type="text"
                                         placeholder="Search orders..."
                                         value={salesModalSearchQuery}
                                         onChange={(e) => setSalesModalSearchQuery(e.target.value)}
-                                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
+                                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111827', fontSize: '13px', width: '100%' }}
                                       />
                                       {salesModalSearchQuery && (
                                         <button onClick={() => setSalesModalSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
