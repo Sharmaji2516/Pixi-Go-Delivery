@@ -1075,11 +1075,13 @@ function App() {
   };
 
   const showToast = (message, type = 'info') => {
+    console.log("[Toast Debug] showToast called:", message, type);
     if (toastTimeoutId) {
       clearTimeout(toastTimeoutId);
     }
     setToast({ show: true, message, type });
     const id = setTimeout(() => {
+      console.log("[Toast Debug] Toast timeout resolved, closing toast.");
       setToast({ show: false, message: '', type: 'info' });
     }, 3000);
     setToastTimeoutId(id);
@@ -1760,13 +1762,34 @@ function App() {
     }
   }, [activeTab, authAdminData, authMerchantData, authRiderData]);
 
+  // Global interceptor for native alert() calls to style them like our custom warningModal
+  useEffect(() => {
+    const originalAlert = window.alert;
+    window.alert = (message) => {
+      setWarningModal({
+        isOpen: true,
+        title: "System Notification",
+        message: message,
+        iconType: "error"
+      });
+    };
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, []);
+
   // Prevent staff users from logging in/browsing customer pages
   useEffect(() => {
     if (!user) return;
     const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
     const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
     if (!isStaffTab && (userRole === 'admin' || userRole === 'merchant' || userRole === 'rider')) {
-      alert("This email is registered as an Admin/Merchant/Rider account and cannot be used to access the Customer portal. Please log in on the appropriate staff portal.");
+      setWarningModal({
+        isOpen: true,
+        title: "Access Restricted",
+        message: "This email is registered as an Admin/Merchant/Rider account and cannot be used to access the Customer portal. Please log in on the appropriate staff portal.",
+        iconType: "error"
+      });
       handleLogout();
     }
   }, [user, userRole, activeTab]);
@@ -2916,7 +2939,12 @@ function App() {
       });
   };
 
-  const handleLogout = () => {
+  const handleLogout = (e) => {
+    if (e) {
+      if (typeof e.preventDefault === 'function') e.preventDefault();
+      if (typeof e.stopPropagation === 'function') e.stopPropagation();
+    }
+    console.log("[Toast Debug] handleLogout initiated.");
     // Unsubscribe from customer snapshot
     if (customerSnapshotUnsubscribe.current) {
       customerSnapshotUnsubscribe.current();
@@ -2945,10 +2973,8 @@ function App() {
     setShowPhonePromptModal(false);
     setPhonePromptInput('');
     setPhonePromptError('');
+    showToast('Logged out successfully!', 'success');
     signOut(auth)
-      .then(() => {
-        alert('Logged out successfully!');
-      })
       .catch((error) => {
         console.warn("Auth sign out warning:", error);
       });
