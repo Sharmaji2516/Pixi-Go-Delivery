@@ -2902,6 +2902,12 @@ function App() {
 
   // Add Item to Cart
   const handleAddToCart = (product, selectedVariant = null) => {
+    if (!user) {
+      showToast("🔐 Please sign in or register to add items to your cart!", "warning");
+      setIsSignUp(false);
+      setIsAuthModalOpen(true);
+      return;
+    }
     const currentStore = cart.length > 0 ? cart[0].store : null;
     if (currentStore && currentStore !== product.store) {
       setShopSwitchModal({ isOpen: true, pendingProduct: product, pendingVariant: selectedVariant });
@@ -5950,7 +5956,7 @@ function App() {
                       type="text"
                       name="pixigo_onboard_shopphone"
                       maxLength={10}
-                      placeholder="9251054064"
+                      placeholder="Enter Your Number"
                       value={onboardShopPhone}
                       onChange={(e) => {
                         const val = e.target.value.replace(/\D/g, '');
@@ -6069,7 +6075,7 @@ function App() {
                       type="text"
                       name="pixigo_onboard_riderphone"
                       maxLength={10}
-                      placeholder="9251054064"
+                      placeholder="Enter Your Number"
                       value={onboardRiderPhone}
                       onChange={(e) => {
                         const val = e.target.value.replace(/\D/g, '');
@@ -12154,7 +12160,7 @@ function App() {
                         type="text"
                         name="pixigo_onboard_customerphone"
                         maxLength={10}
-                        placeholder="9251054064"
+                        placeholder="Enter Your Number"
                         value={authPhone}
                         onChange={(e) => {
                           const val = e.target.value.replace(/\D/g, '');
@@ -12266,7 +12272,7 @@ function App() {
                   <input
                     type="text"
                     maxLength={10}
-                    placeholder="9251054064"
+                    placeholder="Enter Your Number"
                     value={phonePromptInput}
                     onChange={(e) => {
                       const val = e.target.value.replace(/\D/g, '');
