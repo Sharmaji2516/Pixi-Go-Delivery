@@ -3239,50 +3239,6 @@
   gap: 24px;
 }
 
-.profile-edit-modal-card .section-title-premium {
-  color: var(--color-text-main) !important;
-}
-
-.profile-edit-modal-card .profile-sub {
-  color: var(--color-text-muted) !important;
-}
-
-.profile-edit-modal-card .prefixed-phone-container-premium {
-  background: rgba(30, 41, 59, 0.08) !important;
-  border: 1px solid var(--color-border) !important;
-  box-shadow: none !important;
-}
-
-.profile-edit-modal-card .prefixed-phone-container-premium:hover {
-  background: rgba(30, 41, 59, 0.12) !important;
-  border-color: rgba(30, 41, 59, 0.2) !important;
-}
-
-.profile-edit-modal-card .prefixed-phone-container-premium:focus-within {
-  background: rgba(30, 41, 59, 0.12) !important;
-  border-color: var(--color-primary) !important;
-  box-shadow: 0 0 10px var(--color-primary-glow-strong) !important;
-}
-
-.profile-edit-modal-card .phone-prefix-badge-premium {
-  color: var(--color-text-main) !important;
-  border-right: 1px solid var(--color-border) !important;
-}
-
-.profile-edit-modal-card .phone-numeric-input-premium {
-  color: var(--color-text-main) !important;
-  background: transparent !important;
-}
-
-.profile-edit-modal-card .custom-input-premium:disabled {
-  background: rgba(30, 41, 59, 0.08) !important;
-  color: var(--color-text-muted) !important;
-  cursor: not-allowed !important;
-  opacity: 0.8 !important;
-  border-color: var(--color-border) !important;
-}
-
-
 .profile-form-premium {
   display: flex;
   flex-direction: column;
@@ -3347,13 +3303,13 @@
 /* ==================== PAST ORDERS MODAL STYLING ==================== */
 .past-orders-modal-card {
   width: 100%;
-  max-width: 520px;
-  padding: 28px;
+  max-width: 500px;
+  padding: 32px;
   position: relative;
-  background: linear-gradient(135deg, #111e19 0%, #0a110e 100%);
-  border: 1px solid rgba(31, 78, 61, 0.25);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), 0 0 40px rgba(31, 78, 61, 0.15);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
   max-height: 85vh;
   display: flex;
   flex-direction: column;
@@ -3383,23 +3339,6 @@
   padding-right: 6px;
 }
 
-/* Custom premium scrollbar for past orders */
-.past-orders-list-premium::-webkit-scrollbar {
-  width: 6px;
-}
-.past-orders-list-premium::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.01);
-  border-radius: 10px;
-}
-.past-orders-list-premium::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 10px;
-  transition: all 0.3s;
-}
-.past-orders-list-premium::-webkit-scrollbar-thumb:hover {
-  background: rgba(31, 78, 61, 0.6);
-}
-
 .no-past-orders-premium {
   display: flex;
   flex-direction: column;
@@ -3413,35 +3352,18 @@
 
 .past-order-card-premium {
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 16px;
-  padding: 18px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  position: relative;
-  overflow: hidden;
-  flex-shrink: 0;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.past-order-card-premium::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: #00e676; /* Accent color for delivered state */
-}
-
-.past-order-card-premium.cancelled::before {
-  background: #ff1744; /* Accent color for cancelled state */
+  gap: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .past-order-card-premium:hover {
-  border-color: rgba(31, 78, 61, 0.4);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 15px rgba(31, 78, 61, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
   background: rgba(255, 255, 255, 0.04);
   transform: translateY(-2px);
 }
@@ -3452,66 +3374,23 @@
   align-items: center;
 }
 
-.past-order-title-section {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.past-order-store-name {
-  font-size: 15px;
-  font-weight: 700;
+.order-id-premium {
+  font-size: 13.5px;
   color: #ffffff;
   font-family: var(--font-heading);
-}
-
-.order-id-premium {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
-  font-family: monospace;
 }
 
 .past-order-body-premium {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.past-order-items-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.02);
-}
-
-.past-order-item-row {
-  display: flex;
-  align-items: center;
   gap: 8px;
+}
+
+.order-items-summary-premium {
   font-size: 13.5px;
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.past-order-item-bullet {
-  font-size: 8px;
-  color: #1f4e3d;
-  opacity: 0.6;
-}
-
-.past-order-item-name {
-  flex: 1;
-}
-
-.past-order-item-qty {
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.06);
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.45;
+  font-weight: 500;
 }
 
 .order-meta-info-premium {
@@ -3519,86 +3398,14 @@
   justify-content: space-between;
   align-items: center;
   font-size: 12.5px;
-  border-top: 1px dashed rgba(255, 255, 255, 0.06);
-  padding-top: 10px;
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.5);
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+  margin-top: 4px;
 }
 
-.meta-left {
-  display: flex;
-  gap: 12px;
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.meta-right {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.meta-amount-label {
-  color: rgba(255, 255, 255, 0.45);
-}
-
-.meta-amount {
-  font-size: 15px;
-  font-weight: 800;
+.order-meta-info-premium strong {
   color: var(--color-accent-yellow);
-}
-
-.past-order-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 2px;
-}
-
-.past-order-reorder-btn {
-  background: rgba(31, 78, 61, 0.15) !important;
-  color: #00fff2 !important;
-  border: 1px solid rgba(0, 255, 242, 0.25) !important;
-  padding: 6px 14px !important;
-  font-size: 12px !important;
-  font-weight: 600 !important;
-  border-radius: 8px !important;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.past-order-reorder-btn:hover {
-  background: rgba(0, 255, 242, 0.12) !important;
-  border-color: #00fff2 !important;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 255, 242, 0.18);
-}
-
-@media (max-width: 480px) {
-  .past-orders-modal-card {
-    max-width: 92% !important;
-    padding: 20px 16px !important;
-    border-radius: 18px !important;
-    gap: 14px !important;
-  }
-  .past-order-card-premium {
-    padding: 14px !important;
-    gap: 12px !important;
-  }
-  .past-order-items-list {
-    padding: 8px 10px !important;
-  }
-  .past-order-store-name {
-    font-size: 14px !important;
-  }
-  .past-order-item-row {
-    font-size: 12.5px !important;
-  }
-  .order-meta-info-premium {
-    font-size: 11.5px !important;
-    gap: 6px !important;
-    flex-wrap: wrap !important;
-  }
 }
 
 .cart-badge-count-mobile {
@@ -4797,33 +4604,6 @@
 
 .app-header.admin-header-black .tagline {
   color: rgba(255, 255, 255, 0.4) !important;
-}
-
-@media (min-width: 769px) {
-  .app-header.admin-header-black {
-    flex-wrap: nowrap !important;
-  }
-  .app-header.admin-header-black .header-nav {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    max-width: calc(100% - 460px) !important;
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    scrollbar-width: thin !important;
-  }
-  .app-header.admin-header-black .header-nav::-webkit-scrollbar {
-    height: 4px !important;
-    display: block !important;
-  }
-  .app-header.admin-header-black .header-nav::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2) !important;
-    border-radius: 4px !important;
-  }
-  .app-header.admin-header-black .nav-link {
-    flex-shrink: 0 !important;
-    white-space: nowrap !important;
-  }
 }
 
 .app-header.admin-header-black .header-nav {
@@ -6729,7 +6509,7 @@
 
 @media (min-width: 768px) {
   .custom-brand-banner-wrap {
-    max-width: 900px;
+    max-width: 700px;
     margin: 16px auto 10px auto;
   }
   .custom-brand-banner-img {
@@ -7474,148 +7254,4 @@
     margin: 0 auto !important;
     display: block;
   }
-}
-
-/* SLA Alerts & Pulsing Animations */
-@keyframes pulse-bg {
-  0% {
-    background-color: rgba(239, 68, 68, 0.08);
-    border-color: rgba(239, 68, 68, 0.2);
-  }
-  100% {
-    background-color: rgba(239, 68, 68, 0.22);
-    border-color: rgba(239, 68, 68, 0.55);
-  }
-}
-
-@keyframes pulse-fast {
-  0% {
-    opacity: 0.6;
-    transform: scale(0.96);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1.04);
-  }
-}
-
-@keyframes pulse-icon {
-  0% {
-    transform: scale(1);
-  }
-  100% {
-    transform: scale(1.2);
-  }
-}
-
-.sla-alert-banner {
-  box-shadow: 0 0 12px rgba(239, 68, 68, 0.1);
-  transition: all 0.3s ease;
-}
-
-.flashing-icon {
-  animation: pulse-icon 0.8s infinite alternate ease-in-out;
-}
-
-/* ==================== LIGHT THEME OVERRIDES FOR SALES DASHBOARD ==================== */
-.analytics-dashboard-container.light-theme {
-  background-color: #ffffff !important;
-  color: #111827 !important;
-  padding: 24px;
-  border-radius: 16px;
-  border: 1px solid #e5e7eb;
-}
-
-.analytics-dashboard-container.light-theme .panel-header h2 {
-  color: #111827 !important;
-}
-
-.analytics-dashboard-container.light-theme h3 {
-  color: #111827 !important;
-}
-
-.analytics-dashboard-container.light-theme .nav-link {
-  color: #4b5563 !important;
-  border: 1px solid #e5e7eb !important;
-  background: #f9fafb !important;
-}
-
-.analytics-dashboard-container.light-theme .nav-link:hover {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-}
-
-.analytics-dashboard-container.light-theme .nav-link.active {
-  background: var(--color-primary) !important;
-  color: #ffffff !important;
-  border-color: var(--color-primary) !important;
-}
-
-.analytics-dashboard-container.light-theme .glass-panel {
-  background: #ffffff !important;
-  border: 1px solid #e5e7eb !important;
-  color: #111827 !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
-}
-
-.analytics-dashboard-container.light-theme .analytics-table-wrapper {
-  border: 1px solid #e5e7eb !important;
-}
-
-.analytics-dashboard-container.light-theme .analytics-table th {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-  border-bottom: 2px solid #e5e7eb !important;
-}
-
-.analytics-dashboard-container.light-theme .analytics-table td {
-  background: #ffffff !important;
-  color: #111827 !important;
-  border-bottom: 1px solid #e5e7eb !important;
-}
-
-.analytics-dashboard-container.light-theme .analytics-table tr:hover td {
-  background: #f9fafb !important;
-}
-
-.analytics-dashboard-container.light-theme .clickable-row:hover td {
-  background: #f9fafb !important;
-}
-
-/* Force light background and dark text on the smaller summary cards */
-.analytics-dashboard-container.light-theme .analytics-card:not(.card-grad-primary):not(.card-grad-success):not(.card-grad-warning):not(.card-grad-profit):not(.card-grad-cancelled) {
-  background: #ffffff !important;
-  border: 1px solid #e5e7eb !important;
-  color: #111827 !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04) !important;
-}
-
-.analytics-dashboard-container.light-theme .analytics-card:not(.card-grad-primary):not(.card-grad-success):not(.card-grad-warning):not(.card-grad-profit):not(.card-grad-cancelled) .analytics-card-title {
-  color: #6b7280 !important;
-}
-
-.analytics-dashboard-container.light-theme .analytics-card:not(.card-grad-primary):not(.card-grad-success):not(.card-grad-warning):not(.card-grad-profit):not(.card-grad-cancelled) .analytics-card-footer span {
-  background: #f3f4f6 !important;
-  color: #4b5563 !important;
-}
-
-/* Contrast optimization for badges on light background */
-.analytics-dashboard-container.light-theme .analytics-badge-success {
-  background: rgba(34, 197, 94, 0.15) !important;
-  color: #15803d !important; /* Darker green */
-}
-
-.analytics-dashboard-container.light-theme .analytics-badge-danger {
-  background: rgba(239, 68, 68, 0.15) !important;
-  color: #b91c1c !important; /* Darker red */
-}
-
-.analytics-dashboard-container.light-theme .analytics-badge-warning {
-  background: rgba(245, 158, 11, 0.15) !important;
-  color: #b45309 !important; /* Darker orange */
-}
-
-.analytics-dashboard-container.light-theme .analytics-badge-info {
-  background: rgba(59, 130, 246, 0.15) !important;
-  color: #1d4ed8 !important; /* Darker blue */
 }

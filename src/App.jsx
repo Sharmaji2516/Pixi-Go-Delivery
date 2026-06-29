@@ -3,16 +3,15 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag,
   MessageCircle, AlertCircle, AlertTriangle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell, CheckCircle2, XCircle
+  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithPopup, signOut, onAuthStateChanged, sendPasswordResetEmail, getAuth, updatePassword, deleteUser } from 'firebase/auth';
-import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, limit, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, onSnapshot, orderBy, doc, updateDoc, getDoc, setDoc, deleteDoc, or } from 'firebase/firestore';
 import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbRemove } from 'firebase/database';
 import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
-import { getOrderSlaDetails } from './slaUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
 const INITIAL_PRODUCTS = [
@@ -302,18 +301,11 @@ const getShopOpenStatus = (shop) => {
     return { isOpen: false, reason: 'MANUAL_CLOSED' };
   }
 
-  // 2. Check automatic operating hours scheduler (10:00 AM to 10:00 PM)
-  const openTime = "10:00";
-  const closeTime = "22:00";
+  // 2. Check automatic operating hours scheduler
+  const openTime = shop.openTime || "09:00";
+  const closeTime = shop.closeTime || "22:00";
 
   const now = new Date();
-  
-  // Format local date string: YYYY-MM-DD
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const date = String(now.getDate()).padStart(2, '0');
-  const todayDateString = `${year}-${month}-${date}`;
-
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
 
@@ -326,16 +318,11 @@ const getShopOpenStatus = (shop) => {
 
   const isWithinHours = currentTotalMinutes >= openTotalMinutes && currentTotalMinutes <= closeTotalMinutes;
 
-  if (isWithinHours) {
-    return { isOpen: true, reason: 'OPEN' };
+  if (!isWithinHours) {
+    return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
   }
 
-  // Outside operating hours: check manual override date
-  if (shop.manualForceOpenDate === todayDateString) {
-    return { isOpen: true, reason: 'FORCE_OPEN' };
-  }
-
-  return { isOpen: false, reason: 'OUTSIDE_HOURS', details: `Operating Hours: ${openTime} - ${closeTime}` };
+  return { isOpen: true, reason: 'OPEN' };
 };
 
 const getCategoryBgClass = (cat) => {
@@ -384,7 +371,6 @@ const getNoticeStyles = (color) => {
 };
 
 const MAX_DELIVERY_RADIUS_KM = 10.0;
-const MIN_ORDER_VALUE = 0; // Removed/disabled minimum cart threshold (set to 0)
 
 const ProductThumbnail = ({ src, name, emoji, className, style }) => {
   const [hasError, setHasError] = useState(false);
@@ -496,10 +482,6 @@ function App() {
   const [riderVehicleInput, setRiderVehicleInput] = useState('');
   const [riderEmailInput, setRiderEmailInput] = useState('');
   const [userRole, setUserRole] = useState(null); // admin | rider | customer | null
-  const [isRoleChecking, setIsRoleChecking] = useState(false);
-  const [authAdminData, setAuthAdminData] = useState(null);
-  const [authMerchantData, setAuthMerchantData] = useState(null);
-  const [authRiderData, setAuthRiderData] = useState(null);
   const [newRiderName, setNewRiderName] = useState('');
   const [newRiderEmail, setNewRiderEmail] = useState('');
   const [newRiderPassword, setNewRiderPassword] = useState('');
@@ -535,8 +517,6 @@ function App() {
   const [shops, setShops] = useState(INITIAL_SHOPS);
   const [deliveryPartners, setDeliveryPartners] = useState(INITIAL_DELIVERY_PARTNERS);
   const [orders, setOrders] = useState(INITIAL_ORDERS);
-  const [tick, setTick] = useState(0);
-  const [isOrdersLoading, setIsOrdersLoading] = useState(true);
   const [commissionPercent, setCommissionPercent] = useState(10);
   const [baseDeliveryCharge, setBaseDeliveryCharge] = useState(20);
   const [perKmCharge, setPerKmCharge] = useState(5);
@@ -603,9 +583,7 @@ function App() {
   const [deliveryDistance, setDeliveryDistance] = useState(null);
   const [isDistanceLoading, setIsDistanceLoading] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState('COD');
-  const [currentOrderTracking, setCurrentOrderTracking] = useState(() => {
-    return localStorage.getItem('pixigo_last_tracked_order_id') || null;
-  });
+  const [currentOrderTracking, setCurrentOrderTracking] = useState(null);
   const [uploadStatus, setUploadStatus] = useState({});
   const [reroutingOrderId, setReroutingOrderId] = useState(null);
   const [rerouteSelectedShop, setRerouteSelectedShop] = useState('');
@@ -636,29 +614,8 @@ function App() {
   const [isAppPromoSubmitting, setIsAppPromoSubmitting] = useState(false);
   const [isAppPromoSubscribed, setIsAppPromoSubscribed] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-
-  // Merchant Profile Edit States
-  const [isMerchantShopSettingsOpen, setIsMerchantShopSettingsOpen] = useState(false);
-  const [merchantEditPhone, setMerchantEditPhone] = useState('');
-  const [merchantEditEmail, setMerchantEditEmail] = useState('');
-  const [merchantEditAddress, setMerchantEditAddress] = useState('');
-  const [merchantEditOpenTime, setMerchantEditOpenTime] = useState('09:00');
-  const [merchantEditCloseTime, setMerchantEditCloseTime] = useState('22:00');
-  const [merchantEditUseHours, setMerchantEditUseHours] = useState(false);
-  const [isSavingMerchantEdit, setIsSavingMerchantEdit] = useState(false);
-  const [merchantEditError, setMerchantEditError] = useState('');
-
-  // Rider Profile Edit States
-  const [isRiderEditModalOpen, setIsRiderEditModalOpen] = useState(false);
-  const [riderEditPhone, setRiderEditPhone] = useState('');
-  const [riderEditEmail, setRiderEditEmail] = useState('');
-  const [isSavingRiderEdit, setIsSavingRiderEdit] = useState(false);
-  const [riderEditError, setRiderEditError] = useState('');
-
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(() => {
-    return localStorage.getItem('pixigo_is_tracking_drawer_open') === 'true';
-  });
+  const [isTrackingDrawerOpen, setIsTrackingDrawerOpen] = useState(false);
   const [activeQrModalOrder, setActiveQrModalOrder] = useState(null);
   const [isPastOrdersOpen, setIsPastOrdersOpen] = useState(false);
   const [dbError, setDbError] = useState(null);
@@ -848,9 +805,6 @@ function App() {
 
   // --- HELPER FUNCTIONS ---
   const isUserOrder = (o) => {
-    if (guestOrderIds.includes(o.id)) {
-      return true;
-    }
     if (user) {
       const emailVal = (o.customerEmail || o.email || '').trim().toLowerCase();
       const targetEmail = (user.email || customerEmail || '').trim().toLowerCase();
@@ -858,8 +812,9 @@ function App() {
       const isUidMatch = o.userId && o.userId === user.uid;
       const isPhoneMatch = o.customerPhone && o.customerPhone.trim() === customerPhone.trim();
       return isEmailMatch || isUidMatch || isPhoneMatch;
+    } else {
+      return guestOrderIds.includes(o.id);
     }
-    return false;
   };
 
   const saveGuestOrder = (orderId) => {
@@ -939,9 +894,9 @@ function App() {
       netProfit: todayOrders.reduce((acc, o) => {
         const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
         if (isCancelled) return acc;
-        const riderPayoutVal = o.riderPayout !== undefined ? o.riderPayout : (o.deliveryCharge || 0);
-        const netMerchEarning = o.netMerchantEarning !== undefined ? o.netMerchantEarning : ((o.totalAmount || 0) - (o.deliveryCharge || 0) - (o.commissionAmount || 0));
-        return acc + ((o.totalAmount || 0) - netMerchEarning - riderPayoutVal);
+        const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
+        const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
+        return acc + ((o.commissionAmount || 0) - riderPayout - discountPixigo);
       }, 0)
     };
 
@@ -1169,107 +1124,6 @@ function App() {
     }
   };
 
-  const handleSaveMerchantSettings = async (e) => {
-    e.preventDefault();
-    if (!loggedInMerchantShop) return;
-    setIsSavingMerchantEdit(true);
-    setMerchantEditError('');
-
-    const phoneClean = merchantEditPhone.replace(/\D/g, '');
-    if (phoneClean.length !== 10) {
-      setMerchantEditError('Please enter a valid 10-digit mobile number.');
-      setIsSavingMerchantEdit(false);
-      return;
-    }
-
-    try {
-      const fullPhone = "+91" + phoneClean;
-      const docRef = doc(db, "merchants", loggedInMerchantShop.firestoreId);
-      
-      await updateDoc(docRef, {
-        phone: fullPhone,
-        address: merchantEditAddress.trim(),
-        email: merchantEditEmail.trim().toLowerCase(),
-        openTime: merchantEditOpenTime,
-        closeTime: merchantEditCloseTime,
-        useOperatingHours: merchantEditUseHours
-      });
-
-      // Update state
-      setShops(prevShops => prevShops.map(s => 
-        s.id === loggedInMerchantShop.id 
-          ? { 
-              ...s, 
-              phone: fullPhone, 
-              address: merchantEditAddress.trim(), 
-              email: merchantEditEmail.trim().toLowerCase(),
-              openTime: merchantEditOpenTime,
-              closeTime: merchantEditCloseTime,
-              useOperatingHours: merchantEditUseHours
-            } 
-          : s
-      ));
-
-      showToast("Shop settings updated successfully!");
-      setIsMerchantShopSettingsOpen(false);
-    } catch (err) {
-      console.error("Error saving merchant shop settings:", err);
-      setMerchantEditError(`Failed to save settings: ${err.message}`);
-    } finally {
-      setIsSavingMerchantEdit(false);
-    }
-  };
-
-  const handleSaveRiderSettings = async (e) => {
-    e.preventDefault();
-    const currentRider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
-    if (!currentRider) return;
-
-    setIsSavingRiderEdit(true);
-    setRiderEditError('');
-
-    const phoneClean = riderEditPhone.replace(/\D/g, '');
-    if (phoneClean.length !== 10) {
-      setRiderEditError('Please enter a valid 10-digit mobile number.');
-      setIsSavingRiderEdit(false);
-      return;
-    }
-
-    try {
-      const fullPhone = "+91" + phoneClean;
-      const docRef = doc(db, "delivery_boys", currentRider.firestoreId || currentRider.id);
-      
-      const updatedData = {
-        phone: fullPhone,
-        email: riderEditEmail.trim().toLowerCase()
-      };
-
-      await updateDoc(docRef, updatedData);
-
-      // Update the active local session if there is one
-      const savedRider = localStorage.getItem('pixigo_rider_session');
-      if (savedRider) {
-        const sessionData = JSON.parse(savedRider);
-        if (sessionData.uid === currentRider.id) {
-          const newSession = {
-            ...sessionData,
-            email: updatedData.email
-          };
-          localStorage.setItem('pixigo_rider_session', JSON.stringify(newSession));
-          setUser(newSession);
-        }
-      }
-
-      showToast("Rider profile settings updated successfully!");
-      setIsRiderEditModalOpen(false);
-    } catch (err) {
-      console.error("Error saving rider settings:", err);
-      setRiderEditError(`Failed to save settings: ${err.message}`);
-    } finally {
-      setIsSavingRiderEdit(false);
-    }
-  };
-
   const handleAutoDetectLocation = (setAddressCallback, isAutomatic = false) => {
     if (!navigator.geolocation) {
       if (!isAutomatic) alert("Geolocation is not supported by your browser.");
@@ -1369,19 +1223,6 @@ function App() {
 
   // --- SIDE EFFECTS (useEffect) ---
 
-  // Persist tracking states in localStorage
-  useEffect(() => {
-    if (currentOrderTracking) {
-      localStorage.setItem('pixigo_last_tracked_order_id', currentOrderTracking);
-    } else {
-      localStorage.removeItem('pixigo_last_tracked_order_id');
-    }
-  }, [currentOrderTracking]);
-
-  useEffect(() => {
-    localStorage.setItem('pixigo_is_tracking_drawer_open', isTrackingDrawerOpen);
-  }, [isTrackingDrawerOpen]);
-
   // Automatically trigger auto-detect location on load
   useEffect(() => {
     handleAutoDetectLocation(setCustomerAddress, true);
@@ -1433,7 +1274,7 @@ function App() {
   // Simple Frontend URL Router
   useEffect(() => {
     const handleLocationChange = () => {
-      const path = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
+      const path = window.location.pathname.replace('/', '').toLowerCase();
       if (['customer', 'admin', 'delivery', 'merchant'].includes(path)) {
         setActiveTab(path);
       } else if (path === 'rider') {
@@ -1454,13 +1295,12 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       const savedRider = localStorage.getItem('pixigo_rider_session');
-      const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
+      const currentTab = window.location.pathname.replace('/', '').toLowerCase();
       if ((currentTab === 'delivery' || currentTab === 'rider') && savedRider) {
         try {
           const riderData = JSON.parse(savedRider);
           setUser(riderData);
           setUserRole('rider');
-          setIsRoleChecking(false);
           return; // Skip Firebase Auth override
         } catch (e) {
           console.error("Error parsing rider session on auth state change:", e);
@@ -1468,7 +1308,6 @@ function App() {
       }
 
       if (currentUser) {
-        setIsRoleChecking(true);
         const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
         setUser({
           uid: currentUser.uid,
@@ -1484,12 +1323,65 @@ function App() {
 
         try {
           const timestamp = new Date().toISOString();
-          const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
+          const currentTab = window.location.pathname.replace('/', '').toLowerCase();
 
           const emailClean = localEmail.trim().toLowerCase();
           const existingRole = getRoleForEmail(emailClean);
 
-          // Customer sync will be initialized below after fetching staff status
+          // 1. Sync with Customer collection for all logged-in users to load/create their customer profiles
+          const customerDocRef = doc(db, "customers", currentUser.uid);
+
+          // Clean up any existing customer snapshot subscription first
+          if (customerSnapshotUnsubscribe.current) {
+            customerSnapshotUnsubscribe.current();
+            customerSnapshotUnsubscribe.current = null;
+          }
+
+          // Subscribe to live customer document updates
+          customerSnapshotUnsubscribe.current = onSnapshot(customerDocRef, async (custSnap) => {
+            if (custSnap.exists()) {
+              const data = custSnap.data();
+              if (data.isActive === false) {
+                // If deactivated, sign out immediately
+                await signOut(auth);
+                setUser(null);
+                alert("Your account has been temporarily deactivated by the Administrator.");
+                return;
+              }
+              const dbName = data.name || localName;
+              const dbPhone = data.phone || localPhone;
+              const dbEmail = data.email || localEmail;
+              const dbAddress = data.address || localAddress;
+
+              localStorage.setItem('pixigo_customerName', dbName);
+              localStorage.setItem('pixigo_customerPhone', dbPhone);
+              localStorage.setItem('pixigo_customerEmail', dbEmail);
+              localStorage.setItem('pixigo_customerAddress', dbAddress);
+
+              setCustomerName(dbName);
+              setCustomerPhone(dbPhone);
+              setCustomerEmail(dbEmail);
+              setCustomerAddress(dbAddress);
+            } else {
+              // Create the document if it doesn't exist yet
+              await setDoc(customerDocRef, {
+                name: localName,
+                email: localEmail,
+                phone: localPhone,
+                address: localAddress,
+                createdAt: timestamp
+              });
+              localStorage.setItem('pixigo_customerName', localName);
+              localStorage.setItem('pixigo_customerPhone', localPhone);
+              localStorage.setItem('pixigo_customerEmail', localEmail);
+              localStorage.setItem('pixigo_customerAddress', localAddress);
+
+              setCustomerName(localName);
+              setCustomerPhone(localPhone);
+              setCustomerEmail(localEmail);
+              setCustomerAddress(localAddress);
+            }
+          });
 
           // 2. Sync with Admin collection if on admin page AND not already another role
           if (currentTab === 'admin') {
@@ -1513,111 +1405,10 @@ function App() {
 
           const adminDocRef = doc(db, "admins", currentUser.uid);
           const adminSnap = await getDoc(adminDocRef);
-          const hardcodedAdmins = [];
+          const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
           const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
-          const isAdmin = adminSnap.exists() || isHardcodedAdmin;
 
-          // Fetch rider info to see if user has a rider document (case-insensitive query)
-          const ridersRef = collection(db, "delivery_boys");
-          const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
-          const riderQuery2 = query(ridersRef, where("email", "==", currentUser.email ? currentUser.email.toLowerCase() : ''));
-          const [riderSnap1, riderSnap2] = await Promise.all([getDocs(riderQuery1), getDocs(riderQuery2)]);
-
-          let riderDoc = null;
-          if (!riderSnap1.empty) riderDoc = riderSnap1.docs[0];
-          else if (!riderSnap2.empty) riderDoc = riderSnap2.docs[0];
-
-          // Fetch merchant info to see if user has a merchant document (case-insensitive query)
-          const merchantsRef = collection(db, "merchants");
-          const merchQuery1 = query(merchantsRef, where("authUid", "==", currentUser.uid));
-          const merchQuery2 = query(merchantsRef, where("email", "==", currentUser.email ? currentUser.email.toLowerCase() : ''));
-          const [merchSnap1, merchSnap2] = await Promise.all([getDocs(merchQuery1), getDocs(merchQuery2)]);
-
-          let merchDoc = null;
-          if (!merchSnap1.empty) merchDoc = merchSnap1.docs[0];
-          else if (!merchSnap2.empty) merchDoc = merchSnap2.docs[0];
-
-          // Cache roles in state variables
-          setAuthAdminData(adminSnap.exists() ? adminSnap.data() : (isHardcodedAdmin ? { isHardcoded: true } : null));
-          setAuthMerchantData(merchDoc ? { firestoreId: merchDoc.id, ...merchDoc.data() } : null);
-          setAuthRiderData(riderDoc ? { firestoreId: riderDoc.id, ...riderDoc.data() } : null);
-
-          // 1. Sync with Customer collection for all logged-in users to load/create their customer profiles (only if they are NOT staff)
-          const isStaff = merchDoc || riderDoc || isAdmin;
-          if (!isStaff) {
-            const customerDocRef = doc(db, "customers", currentUser.uid);
-
-            // Clean up any existing customer snapshot subscription first
-            if (customerSnapshotUnsubscribe.current) {
-              customerSnapshotUnsubscribe.current();
-              customerSnapshotUnsubscribe.current = null;
-            }
-
-            // Subscribe to live customer document updates
-            customerSnapshotUnsubscribe.current = onSnapshot(customerDocRef, async (custSnap) => {
-              if (custSnap.exists()) {
-                const data = custSnap.data();
-                if (data.isActive === false) {
-                  // If deactivated, sign out immediately
-                  await signOut(auth);
-                  setUser(null);
-                  alert("Your account has been temporarily deactivated by the Administrator.");
-                  return;
-                }
-                const dbName = data.name || localName;
-                const dbPhone = data.phone || localPhone;
-                const dbEmail = data.email || localEmail;
-                const dbAddress = data.address || localAddress;
-
-                localStorage.setItem('pixigo_customerName', dbName);
-                localStorage.setItem('pixigo_customerPhone', dbPhone);
-                localStorage.setItem('pixigo_customerEmail', dbEmail);
-                localStorage.setItem('pixigo_customerAddress', dbAddress);
-
-                setCustomerName(dbName);
-                setCustomerPhone(dbPhone);
-                setCustomerEmail(dbEmail);
-                setCustomerAddress(dbAddress);
-              } else {
-                // Create the document if it doesn't exist yet
-                await setDoc(customerDocRef, {
-                  name: localName,
-                  email: localEmail,
-                  phone: localPhone,
-                  address: localAddress,
-                  createdAt: timestamp
-                });
-                localStorage.setItem('pixigo_customerName', localName);
-                localStorage.setItem('pixigo_customerPhone', localPhone);
-                localStorage.setItem('pixigo_customerEmail', localEmail);
-                localStorage.setItem('pixigo_customerAddress', localAddress);
-
-                setCustomerName(localName);
-                setCustomerPhone(localPhone);
-                setCustomerEmail(localEmail);
-                setCustomerAddress(localAddress);
-              }
-            });
-          }
-
-          // Determine active user role dynamically based on current portal path
-          if ((currentTab === 'merchant' || currentTab === 'shop') && merchDoc) {
-            setUserRole('merchant');
-            const merchData = merchDoc.data();
-            setUser({
-              uid: merchData.id || merchDoc.id,
-              email: currentUser.email,
-              name: merchData.storeName || nameVal
-            });
-          } else if ((currentTab === 'delivery' || currentTab === 'rider') && riderDoc) {
-            setUserRole('rider');
-            const riderData = riderDoc.data();
-            setUser({
-              uid: riderData.id || riderDoc.id,
-              email: currentUser.email,
-              name: riderData.name || nameVal
-            });
-          } else if (isAdmin) {
+          if (adminSnap.exists() || isHardcodedAdmin) {
             setUserRole('admin');
             if (!adminSnap.exists()) {
               try {
@@ -1632,24 +1423,46 @@ function App() {
                 console.error("Error creating missing admin doc:", e);
               }
             }
-          } else if (riderDoc) {
-            setUserRole('rider');
-            const riderData = riderDoc.data();
-            setUser({
-              uid: riderData.id || riderDoc.id,
-              email: currentUser.email,
-              name: riderData.name || nameVal
-            });
-          } else if (merchDoc) {
-            setUserRole('merchant');
-            const merchData = merchDoc.data();
-            setUser({
-              uid: merchData.id || merchDoc.id,
-              email: currentUser.email,
-              name: merchData.storeName || nameVal
-            });
           } else {
-            setUserRole('customer');
+            const ridersRef = collection(db, "delivery_boys");
+            const riderQuery1 = query(ridersRef, where("authUid", "==", currentUser.uid));
+            const riderQuery2 = query(ridersRef, where("email", "==", currentUser.email));
+            const [riderSnap1, riderSnap2] = await Promise.all([getDocs(riderQuery1), getDocs(riderQuery2)]);
+
+            let riderDoc = null;
+            if (!riderSnap1.empty) riderDoc = riderSnap1.docs[0];
+            else if (!riderSnap2.empty) riderDoc = riderSnap2.docs[0];
+
+            if (riderDoc) {
+              setUserRole('rider');
+              const riderData = riderDoc.data();
+              setUser({
+                uid: riderData.id || riderDoc.id,
+                email: currentUser.email,
+                name: riderData.name || nameVal
+              });
+            } else {
+              const merchantsRef = collection(db, "merchants");
+              const merchQuery1 = query(merchantsRef, where("authUid", "==", currentUser.uid));
+              const merchQuery2 = query(merchantsRef, where("email", "==", currentUser.email));
+              const [merchSnap1, merchSnap2] = await Promise.all([getDocs(merchQuery1), getDocs(merchQuery2)]);
+
+              let merchDoc = null;
+              if (!merchSnap1.empty) merchDoc = merchSnap1.docs[0];
+              else if (!merchSnap2.empty) merchDoc = merchSnap2.docs[0];
+
+              if (merchDoc) {
+                setUserRole('merchant');
+                const merchData = merchDoc.data();
+                setUser({
+                  uid: merchData.id || merchDoc.id,
+                  email: currentUser.email,
+                  name: merchData.storeName || nameVal
+                });
+              } else {
+                setUserRole('customer');
+              }
+            }
           }
         } catch (e) {
           console.error("Error auto-syncing Firestore user profiles:", e);
@@ -1659,12 +1472,7 @@ function App() {
         setCustomerEmail(localEmail);
         setCustomerName(localName);
         setCustomerPhone(localPhone);
-        setIsRoleChecking(false);
       } else {
-        setIsRoleChecking(false);
-        setAuthAdminData(null);
-        setAuthMerchantData(null);
-        setAuthRiderData(null);
         const savedRider = localStorage.getItem('pixigo_rider_session');
         if (savedRider) {
           try {
@@ -1694,86 +1502,9 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Dynamically sync userRole and user info based on activeTab and verified profile documents
-  useEffect(() => {
-    if (!auth.currentUser) return;
-
-    const currentUser = auth.currentUser;
-    const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
-
-    const hardcodedAdmins = [];
-    const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
-    const isAdmin = authAdminData || isHardcodedAdmin;
-
-    if ((activeTab === 'merchant' || activeTab === 'shop') && authMerchantData) {
-      setUserRole('merchant');
-      setUser({
-        uid: authMerchantData.id || authMerchantData.firestoreId,
-        email: currentUser.email,
-        name: authMerchantData.storeName || nameVal
-      });
-    } else if ((activeTab === 'delivery' || activeTab === 'rider') && authRiderData) {
-      setUserRole('rider');
-      setUser({
-        uid: authRiderData.id || authRiderData.firestoreId,
-        email: currentUser.email,
-        name: authRiderData.name || nameVal
-      });
-    } else if (activeTab === 'admin' && isAdmin) {
-      setUserRole('admin');
-      setUser({
-        uid: currentUser.uid,
-        email: currentUser.email,
-        name: (authAdminData && authAdminData.name) || nameVal
-      });
-    } else {
-      // Fallback/default roles when on non-staff page (customer pages)
-      if (isAdmin) {
-        setUserRole('admin');
-        setUser({
-          uid: currentUser.uid,
-          email: currentUser.email,
-          name: (authAdminData && authAdminData.name) || nameVal
-        });
-      } else if (authRiderData) {
-        setUserRole('rider');
-        setUser({
-          uid: authRiderData.id || authRiderData.firestoreId,
-          email: currentUser.email,
-          name: authRiderData.name || nameVal
-        });
-      } else if (authMerchantData) {
-        setUserRole('merchant');
-        setUser({
-          uid: authMerchantData.id || authMerchantData.firestoreId,
-          email: currentUser.email,
-          name: authMerchantData.storeName || nameVal
-        });
-      } else {
-        setUserRole('customer');
-        setUser({
-          uid: currentUser.uid,
-          email: currentUser.email,
-          name: nameVal
-        });
-      }
-    }
-  }, [activeTab, authAdminData, authMerchantData, authRiderData]);
-
-  // Prevent staff users from logging in/browsing customer pages
-  useEffect(() => {
-    if (!user) return;
-    const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
-    const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
-    if (!isStaffTab && (userRole === 'admin' || userRole === 'merchant' || userRole === 'rider')) {
-      alert("This email is registered as an Admin/Merchant/Rider account and cannot be used to access the Customer portal. Please log in on the appropriate staff portal.");
-      handleLogout();
-    }
-  }, [user, userRole, activeTab]);
-
   // Handle customer mobile phone prompt modal overlay if phone number is missing
   useEffect(() => {
-    const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
+    const currentTab = window.location.pathname.replace('/', '').toLowerCase();
     const isStaffTab = ['admin', 'merchant', 'delivery', 'rider', 'shop'].includes(currentTab);
     if (user && userRole === 'customer' && !isStaffTab && (!customerPhone || customerPhone.trim() === '')) {
       setShowPhonePromptModal(true);
@@ -1829,12 +1560,11 @@ function App() {
   useEffect(() => {
     const ordersRef = collection(db, "orders");
     let q = null;
-    setIsOrdersLoading(true);
 
     if (userRole === 'admin') {
-      q = query(ordersRef, orderBy("createdAt", "desc"), limit(200));
+      q = query(ordersRef, orderBy("createdAt", "desc"));
     } else if (userRole === 'merchant' && user) {
-      q = query(ordersRef, orderBy("createdAt", "desc"), limit(200));
+      q = query(ordersRef, orderBy("createdAt", "desc"));
     } else if (userRole === 'rider' && user) {
       q = query(ordersRef, or(
         where("deliveryPartnerId", "==", user.uid),
@@ -1843,53 +1573,17 @@ function App() {
         where("status", "==", "READY_FOR_PICKUP")
       ));
     } else if (userRole === 'customer' && user) {
-      const emailVal = (user.email || customerEmail || '').trim().toLowerCase();
-      if (currentOrderTracking) {
-        q = query(ordersRef, or(
-          where("customerEmail", "==", emailVal),
-          where("id", "==", currentOrderTracking)
-        ));
-      } else {
-        q = query(ordersRef, where("customerEmail", "==", emailVal));
-      }
+      q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"));
     } else {
       // Guest / Anonymous user
-      const emailVal = (customerEmail || '').trim().toLowerCase();
-      const hasEmail = emailVal && emailVal !== 'pixigodelivery@gmail.com';
-      const hasGuestOrders = guestOrderIds && guestOrderIds.length > 0;
-
-      if (currentOrderTracking) {
-        if (hasEmail) {
-          q = query(ordersRef, or(
-            where("customerEmail", "==", emailVal),
-            where("id", "==", currentOrderTracking)
-          ));
-        } else if (hasGuestOrders) {
-          const sliceIds = guestOrderIds.slice(0, 29);
-          if (!sliceIds.includes(currentOrderTracking)) {
-            q = query(ordersRef, or(
-              where("id", "in", sliceIds),
-              where("id", "==", currentOrderTracking)
-            ));
-          } else {
-            q = query(ordersRef, where("id", "in", sliceIds));
-          }
-        } else {
-          q = query(ordersRef, where("id", "==", currentOrderTracking));
-        }
-      } else {
-        if (hasEmail) {
-          q = query(ordersRef, where("customerEmail", "==", emailVal));
-        } else if (hasGuestOrders) {
-          const sliceIds = guestOrderIds.slice(0, 30);
-          q = query(ordersRef, where("id", "in", sliceIds));
-        }
+      if (guestOrderIds && guestOrderIds.length > 0) {
+        const sliceIds = guestOrderIds.slice(0, 30);
+        q = query(ordersRef, where("id", "in", sliceIds));
       }
     }
 
     if (!q) {
       setOrders(INITIAL_ORDERS);
-      setIsOrdersLoading(false);
       return;
     }
 
@@ -1939,16 +1633,14 @@ function App() {
           return o;
         });
       });
-      setIsOrdersLoading(false);
     }, (error) => {
       console.error("Firestore order subscription error/warning:", error.message);
       setDbError(error.message);
       setOrders(INITIAL_ORDERS);
-      setIsOrdersLoading(false);
     });
 
     return () => unsubscribe();
-  }, [userRole, user, guestOrderIds, customerEmail, currentOrderTracking]);
+  }, [userRole, user, guestOrderIds]);
 
   // Fetch real-time products from Firestore
   useEffect(() => {
@@ -2526,21 +2218,21 @@ function App() {
   const riderActiveJobs = user ? orders.filter(o => o.deliveryPartnerId === user.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED')) : [];
 
   useEffect(() => {
-    if (user && userRole === 'rider' && riderActiveJobs.length > prevActiveJobsCount.current) {
+    if (riderActiveJobs.length > prevActiveJobsCount.current) {
       if (prevActiveJobsCount.current > 0 || (activeTab === 'delivery' && riderActiveJobs.length > 0)) {
         playNotificationSound();
         showToast("🔔 New delivery run assigned! Check details below.");
       }
     }
     prevActiveJobsCount.current = riderActiveJobs.length;
-  }, [riderActiveJobs.length, activeTab, user, userRole]);
+  }, [riderActiveJobs.length, activeTab]);
 
   const prevPoolJobsCount = useRef(0);
   const availablePoolJobs = orders.filter(o => (o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId);
 
   useEffect(() => {
-    if (activeTab === 'delivery' && user && userRole === 'rider') {
-      const currentRider = deliveryPartners.find(d => d.id === user.uid || (d.email && user.email && d.email.toLowerCase() === user.email.toLowerCase()));
+    if (activeTab === 'delivery') {
+      const currentRider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
       const isOnline = currentRider?.isOnline !== false;
       if (isOnline && availablePoolJobs.length > prevPoolJobsCount.current) {
         play30SecondBeepAlert();
@@ -2548,7 +2240,7 @@ function App() {
       }
     }
     prevPoolJobsCount.current = availablePoolJobs.length;
-  }, [availablePoolJobs.length, activeTab, deliveryPartners, user, userRole]);
+  }, [availablePoolJobs.length, activeTab, deliveryPartners, user]);
 
   // Get active merchant shop based on email or phone
   const loggedInMerchantShop = user ? shops.find(s =>
@@ -2580,7 +2272,7 @@ function App() {
 
   // New Order Alerts for Merchant
   useEffect(() => {
-    if (activeTab === 'merchant' && user && userRole === 'merchant' && myMerchantShopNames.length > 0) {
+    if (activeTab === 'merchant' && user && myMerchantShopNames.length > 0) {
       // Find orders for this merchant shop that are pending acceptance
       const merchantPendingOrders = orders.filter(o => {
         const orderMName = (o.merchantName || '').trim().toLowerCase();
@@ -2596,110 +2288,18 @@ function App() {
           showToast(`🔔 New order received for your shop! Order ID: ${latestOrder.id}`);
 
           setTimeout(() => {
-            alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nNet Earning: ${formatINR(latestOrder.netMerchantEarning ?? latestOrder.totalAmount)}\nPlease accept the order to prepare it.`);
+            alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nAmount: ${formatINR(latestOrder.totalAmount)}\nPlease accept the order to prepare it.`);
           }, 100);
         }
       }
       prevMerchantOrdersCount.current = merchantPendingOrders.length;
     }
-  }, [orders, myMerchantShopNames, activeTab, user, userRole]);
-
-  // SLA Live Ticking Trigger
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTick(prev => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // SLA Watchdog for auto-cancellation (runs every 10 seconds)
-  useEffect(() => {
-    const handleTimeoutWatchdog = async () => {
-      const pendingSlaOrders = orders.filter(o => 
-        o.status === 'PLACED' || 
-        ((o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId)
-      );
-      if (pendingSlaOrders.length === 0) return;
-
-      const now = Date.now();
-      for (const order of pendingSlaOrders) {
-        if (!order.createdAt) continue;
-        
-        const baseTime = (order.status !== 'PLACED' && order.acceptedAt) ? order.acceptedAt : order.createdAt;
-        const createdTime = new Date(baseTime).getTime();
-        const elapsedSeconds = Math.max(0, Math.floor((now - createdTime) / 1000));
-
-        let isTimeout = false;
-        let cancelReason = '';
-
-        if (order.status === 'PLACED') {
-          if (elapsedSeconds >= 300) { // 5 minutes timeout
-            isTimeout = true;
-            cancelReason = 'Merchant failed to accept order within 5 minutes SLA.';
-          }
-        } else {
-          if (elapsedSeconds >= 300) { // 5 minutes timeout
-            isTimeout = true;
-            cancelReason = 'No delivery rider accepted the order within 5 minutes SLA.';
-          }
-        }
-
-        if (isTimeout && order.firestoreId) {
-          console.log(`Auto-timeout triggered for Order ${order.id} (Status: ${order.status})`);
-          try {
-            const orderRef = doc(db, "orders", order.firestoreId);
-            await updateDoc(orderRef, {
-              status: 'CANCELLED_AUTO',
-              cancelledBy: 'System Timeout',
-              cancelReason: cancelReason,
-              cancelledAt: new Date().toISOString()
-            });
-          } catch (err) {
-            console.error("Error auto-cancelling order:", err);
-          }
-        }
-      }
-    };
-
-    if (tick % 10 === 0) {
-      handleTimeoutWatchdog();
-    }
-  }, [tick, orders]);
-
-  const checkEmailRoleInFirestore = async (email) => {
-    if (!email) return null;
-    const cleanEmail = email.trim().toLowerCase();
-
-    // 1. Hardcoded Admins Check
-    const hardcodedAdmins = [];
-    if (hardcodedAdmins.includes(cleanEmail)) {
-      return 'admin';
-    }
-
-    try {
-      // 2. Query Firestore collections
-      const adminsSnap = await getDocs(query(collection(db, "admins"), where("email", "==", cleanEmail)));
-      if (!adminsSnap.empty) return 'admin';
-
-      const merchantsSnap = await getDocs(query(collection(db, "merchants"), where("email", "==", cleanEmail)));
-      if (!merchantsSnap.empty) return 'merchant';
-
-      const ridersSnap = await getDocs(query(collection(db, "delivery_boys"), where("email", "==", cleanEmail)));
-      if (!ridersSnap.empty) return 'rider';
-
-      const customersSnap = await getDocs(query(collection(db, "customers"), where("email", "==", cleanEmail)));
-      if (!customersSnap.empty) return 'customer';
-    } catch (e) {
-      console.error("Error checking email role in Firestore:", e);
-    }
-
-    return null;
-  };
+  }, [orders, myMerchantShopNames, activeTab, user]);
 
   const getRoleForEmail = (email) => {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
-    const hardcodedAdmins = [];
+    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
     if (hardcodedAdmins.includes(cleanEmail)) {
       return 'admin';
     }
@@ -2821,7 +2421,7 @@ function App() {
     let targetEmail = authEmail;
 
     if (isSignUp) {
-      const currentTab = window.location.pathname.split('/').filter(Boolean)[0]?.toLowerCase() || 'customer';
+      const currentTab = window.location.pathname.replace('/', '').toLowerCase();
       let cleanPhone = '';
       if (currentTab !== 'admin') {
         cleanPhone = authPhone.replace(/\D/g, '');
@@ -2831,7 +2431,7 @@ function App() {
         }
       }
       const emailClean = targetEmail.trim().toLowerCase();
-      const existingRole = await checkEmailRoleInFirestore(emailClean);
+      const existingRole = getRoleForEmail(emailClean);
       if (existingRole) {
         setAuthError(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
         return;
@@ -3024,17 +2624,18 @@ function App() {
   const stats = {
     totalOrders: orders.length,
     activeCustomers: new Set(orders.map(o => o.customerEmail)).size,
-    activeMerchants: shops.filter(s => !deletedShopIds.includes(s.id) && s.verified).length,
-    activeRiders: deliveryPartners.filter(d => !deletedUserIds.includes(d.id) && d.verified).length,
+    activeMerchants: shops.filter(s => s.verified).length,
+    activeRiders: deliveryPartners.filter(d => d.verified).length,
     totalSales: orders.reduce((acc, o) => acc + o.totalAmount, 0),
     totalDiscounts: orders.reduce((acc, o) => acc + o.discountAmount, 0),
     totalDeliveryFee: orders.reduce((acc, o) => acc + o.deliveryCharge, 0),
     netProfit: orders.reduce((acc, o) => {
       const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
       if (isCancelled) return acc;
-      const riderPayoutVal = o.riderPayout !== undefined ? o.riderPayout : (o.deliveryCharge || 0);
-      const netMerchEarning = o.netMerchantEarning !== undefined ? o.netMerchantEarning : ((o.totalAmount || 0) - (o.deliveryCharge || 0) - (o.commissionAmount || 0));
-      return acc + ((o.totalAmount || 0) - netMerchEarning - riderPayoutVal);
+      // Net Profit = Total Commission - Total Delivery Boy Payouts - PixiGo Sponsored discounts
+      const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
+      const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
+      return acc + (o.commissionAmount - riderPayout - discountPixigo);
     }, 0)
   };
 
@@ -3087,22 +2688,22 @@ function App() {
   };
 
   // 1. Add Admins
-  allAdmins.filter(a => !deletedUserIds.includes(a.id)).forEach(u => {
+  allAdmins.forEach(u => {
     mergeUser(u.id, u.name, u.email, 'admin', u.firestoreId || u.id, u);
   });
 
   // 2. Add Merchants
-  shops.filter(s => !deletedShopIds.includes(s.id)).forEach(u => {
+  shops.forEach(u => {
     mergeUser(u.id, u.name || u.storeName, u.email, 'merchant', u.firestoreId || u.id, u);
   });
 
   // 3. Add Riders
-  deliveryPartners.filter(d => !deletedUserIds.includes(d.id)).forEach(u => {
+  deliveryPartners.forEach(u => {
     mergeUser(u.id, u.name, u.email, 'rider', u.firestoreId || u.id, u);
   });
 
   // 4. Add Customers
-  allCustomers.filter(c => !deletedUserIds.includes(c.id)).forEach(u => {
+  allCustomers.forEach(u => {
     mergeUser(u.id, u.name, u.email, 'customer', u.firestoreId || u.id, u);
   });
 
@@ -3333,15 +2934,6 @@ function App() {
     showToast(`${product.name}${variant ? ` (${variant.specs})` : ''} added to cart!`, 'success');
   };
 
-  const handleReorderItems = (items) => {
-    const confirmReorder = window.confirm("Do you want to clear your current cart and reorder these items?");
-    if (!confirmReorder) return;
-    setCart(items.map(item => ({ ...item, quantity: item.quantity || 1 })));
-    setIsPastOrdersOpen(false);
-    setIsCartDrawerOpen(true);
-    showToast("Reordered items successfully added to your cart!", "success");
-  };
-
   // Update Cart Quantity
   const handleUpdateQty = (id, delta) => {
     const item = cart.find(i => (i.cartItemId === id || i.id === id));
@@ -3475,7 +3067,7 @@ function App() {
     }
 
     // Check if customer already has an active order in progress
-    const customerId = user.uid;
+    const customerId = auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`;
     const hasActiveOrder = orders.some(o =>
       (o.customerId === customerId || (o.customerPhone === customerPhone && customerPhone)) &&
       !['COMPLETED', 'DELIVERED'].includes(o.status?.toUpperCase()) &&
@@ -3488,8 +3080,8 @@ function App() {
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
 
-    if (MIN_ORDER_VALUE > 0 && cartSubtotal < MIN_ORDER_VALUE) {
-      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹${MIN_ORDER_VALUE} is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
+    if (cartSubtotal < 149) {
+      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹149 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
       return;
     }
 
@@ -3567,8 +3159,8 @@ function App() {
       otp: Math.floor(1000 + Math.random() * 9000).toString(),
       deliveryPartnerId: null,
       deliveryPartnerName: '',
-      userId: user.uid,
-      customerId: user.uid, // Relational link
+      userId: auth.currentUser ? auth.currentUser.uid : 'anonymous',
+      customerId: auth.currentUser ? auth.currentUser.uid : `guest_${customerPhone || 'anonymous'}`, // Relational link
       merchantId: merchantId, // Relational link
       merchantName: storeName,
       routingOption, // Set routing flow dynamically
@@ -3622,14 +3214,13 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    const acceptedAtTime = new Date().toISOString();
     // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED', acceptedAt: acceptedAtTime } : o));
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
 
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { status: 'ACCEPTED', acceptedAt: acceptedAtTime });
+        await updateDoc(orderRef, { status: 'ACCEPTED' });
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
       }
@@ -3703,7 +3294,6 @@ function App() {
 
     const updatedFields = {
       status: rider ? 'ASSIGNED' : 'ACCEPTED',
-      acceptedAt: rider ? null : new Date().toISOString(),
       merchantId: shop.id,
       merchantName: shop.storeName || shop.name,
       routingOption: 'Option 2 (Managed)', // default to managed for manual re-routing
@@ -3737,24 +3327,13 @@ function App() {
     if (!shop) return;
     const newStatus = !currentStatus;
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const date = String(now.getDate()).padStart(2, '0');
-    const todayDateString = `${year}-${month}-${date}`;
-
-    const currentHour = now.getHours();
-    const isOutsideHours = currentHour < 10 || currentHour >= 22;
-
-    const manualForceOpenDate = (newStatus && isOutsideHours) ? todayDateString : "";
-
     // Update local state first
-    setShops(prevShops => prevShops.map(s => s.id === shop.id ? { ...s, isAcceptingOrders: newStatus, manualForceOpenDate } : s));
+    setShops(prevShops => prevShops.map(s => s.id === shop.id ? { ...s, isAcceptingOrders: newStatus } : s));
 
     if (shop.firestoreId) {
       try {
         const docRef = doc(db, "merchants", shop.firestoreId);
-        await updateDoc(docRef, { isAcceptingOrders: newStatus, manualForceOpenDate });
+        await updateDoc(docRef, { isAcceptingOrders: newStatus });
       } catch (err) {
         console.error("Error updating shop order acceptance in Firestore:", err);
       }
@@ -3814,14 +3393,13 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
-    const acceptedAtTime = new Date().toISOString();
     // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED', acceptedAt: acceptedAtTime } : o));
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
 
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { status: 'ACCEPTED', acceptedAt: acceptedAtTime });
+        await updateDoc(orderRef, { status: 'ACCEPTED' });
         showToast(`Order ${orderId} Accepted!`);
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
@@ -4099,7 +3677,7 @@ function App() {
     }
 
     const cleanEmail = newRiderEmail.trim().toLowerCase();
-    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
+    const existingRole = getRoleForEmail(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -4152,7 +3730,7 @@ function App() {
     }
 
     const cleanEmail = newShopEmail.trim().toLowerCase();
-    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
+    const existingRole = getRoleForEmail(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -4192,7 +3770,7 @@ function App() {
 
   const handleMerchantOnboardSubmit = async (e) => {
     e.preventDefault();
-    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress) {
+    if (!onboardShopName || !onboardShopCategory || !onboardShopPhone || !onboardShopEmail || !onboardShopAddress || !onboardShopPassword) {
       alert("Please fill in all the details for the onboarding request.");
       return;
     }
@@ -4206,7 +3784,11 @@ function App() {
       alert("Please enter a valid 10-digit phone number.");
       return;
     }
-    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
+    if (onboardShopPassword.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
+    const existingRole = getRoleForEmail(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -4220,7 +3802,7 @@ function App() {
         phone: "+91" + phoneClean,
         address: onboardShopAddress.trim(),
         email: cleanEmail,
-        password: '',
+        password: onboardShopPassword,
         verified: false,
         status: 'active',
         isAcceptingOrders: true,
@@ -4247,7 +3829,7 @@ function App() {
 
   const handleRiderOnboardSubmit = async (e) => {
     e.preventDefault();
-    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle) {
+    if (!onboardRiderName || !onboardRiderEmail || !onboardRiderPhone || !onboardRiderVehicle || !onboardRiderPassword) {
       alert("Please fill in all the details for the rider onboarding request.");
       return;
     }
@@ -4261,7 +3843,11 @@ function App() {
       alert("Please enter a valid 10-digit phone number.");
       return;
     }
-    const existingRole = await checkEmailRoleInFirestore(cleanEmail);
+    if (onboardRiderPassword.length < 6) {
+      alert("Password must be at least 6 characters long.");
+      return;
+    }
+    const existingRole = getRoleForEmail(cleanEmail);
     if (existingRole) {
       alert(`This email address is already registered as a ${existingRole}. An email can only have one role.`);
       return;
@@ -4274,7 +3860,7 @@ function App() {
         email: cleanEmail,
         phone: "+91" + phoneClean,
         vehicle: onboardRiderVehicle.trim(),
-        password: '',
+        password: onboardRiderPassword,
         active: true,
         verified: false, // Pending verification
         totalDeliveries: 0,
@@ -4756,60 +4342,6 @@ function App() {
     } catch (error) {
       console.error("Error deleting user:", error);
       alert(`Failed to delete user: ${error.message}`);
-    }
-  };
-
-  const handleAdminDeleteUserRole = async (user, roleToDelete) => {
-    const roleDocIds = user.roleDocIds || { [user.role]: user.firestoreId || user.id };
-    const docId = roleDocIds[roleToDelete];
-    if (!docId) {
-      alert("No database record found for this role.");
-      return;
-    }
-
-    const label =
-      roleToDelete === 'admin' ? 'Admin' :
-        roleToDelete === 'merchant' ? 'Merchant' :
-          roleToDelete === 'rider' ? 'Rider' :
-            'Customer';
-
-    if (!window.confirm(`Are you sure you want to permanently delete the "${label}" role for "${user.name}"? This will delete the role record in database, but preserve their other roles.`)) return;
-
-    try {
-      let collectionName = '';
-      if (roleToDelete === 'admin') collectionName = 'admins';
-      else if (roleToDelete === 'merchant') collectionName = 'merchants';
-      else if (roleToDelete === 'rider') collectionName = 'delivery_boys';
-      else if (roleToDelete === 'customer') collectionName = 'customers';
-
-      if (collectionName) {
-        await deleteDoc(doc(db, collectionName, docId));
-      }
-
-      // Add to deleted lists so mock data and compiled directories filter it out immediately
-      if (roleToDelete === 'merchant') {
-        const updated = [...deletedShopIds, docId];
-        setDeletedShopIds(updated);
-        localStorage.setItem('pixigo_deleted_shops', JSON.stringify(updated));
-      } else {
-        const updated = [...deletedUserIds, docId];
-        setDeletedUserIds(updated);
-        localStorage.setItem('pixigo_deleted_users', JSON.stringify(updated));
-      }
-
-      const updatedRoles = user.roles.filter(r => r !== roleToDelete);
-      setSelectedUserDetails(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          roles: updatedRoles
-        };
-      });
-
-      showToast(`Role "${label}" successfully removed from "${user.name}".`);
-    } catch (error) {
-      console.error("Error deleting role:", error);
-      alert(`Failed to delete role: ${error.message}`);
     }
   };
 
@@ -5344,25 +4876,6 @@ function App() {
       targetEmail = `${targetEmail.toLowerCase().replace(/\s+/g, '')}@pixigo.com`;
     }
 
-    const existingRole = await checkEmailRoleInFirestore(targetEmail);
-    let isSameUser = false;
-    if (type === 'merchant') {
-      const merchant = shops.find(s => s.id === id);
-      if (merchant && existingRole === 'merchant' && (merchant.email || '').trim().toLowerCase() === targetEmail.toLowerCase()) {
-        isSameUser = true;
-      }
-    } else if (type === 'rider') {
-      const rider = deliveryPartners.find(d => d.id === id);
-      if (rider && existingRole === 'rider' && (rider.email || '').trim().toLowerCase() === targetEmail.toLowerCase()) {
-        isSameUser = true;
-      }
-    }
-
-    if (existingRole && !isSameUser) {
-      alert(`Cannot create account: This email address is already registered as a ${existingRole}. Each email can only have one role.`);
-      return;
-    }
-
     try {
       showToast("Creating auth account... Please wait.");
 
@@ -5643,18 +5156,12 @@ function App() {
   };
 
   const getUniqueProductNames = () => {
-    const approved = products.filter(p => p.approved !== false).filter(p => {
-      const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-      return pShop && pShop.verified !== false && pShop.isActive !== false && !deletedShopIds.includes(pShop.id);
-    });
+    const approved = products.filter(p => p.approved !== false);
     return [...new Set(approved.map(p => p.name))].sort();
   };
 
   const getUniqueStoreNames = () => {
-    const approved = products.filter(p => p.approved !== false).filter(p => {
-      const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-      return pShop && pShop.verified !== false && pShop.isActive !== false && !deletedShopIds.includes(pShop.id);
-    });
+    const approved = products.filter(p => p.approved !== false);
     return [...new Set(approved.map(p => p.store))].sort();
   };
 
@@ -5673,7 +5180,7 @@ function App() {
     if (p.approved === false) return false;
     // Hide products from deleted, deactivated, or unverified shops
     const pShop = shops.find(s => s.name === p.store || s.storeName === p.store);
-    if (!pShop || pShop.verified === false || pShop.isActive === false || deletedShopIds.includes(pShop.id)) return false;
+    if (!pShop || pShop.verified === false || pShop.isActive === false) return false;
     let matchQuery = true;
     if (searchQuery.trim() !== '') {
       const queryLower = searchQuery.toLowerCase();
@@ -5928,7 +5435,7 @@ function App() {
     const customerCoords = parseCoords(customerAddress);
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-    const isUnderMinimumOrder = cart.length > 0 && MIN_ORDER_VALUE > 0 && cartSubtotal < MIN_ORDER_VALUE;
+    const isUnderMinimumOrder = cart.length > 0 && cartSubtotal < 149;
 
     let dist = null;
     let isOutOfRange = false;
@@ -6085,7 +5592,7 @@ function App() {
               }}>
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
                 <span>
-                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹{MIN_ORDER_VALUE} is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
+                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹149 is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
                 </span>
               </div>
             )}
@@ -6264,206 +5771,100 @@ function App() {
 
             <div className="divider"></div>
 
-            {/* Pricing wrapper IIFE ends and wraps the remaining delivery form/payment select logic */}
-            {(() => {
-              const subtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-              let fee = 33;
-              const activeDeliveryPromos = coupons.filter(c => c.isDeliveryPromo && c.isActive);
-              const cartWeight = getCartTotalWeight(cart);
-              const heavySurcharge = cartWeight > 10 ? (cartWeight - 10) * 2 : 0;
+            {/* Delivery Form Info */}
+            <div className="delivery-info-form">
+              <h3 className="sub-header-title">Delivery Coordinates</h3>
+              <input
+                type="text"
+                placeholder="Name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="custom-input"
+              />
+              <input
+                type="text"
+                placeholder="Delivery Location Pin / Address"
+                value={customerAddress}
+                onChange={(e) => setCustomerAddress(e.target.value)}
+                className="custom-input"
+              />
+              <button
+                type="button"
+                className="auto-detect-btn"
+                onClick={() => handleAutoDetectLocation(setCustomerAddress)}
+                disabled={isLocating}
+                style={{ marginBottom: '6px' }}
+              >
+                <Compass size={14} className={isLocating ? "spin" : ""} />
+                {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
+              </button>
 
-              if (dist !== null) {
-                const rates = calculateDeliveryRates(dist);
-                fee = getPromotionalDeliveryFee(subtotal, cart, rates.customerCharge, activeDeliveryPromos) + heavySurcharge;
-              } else {
-                fee = getPromotionalDeliveryFee(subtotal, cart, 33, activeDeliveryPromos) + heavySurcharge;
-              }
-              const totalAmount = subtotal + fee - appliedDiscount;
+              {/* Interactive map adjustment for Customer */}
+              <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
+                <LeafletMap
+                  merchantCoords={cartShop ? { lat: cartShop.lat || 24.8887, lng: cartShop.lng || 74.6269 } : { lat: 26.9015, lng: 75.7482 }}
+                  customerCoords={customerCoords}
+                  customerName={customerName || 'Customer'}
+                  merchantName={storeName || "Store"}
+                  isInteractive={true}
+                  onLocationChange={handleMapLocationChange}
+                />
+              </div>
 
-              return (
-                <>
-                  {/* Delivery Form Info */}
-                  <div className="delivery-info-form">
-                    <h3 className="sub-header-title">Delivery Coordinates</h3>
-                    <input
-                      type="text"
-                      placeholder="Name"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      className="custom-input"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Delivery Location (Auto-Detected Coordinates)"
-                      value={customerAddress}
-                      onChange={(e) => setCustomerAddress(e.target.value)}
-                      className="custom-input"
-                      readOnly={true}
-                      style={{ cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.02)' }}
-                    />
-                    <button
-                      type="button"
-                      className="auto-detect-btn"
-                      onClick={() => handleAutoDetectLocation(setCustomerAddress)}
-                      disabled={isLocating}
-                      style={{ marginBottom: '6px' }}
-                    >
-                      <Compass size={14} className={isLocating ? "spin" : ""} />
-                      {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
-                    </button>
+              <div className="payment-select-grid">
+                <button
+                  className={`pay-btn ${selectedPayment === 'UPI' ? 'active' : ''}`}
+                  onClick={() => setSelectedPayment('UPI')}
+                >
+                  <DollarSign size={16} /> Pay via UPI on Delivery
+                </button>
+                <button
+                  className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
+                  onClick={() => setSelectedPayment('COD')}
+                >
+                  <MapPin size={16} /> Cash on Delivery (COD)
+                </button>
+              </div>
+            </div>
 
-                    {/* Interactive map adjustment for Customer */}
-                    <div className="leaflet-mock-map-sidebar border-glow" style={{ height: '140px', marginTop: '6px', marginBottom: '10px' }}>
-                      <LeafletMap
-                        merchantCoords={cartShop ? { lat: cartShop.lat || 24.8887, lng: cartShop.lng || 74.6269 } : { lat: 26.9015, lng: 75.7482 }}
-                        customerCoords={customerCoords}
-                        customerName={customerName || 'Customer'}
-                        merchantName={storeName || "Store"}
-                        isInteractive={true}
-                        onLocationChange={handleMapLocationChange}
-                      />
-                    </div>
-
-                    <div className="payment-select-grid">
-                      <button
-                        className={`pay-btn ${selectedPayment === 'UPI' ? 'active' : ''}`}
-                        onClick={() => setSelectedPayment('UPI')}
-                      >
-                        <DollarSign size={16} /> Pay via UPI on Delivery
-                      </button>
-                      <button
-                        className={`pay-btn ${selectedPayment === 'COD' ? 'active' : ''}`}
-                        onClick={() => setSelectedPayment('COD')}
-                      >
-                        <MapPin size={16} /> Cash on Delivery (COD)
-                      </button>
-                    </div>
-
-                    {/* Payment Instruction Blocks */}
-                    {selectedPayment === 'UPI' && (
-                      <div className="payment-instructions-card upi border-glow fade-in" style={{ marginTop: '12px' }}>
-                        <p className="payment-instruction-text warning-text" style={{ fontSize: '12px', color: '#ff5252', lineHeight: '1.45', margin: '0 0 10px 0', background: 'rgba(255, 82, 82, 0.08)', border: '1px solid rgba(255, 82, 82, 0.18)', padding: '10px 12px', borderRadius: '8px' }}>
-                          ⚠️ <strong>Crucial Instruction:</strong> You have to pay the amount <strong>only after</strong> the delivery partner arrives at your home. Do not pay/transfer any amount before they reach your location.
-                        </p>
-                        
-                        <div className="upi-payment-details-box" style={{ background: '#0a110e', padding: '14px', borderRadius: '12px', border: '1px solid rgba(31, 78, 61, 0.3)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}>
-                          <div className="upi-details-header" style={{ fontSize: '12px', fontWeight: '800', color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: '12px', textAlign: 'center', borderBottom: '1px dashed rgba(255,255,255,0.08)', paddingBottom: '8px' }}>
-                            Scan to Pay on Delivery
-                          </div>
-                          <div className="upi-details-body" style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-                            <div className="upi-qr-code-container" style={{ background: '#ffffff', padding: '6px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
-                              <img 
-                                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=paytm.s27imms@pty&pn=SHAKTI%20SINGH%20RATHOR&am=${totalAmount.toFixed(2)}&cu=INR`)}`} 
-                                alt="UPI Payment QR Code"
-                                style={{ width: '100px', height: '100px', display: 'block' }}
-                              />
-                            </div>
-                            <div className="upi-text-details" style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, minWidth: 0 }}>
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Receiver:</span>
-                                <span style={{ fontSize: '13px', fontWeight: '700', color: '#ffffff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title="SHAKTI SINGH RATHOR">SHAKTI SINGH RATHOR</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Phone Number:</span>
-                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#ffffff' }}>7357681538</span>
-                              </div>
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>UPI ID:</span>
-                                <span style={{ fontSize: '12px', fontWeight: '600', color: '#00fff2', fontFamily: 'monospace', overflowWrap: 'anywhere' }}>paytm.s27imms@pty</span>
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '6px', marginTop: '2px' }}>
-                                <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.5)', fontWeight: '600' }}>Amount:</span>
-                                <span style={{ fontSize: '15px', fontWeight: '800', color: 'var(--color-accent-yellow)' }}>₹{totalAmount}</span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText('paytm.s27imms@pty');
-                                  showToast("📋 UPI ID copied to clipboard!", "success");
-                                }}
-                                style={{
-                                  marginTop: '4px',
-                                  background: 'rgba(0, 255, 242, 0.08)',
-                                  border: '1px solid rgba(0, 255, 242, 0.2)',
-                                  color: '#00fff2',
-                                  fontSize: '10px',
-                                  fontWeight: '700',
-                                  padding: '4px 8px',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  width: 'fit-content',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px',
-                                  transition: 'all 0.2s'
-                                }}
-                              >
-                                📋 Copy UPI ID
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedPayment === 'COD' && (
-                      <div className="payment-instructions-card cod border-glow fade-in" style={{ marginTop: '12px', background: 'rgba(16, 185, 129, 0.08)', padding: '10px 12px', borderRadius: '8px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                        <p className="payment-instruction-text" style={{ fontSize: '12.5px', color: '#155724', lineHeight: '1.45', margin: 0 }}>
-                          ℹ️ <strong>Cash on Delivery (COD) Instruction:</strong> Please keep the exact amount of <strong style={{ color: '#0f5132', fontWeight: 'bold' }}>₹{totalAmount}</strong> ready in cash. You have to pay the amount only after the delivery partner arrives at your home. Do not pay any amount before that.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Checkout Button */}
-                  <button
-                    className="neon-btn checkout-btn"
-                    disabled={isOutOfRange || isDistanceLoading || isUnderMinimumOrder}
-                    onClick={() => {
-                      if (!user) {
-                        showToast("🔐 Please sign in or register to place your order!", "warning");
-                        setIsAuthModalOpen(true);
-                        return;
-                      }
-                      if (isOutOfRange) {
-                        showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
-                        return;
-                      }
-                      if (isUnderMinimumOrder) {
-                        showToast(`⚠️ Minimum cart value of ₹${MIN_ORDER_VALUE} is required to place an order.`);
-                        return;
-                      }
-                      handlePlaceOrder();
-                      if (isDrawer) setIsCartDrawerOpen(false);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '14px',
-                      borderRadius: '12px',
-                      fontSize: '15px',
-                      fontWeight: 'bold',
-                      textAlign: 'center',
-                      transition: 'all 0.2s',
-                      background: (isOutOfRange || isUnderMinimumOrder) ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
-                      color: (isOutOfRange || isUnderMinimumOrder) ? 'var(--color-text-muted)' : '#000',
-                      border: (isOutOfRange || isUnderMinimumOrder) ? '1px solid var(--color-border)' : 'none',
-                      cursor: (isOutOfRange || isUnderMinimumOrder) ? 'not-allowed' : 'pointer',
-                      marginTop: '12px'
-                    }}
-                  >
-                    {isOutOfRange ? (
-                      <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
-                    ) : isUnderMinimumOrder ? (
-                      <>Min. Order ₹{MIN_ORDER_VALUE} Required (Current: ₹{cartSubtotal}) <X size={18} /></>
-                    ) : isDistanceLoading ? (
-                      <>Calculating Route... <RefreshCw size={18} className="spin" /></>
-                    ) : (
-                      <>Confirm & Place Order <ArrowRight size={18} /></>
-                    )}
-                  </button>
-                </>
-              );
-            })()}
+            {/* Checkout Button */}
+            <button
+              className="neon-btn checkout-btn"
+              disabled={isOutOfRange || isDistanceLoading || isUnderMinimumOrder}
+              onClick={() => {
+                if (!user) {
+                  showToast("🔐 Please sign in or register to place your order!", "warning");
+                  setIsAuthModalOpen(true);
+                  return;
+                }
+                if (isOutOfRange) {
+                  showToast(`⚠️ Cannot place order. Delivery distance is too far (${dist?.toFixed(1)} km).`);
+                  return;
+                }
+                if (isUnderMinimumOrder) {
+                  showToast(`⚠️ Minimum cart value of ₹149 is required to place an order.`);
+                  return;
+                }
+                handlePlaceOrder();
+                if (isDrawer) setIsCartDrawerOpen(false);
+              }}
+              style={{
+                background: (isOutOfRange || isUnderMinimumOrder) ? 'rgba(255, 255, 255, 0.05)' : 'var(--color-primary)',
+                color: (isOutOfRange || isUnderMinimumOrder) ? 'var(--color-text-muted)' : '#000',
+                border: (isOutOfRange || isUnderMinimumOrder) ? '1px solid var(--color-border)' : 'none',
+                cursor: (isOutOfRange || isUnderMinimumOrder) ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isOutOfRange ? (
+                <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
+              ) : isUnderMinimumOrder ? (
+                <>Min. Order ₹149 Required (Current: ₹{cartSubtotal}) <X size={18} /></>
+              ) : isDistanceLoading ? (
+                <>Calculating Route... <RefreshCw size={18} className="spin" /></>
+              ) : (
+                <>Confirm & Place Order <ArrowRight size={18} /></>
+              )}
+            </button>
           </div>
         )}
       </div>
@@ -6471,28 +5872,6 @@ function App() {
   };
 
   const renderPortalGuard = (portalName, children) => {
-    if (isRoleChecking) {
-      const portalThemeClass = portalName === 'Admin Console' ? 'portal-theme-admin' :
-        portalName === 'Delivery Rider' ? 'portal-theme-delivery' :
-          'portal-theme-merchant';
-      return (
-        <div className={`portal-auth-scene ${portalThemeClass} fade-in`} style={{ display: 'flex', flexDirection: 'column', gap: '16px', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', padding: '20px' }}>
-          <div className="portal-bg-orbs">
-            <div className="orb orb-1"></div>
-            <div className="orb orb-2"></div>
-          </div>
-          <div className="portal-auth-card-dark" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '40px' }}>
-            <div className="portal-card-glow-ring"></div>
-            <div className="auth-icon-badge-dark logo-badge-premium" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <RefreshCw className="spin" size={32} style={{ color: 'var(--color-primary)' }} />
-            </div>
-            <h3 style={{ color: '#fff', fontSize: '18px', margin: 0, fontFamily: 'var(--font-heading)' }}>Verifying credentials...</h3>
-            <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '13px', margin: 0 }}>Checking role authorizations, please wait a moment.</p>
-          </div>
-        </div>
-      );
-    }
-
     if (!user) {
       const isRider = portalName === 'Delivery Rider';
       const isMerchant = portalName === 'Merchant Dashboard';
@@ -6633,11 +6012,18 @@ function App() {
                     </button>
                   </div>
                 </div>
-                <div className="onboard-note-premium" style={{ marginTop: '12px', background: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-accent-yellow)' }}>
-                  <span className="info-icon">🔑</span>
-                  <span style={{ color: 'var(--color-accent-yellow)', fontSize: '12px' }}>
-                    The login email and password for this console will be sent to you via WhatsApp or Email after approval by the admin.
-                  </span>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Password</label>
+                  <input
+                    type="password"
+                    name="pixigo_onboard_shoppassword"
+                    placeholder="Choose password (min 6 chars)"
+                    value={onboardShopPassword}
+                    onChange={(e) => setOnboardShopPassword(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                    autoComplete="new-password"
+                  />
                 </div>
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
                   Submit Onboarding Request
@@ -6708,11 +6094,18 @@ function App() {
                     autoComplete="off"
                   />
                 </div>
-                <div className="onboard-note-premium" style={{ marginTop: '12px', background: 'rgba(245, 158, 11, 0.08)', borderColor: 'var(--color-accent-yellow)' }}>
-                  <span className="info-icon">🔑</span>
-                  <span style={{ color: 'var(--color-accent-yellow)', fontSize: '12px' }}>
-                    The login email and password for this console will be sent to you via WhatsApp or Email after approval by the admin.
-                  </span>
+                <div className="form-group-premium">
+                  <label className="form-label-premium">Password</label>
+                  <input
+                    type="password"
+                    name="pixigo_onboard_riderpassword"
+                    placeholder="Choose password (min 6 chars)"
+                    value={onboardRiderPassword}
+                    onChange={(e) => setOnboardRiderPassword(e.target.value)}
+                    className="custom-input-premium"
+                    required
+                    autoComplete="new-password"
+                  />
                 </div>
                 <button type="submit" className="neon-btn auth-submit-btn-premium">
                   Submit Onboarding Request
@@ -6817,52 +6210,11 @@ function App() {
         </div>
       );
     }
-    if (portalName === 'Admin Console' && userRole !== 'admin') {
-      return (
-        <div className="portal-auth-scene portal-theme-admin fade-in">
-          <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
-          <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
-            <div className="portal-card-glow-ring"></div>
-            <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
-              <AlertCircle size={36} style={{ color: '#ef4444' }} />
-            </div>
-            <h2 className="auth-portal-title-dark">Access Denied</h2>
-            <p className="auth-portal-subtitle-dark">
-              You are not registered as an authorized Administrator. Please contact support.
-            </p>
-            <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-              Logout & Sign In Again
-            </button>
-          </div>
-        </div>
-      );
-    }
-
     if (portalName === 'Delivery Rider') {
-      if (userRole !== 'rider') {
-        return (
-          <div className="portal-auth-scene portal-theme-delivery fade-in">
-            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
-            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
-              <div className="portal-card-glow-ring"></div>
-              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(239, 68, 68, 0.15)', borderColor: 'rgba(239,68,68,0.4)' }}>
-                <AlertCircle size={36} style={{ color: '#ef4444' }} />
-              </div>
-              <h2 className="auth-portal-title-dark">Access Denied</h2>
-              <p className="auth-portal-subtitle-dark">
-                You are not registered as an authorized Delivery Rider. Please contact the Admin.
-              </p>
-              <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-                Logout & Sign In Again
-              </button>
-            </div>
-          </div>
-        );
-      }
-
       const currentRider = deliveryPartners.find(d => d.id === user.uid || d.email === user.email);
-      if (currentRider) {
-        if (currentRider.isActive === false) {
+
+      if (!currentRider) {
+        if (userRole !== 'admin') {
           return (
             <div className="portal-auth-scene portal-theme-delivery fade-in">
               <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
@@ -6873,56 +6225,18 @@ function App() {
                 </div>
                 <h2 className="auth-portal-title-dark">Access Denied</h2>
                 <p className="auth-portal-subtitle-dark">
-                  Your Rider account (<strong>{currentRider.name}</strong>) is currently deactivated/blocked by the Administrator. Please contact support.
+                  You are not registered as an authorized Delivery Rider. Please contact the Admin.
                 </p>
                 <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-                  Logout
-                </button>
-              </div>
-            </div>
-          );
-        } else if (!currentRider.verified) {
-          return (
-            <div className="portal-auth-scene portal-theme-delivery fade-in">
-              <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
-              <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
-                <div className="portal-card-glow-ring"></div>
-                <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245,158,11,0.4)' }}>
-                  <Activity size={36} style={{ color: '#f59e0b' }} />
-                </div>
-                <h2 className="auth-portal-title-dark">Approval Pending</h2>
-                <p className="auth-portal-subtitle-dark">
-                  Your Rider account (<strong>{currentRider.name}</strong>) is currently pending admin verification. Your account verification is in process, please wait some time.
-                </p>
-                <div className="divider" style={{ margin: '20px 0' }}></div>
-                <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.65)', marginBottom: '16px' }}>
-                  Please message the Administrator to authorize your account:
-                </p>
-                <button
-                  className="neon-btn"
-                  onClick={() => {
-                    const adminPhone = '919251054064';
-                    const message = `Hello Admin, I have registered as a rider (${currentRider.name}). Please verify my account on the PixiGo console.`;
-                    window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
-                  }}
-                  style={{ background: '#25D366', color: '#fff', border: 'none', width: '100%', marginBottom: '12px' }}
-                >
-                  Message Admin on WhatsApp
-                </button>
-                <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%', color: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
-                  Logout
+                  Logout & Sign In Again
                 </button>
               </div>
             </div>
           );
         }
-      }
-    }
-
-    if (portalName === 'Merchant Dashboard') {
-      if (userRole !== 'merchant') {
+      } else if (currentRider.isActive === false) {
         return (
-          <div className="portal-auth-scene portal-theme-merchant fade-in">
+          <div className="portal-auth-scene portal-theme-delivery fade-in">
             <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
             <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
               <div className="portal-card-glow-ring"></div>
@@ -6931,16 +6245,52 @@ function App() {
               </div>
               <h2 className="auth-portal-title-dark">Access Denied</h2>
               <p className="auth-portal-subtitle-dark">
-                You are not registered as an authorized Merchant Partner. Please contact the Admin.
+                Your Rider account (<strong>{currentRider.name}</strong>) is currently deactivated/blocked by the Administrator. Please contact support.
               </p>
               <button className="neon-btn" onClick={handleLogout} style={{ marginTop: '20px', width: '100%' }}>
-                Logout & Sign In Again
+                Logout
+              </button>
+            </div>
+          </div>
+        );
+      } else if (!currentRider.verified) {
+        return (
+          <div className="portal-auth-scene portal-theme-delivery fade-in">
+            <div className="portal-bg-orbs"><div className="orb orb-1"></div><div className="orb orb-2"></div></div>
+            <div className="portal-auth-card-dark" style={{ textAlign: 'center' }}>
+              <div className="portal-card-glow-ring"></div>
+              <div className="auth-icon-badge-dark" style={{ margin: '0 auto 16px', background: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245,158,11,0.4)' }}>
+                <Activity size={36} style={{ color: '#f59e0b' }} />
+              </div>
+              <h2 className="auth-portal-title-dark">Approval Pending</h2>
+              <p className="auth-portal-subtitle-dark">
+                Your Rider account (<strong>{currentRider.name}</strong>) is currently pending admin verification. Your account verification is in process, please wait some time.
+              </p>
+              <div className="divider" style={{ margin: '20px 0' }}></div>
+              <p style={{ fontSize: '13px', color: 'rgba(255, 255, 255, 0.65)', marginBottom: '16px' }}>
+                Please message the Administrator to authorize your account:
+              </p>
+              <button
+                className="neon-btn"
+                onClick={() => {
+                  const adminPhone = '919251054064';
+                  const message = `Hello Admin, I have registered as a rider (${currentRider.name}). Please verify my account on the PixiGo console.`;
+                  window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(message)}`, '_blank');
+                }}
+                style={{ background: '#25D366', color: '#fff', border: 'none', width: '100%', marginBottom: '12px' }}
+              >
+                Message Admin on WhatsApp
+              </button>
+              <button className="secondary-btn" onClick={handleLogout} style={{ width: '100%', color: 'rgba(255, 255, 255, 0.8)', borderColor: 'rgba(255, 255, 255, 0.25)' }}>
+                Logout
               </button>
             </div>
           </div>
         );
       }
+    }
 
+    if (portalName === 'Merchant Dashboard') {
       const currentMerchant = shops.find(s => (s.email && s.email.toLowerCase() === user.email.toLowerCase()) || (s.id === user.uid));
       if (currentMerchant && !currentMerchant.verified) {
         return (
@@ -7259,13 +6609,6 @@ function App() {
           {/* Tab Controls (Desktop only) */}
           {activeTab !== 'delivery' && activeTab !== 'admin' && activeTab !== 'merchant' && (
             <nav className="header-nav desktop-only-nav">
-              <button
-                className={`nav-link ${activeTab === 'customer' ? 'active' : ''}`}
-                onClick={() => handleTabChange('customer')}
-              >
-                <ShoppingCart size={18} />
-                Customer View
-              </button>
               {activeTab !== 'customer' && (
                 <>
                   <button
@@ -8001,53 +7344,6 @@ function App() {
         {/* ==================== ADMIN PORTAL ==================== */}
         {activeTab === 'admin' && renderPortalGuard('Admin Console', (
           <div className="admin-grid fade-in">
-            {(() => {
-              const criticalMerchantOrders = orders.filter(o => {
-                if (o.status !== 'PLACED' || !o.createdAt) return false;
-                const elapsed = (Date.now() - new Date(o.createdAt).getTime()) / 1000;
-                return elapsed >= 300; // 5 minutes
-              });
-
-              const criticalRiderOrders = orders.filter(o => {
-                if ((o.status !== 'ACCEPTED' && o.status !== 'READY_FOR_PICKUP') || o.deliveryPartnerId || !o.createdAt) return false;
-                const elapsed = (Date.now() - new Date(o.createdAt).getTime()) / 1000;
-                return elapsed >= 600; // 10 minutes
-              });
-
-              const totalCritical = criticalMerchantOrders.length + criticalRiderOrders.length;
-              if (totalCritical === 0) return null;
-
-              return (
-                <div className="sla-alert-banner fade-in" style={{
-                  gridColumn: '1 / -1',
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  marginBottom: '16px',
-                  color: '#ff3838',
-                  animation: 'pulse-bg 2s infinite alternate ease-in-out'
-                }}>
-                  <AlertTriangle size={20} className="flashing-icon" />
-                  <div style={{ flex: 1, textAlign: 'left', fontSize: '13px', fontWeight: 'bold', lineHeight: '1.4' }}>
-                    ⚠️ CRITICAL SLA WARNING:
-                    {criticalMerchantOrders.length > 0 && ` ${criticalMerchantOrders.length} merchant unaccepted order(s) (> 5 mins).`}
-                    {criticalRiderOrders.length > 0 && ` ${criticalRiderOrders.length} unassigned rider pool order(s) (> 10 mins).`}
-                    Please notify them or manually assign riders.
-                  </div>
-                  <button 
-                    className="neon-btn small-btn" 
-                    onClick={() => setAdminSubView('orders')}
-                    style={{ background: 'var(--color-danger)', borderColor: 'var(--color-danger)', color: '#fff', fontSize: '11px', padding: '4px 8px' }}
-                  >
-                    View Orders
-                  </button>
-                </div>
-              );
-            })()}
             {/* Dynamic Dashboard Subview Content */}
             {adminSubView === 'sales' && (
               !isSalesUnlocked ? (
@@ -8094,7 +7390,7 @@ function App() {
               ) : (() => {
                 const analytics = getAnalytics();
                 return (
-                  <div className="analytics-dashboard-container light-theme fade-in">
+                  <div className="analytics-dashboard-container fade-in">
                     <div className="panel-header">
                       <h2>Sales & Operations Dashboard</h2>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -8425,14 +7721,14 @@ function App() {
                                   <h3 style={{ margin: 0 }}>📋 Detailed Orders Performance Log</h3>
 
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: '20px', padding: '2px', border: '1px solid #d1d5db' }}>
+                                    <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '20px', padding: '2px', border: '1px solid var(--color-border)' }}>
                                       <button
                                         type="button"
                                         onClick={() => setSalesLogFilter('today')}
                                         style={{
                                           background: salesLogFilter === 'today' ? 'var(--color-primary)' : 'transparent',
                                           border: 'none',
-                                          color: salesLogFilter === 'today' ? '#fff' : '#4b5563',
+                                          color: '#fff',
                                           padding: '6px 16px',
                                           borderRadius: '20px',
                                           fontSize: '12px',
@@ -8449,7 +7745,7 @@ function App() {
                                         style={{
                                           background: salesLogFilter === 'all' ? 'var(--color-primary)' : 'transparent',
                                           border: 'none',
-                                          color: salesLogFilter === 'all' ? '#fff' : '#4b5563',
+                                          color: '#fff',
                                           padding: '6px 16px',
                                           borderRadius: '20px',
                                           fontSize: '12px',
@@ -8462,14 +7758,14 @@ function App() {
                                       </button>
                                     </div>
 
-                                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#ffffff', border: '1px solid #d1d5db', padding: '6px 12px', borderRadius: '8px', width: '220px' }}>
-                                      <Search size={16} style={{ color: '#6b7280' }} />
+                                    <div className="admin-search-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--color-border)', padding: '6px 12px', borderRadius: '8px', width: '220px' }}>
+                                      <Search size={16} style={{ color: 'var(--color-text-muted)' }} />
                                       <input
                                         type="text"
                                         placeholder="Search orders..."
                                         value={salesModalSearchQuery}
                                         onChange={(e) => setSalesModalSearchQuery(e.target.value)}
-                                        style={{ background: 'transparent', border: 'none', outline: 'none', color: '#111827', fontSize: '13px', width: '100%' }}
+                                        style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-main)', fontSize: '13px', width: '100%' }}
                                       />
                                       {salesModalSearchQuery && (
                                         <button onClick={() => setSalesModalSearchQuery('')} style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
@@ -8690,23 +7986,6 @@ function App() {
                                       return statusUpper;
                                     })()}
                                   </span>
-                                  {(o.status === 'PLACED' || ((o.status === 'ACCEPTED' || o.status === 'READY_FOR_PICKUP') && !o.deliveryPartnerId)) && (() => {
-                                    const sla = getOrderSlaDetails(o.createdAt, o.status, o.deliveryPartnerId, o.acceptedAt);
-                                    return (
-                                      <span style={{ 
-                                        fontSize: '10px', 
-                                        fontWeight: 'bold', 
-                                        color: sla.color,
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '4px',
-                                        marginTop: '2px',
-                                        animation: sla.flashing ? 'pulse-fast 1.2s infinite alternate ease-in-out' : 'none'
-                                      }}>
-                                        ⏱️ {o.status === 'PLACED' ? 'SLA' : 'Pool'}: {sla.timerText}
-                                      </span>
-                                    );
-                                  })()}
                                 </div>
                               </td>
                               <td>
@@ -8728,9 +8007,9 @@ function App() {
                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
                                     Rejected by Store
                                   </span>
-                                ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' || o.status === 'CANCELLED_AUTO' ? (
+                                ) : o.status === 'CANCELLED_BY_ADMIN' || o.status === 'CANCELLED' ? (
                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
-                                    Cancelled {o.status === 'CANCELLED_AUTO' ? 'by System (Timeout)' : 'by Admin'}
+                                    Cancelled by Admin
                                   </span>
                                 ) : o.status === 'CANCELLED_BY_RIDER' ? (
                                   <span style={{ fontSize: '11px', color: 'var(--color-danger)', fontWeight: 'bold' }}>
@@ -8791,7 +8070,7 @@ function App() {
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
                                         <option value="">Select Shop...</option>
-                                        {shops.filter(s => !deletedShopIds.includes(s.id) && s.verified).map(s => (
+                                        {shops.filter(s => s.verified).map(s => (
                                           <option key={s.id} value={s.id}>{s.storeName || s.name}</option>
                                         ))}
                                       </select>
@@ -8805,7 +8084,7 @@ function App() {
                                         style={{ width: '100%', padding: '4px', fontSize: '12px' }}
                                       >
                                         <option value="">Select Rider (Optional)...</option>
-                                        {deliveryPartners.filter(d => !deletedUserIds.includes(d.id) && d.verified && d.isOnline !== false).map(d => (
+                                        {deliveryPartners.filter(d => d.verified && d.isOnline !== false).map(d => (
                                           <option key={d.id} value={d.id}>{d.name}</option>
                                         ))}
                                       </select>
@@ -9125,7 +8404,7 @@ function App() {
                           style={{ height: '38px' }}
                         >
                           <option value="">-- Select Shop --</option>
-                          {shops.filter(s => !deletedShopIds.includes(s.id)).map(s => (
+                          {shops.map(s => (
                             <option key={s.id} value={s.storeName || s.name}>{s.storeName || s.name}</option>
                           ))}
                         </select>
@@ -9522,7 +8801,7 @@ function App() {
                 {/* Document Onboarding Applications (Merchants) */}
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Merchant Verification Applications ({shops.filter(s => !deletedShopIds.includes(s.id) && s.docs === 'Pending').length})</h2>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Merchant Verification Applications ({shops.filter(s => s.docs === 'Pending').length})</h2>
                     <button
                       className="neon-btn small-btn"
                       onClick={() => setIsMerchantApprovalsOpen(!isMerchantApprovalsOpen)}
@@ -9533,7 +8812,7 @@ function App() {
                   </div>
                   {isMerchantApprovalsOpen && (
                     <div className="approval-list fade-in">
-                      {shops.filter(s => !deletedShopIds.includes(s.id)).map(s => (
+                      {shops.map(s => (
                         <div key={s.id} className="approval-item">
                           <div className="approval-meta">
                             <h4>{s.name}</h4>
@@ -9569,15 +8848,15 @@ function App() {
                 {/* Pending Merchant Commission Requests */}
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Pending Commission Rate Requests ({shops.filter(s => !deletedShopIds.includes(s.id) && s.commissionRequestStatus === 'pending').length})</h2>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Pending Commission Rate Requests ({shops.filter(s => s.commissionRequestStatus === 'pending').length})</h2>
                   </div>
                   <div className="approval-list fade-in">
-                    {shops.filter(s => !deletedShopIds.includes(s.id) && s.commissionRequestStatus === 'pending').length === 0 ? (
+                    {shops.filter(s => s.commissionRequestStatus === 'pending').length === 0 ? (
                       <p style={{ color: 'var(--color-text-muted)', margin: 0, padding: '12px 0', fontSize: '13px' }}>
                         No pending commission rate change requests.
                       </p>
                     ) : (
-                      shops.filter(s => !deletedShopIds.includes(s.id) && s.commissionRequestStatus === 'pending').map(s => {
+                      shops.filter(s => s.commissionRequestStatus === 'pending').map(s => {
                         const currentComm = s.commissionPercent !== undefined ? s.commissionPercent : commissionPercent;
                         return (
                           <div key={s.id} className="approval-item" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', marginBottom: '8px' }}>
@@ -9861,7 +9140,7 @@ function App() {
                 {/* Delivery Boy Onboarding Verification list */}
                 <div className="approval-card glass-panel" style={{ marginTop: '24px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0, fontSize: '18px' }}>Delivery Boy Onboarding Verification ({deliveryPartners.filter(d => !deletedUserIds.includes(d.id) && !d.verified).length})</h2>
+                    <h2 style={{ margin: 0, fontSize: '18px' }}>Delivery Boy Onboarding Verification ({deliveryPartners.filter(d => !d.verified).length})</h2>
                     <button
                       className="neon-btn small-btn"
                       onClick={() => setIsRiderApprovalsOpen(!isRiderApprovalsOpen)}
@@ -9872,7 +9151,7 @@ function App() {
                   </div>
                   {isRiderApprovalsOpen && (
                     <div className="approval-list fade-in">
-                      {deliveryPartners.filter(d => !deletedUserIds.includes(d.id)).map(d => (
+                      {deliveryPartners.map(d => (
                         <div key={d.id} className="approval-item">
                           <div className="approval-meta">
                             <h4>{d.name}</h4>
@@ -10475,12 +9754,12 @@ function App() {
                               >
                                 <option value="" style={{ background: '#1c1c24' }}>-- Select Payee --</option>
                                 {payoutType === 'merchant'
-                                  ? shops.filter(s => !deletedShopIds.includes(s.id)).map(s => (
+                                  ? shops.map(s => (
                                     <option key={s.id} value={s.id} style={{ background: '#1c1c24' }}>
                                       {s.storeName || s.name}
                                     </option>
                                   ))
-                                  : deliveryPartners.filter(r => !deletedUserIds.includes(r.id)).map(r => (
+                                  : deliveryPartners.map(r => (
                                     <option key={r.id} value={r.id} style={{ background: '#1c1c24' }}>
                                       {r.name}
                                     </option>
@@ -11471,20 +10750,8 @@ function App() {
                       Welcome, {currentRider?.name || user?.name || user?.email}
                     </h2>
                     <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                      Logged in as: <strong>{user?.email}</strong> | Contact: <strong>{currentRider?.phone || 'Not Set'}</strong>
+                      Logged in as: <strong>{user?.email}</strong> | UID: <strong>{user?.uid}</strong>
                     </p>
-                    <button
-                      type="button"
-                      className="neon-btn"
-                      style={{ padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}
-                      onClick={() => {
-                        setRiderEditPhone(currentRider?.phone ? currentRider.phone.replace(/^\+91/, '') : '');
-                        setRiderEditEmail(currentRider?.email || '');
-                        setIsRiderEditModalOpen(true);
-                      }}
-                    >
-                      <Edit size={12} /> Edit Settings
-                    </button>
                   </div>
 
                   <div style={{
@@ -11751,7 +11018,7 @@ function App() {
                                       textAlign: 'center',
                                       fontWeight: '600'
                                     }}>
-                                      ⏳ The order is preparing
+                                      ⏳ Kitchen is preparing order...
                                     </div>
                                   ) : (
                                     <div style={{
@@ -11785,6 +11052,25 @@ function App() {
                                 </div>
                               ) : (
                                 <>
+                                  <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
+                                    {riderTrackingOrderId === o.id ? (
+                                      <button
+                                        className="neon-btn"
+                                        style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
+                                        onClick={handleStopRiderTracking}
+                                      >
+                                        🔴 Stop Live GPS Tracking
+                                      </button>
+                                    ) : (
+                                      <button
+                                        className="neon-btn"
+                                        style={{ flexGrow: 1 }}
+                                        onClick={() => handleStartRiderTracking(o.id)}
+                                      >
+                                        🟢 Start Live Ride Tracking
+                                      </button>
+                                    )}
+                                  </div>
 
                                   <div className="job-otp-form" style={{ marginTop: '20px' }}>
                                     <input
@@ -12027,27 +11313,9 @@ function App() {
                     const activeShopCommission = (matchedShop && matchedShop.commissionPercent !== undefined) ? matchedShop.commissionPercent : commissionPercent;
 
                     return loggedInMerchantShop ? (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginTop: '4px' }}>
-                        <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', margin: 0 }}>
-                          Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong> | Commission Rate: <strong>{activeShopCommission}%</strong>
-                        </p>
-                        <button
-                          type="button"
-                          className="neon-btn"
-                          style={{ padding: '4px 12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }}
-                          onClick={() => {
-                            setMerchantEditAddress(loggedInMerchantShop.address || '');
-                            setMerchantEditPhone(loggedInMerchantShop.phone ? loggedInMerchantShop.phone.replace(/^\+91/, '') : '');
-                            setMerchantEditEmail(loggedInMerchantShop.email || '');
-                            setMerchantEditOpenTime(loggedInMerchantShop.openTime || '09:00');
-                            setMerchantEditCloseTime(loggedInMerchantShop.closeTime || '22:00');
-                            setMerchantEditUseHours(loggedInMerchantShop.useOperatingHours || false);
-                            setIsMerchantShopSettingsOpen(true);
-                          }}
-                        >
-                          <Edit size={12} /> Edit Settings
-                        </button>
-                      </div>
+                      <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
+                        Shop Location: <strong>{loggedInMerchantShop.address}</strong> | Category: <strong>{loggedInMerchantShop.category}</strong> | Contact: <strong>{loggedInMerchantShop.phone}</strong> | Commission Rate: <strong>{activeShopCommission}%</strong>
+                      </p>
                     ) : (
                       <p style={{ fontSize: '13px', color: 'var(--color-text-muted)', marginTop: '4px' }}>
                         Logged in as: <strong>{user?.email}</strong> | Active Commission Rate: <strong>{activeShopCommission}%</strong>. If your shop is not linked, please contact the Administrator.
@@ -12057,8 +11325,6 @@ function App() {
                   {(() => {
                     const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                     if (!matchedShop) return null;
-                    const statusInfo = getShopOpenStatus(matchedShop);
-                    const isOpen = statusInfo.isOpen;
                     return (
                       <div className="glass-panel" style={{
                         marginTop: '16px',
@@ -12066,40 +11332,26 @@ function App() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: isOpen ? 'rgba(104, 166, 0, 0.05)' : 'rgba(239, 68, 68, 0.05)',
-                        border: '1px solid ' + (isOpen ? 'rgba(104, 166, 0, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
+                        background: matchedShop.isAcceptingOrders !== false ? 'rgba(104, 166, 0, 0.05)' : 'rgba(239, 68, 68, 0.05)',
+                        border: '1px solid ' + (matchedShop.isAcceptingOrders !== false ? 'rgba(104, 166, 0, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
                         borderRadius: '8px'
                       }}>
                         <div style={{ textAlign: 'left' }}>
-                          {(() => {
-                            const isManuallyClosed = matchedShop.isAcceptingOrders === false;
-                            
-                            return (
-                              <>
-                                <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <span style={{
-                                    width: '10px',
-                                    height: '10px',
-                                    borderRadius: '50%',
-                                    background: isOpen ? 'var(--color-success)' : 'var(--color-danger)',
-                                    boxShadow: '0 0 8px ' + (isOpen ? 'var(--color-success)' : 'var(--color-danger)')
-                                  }}></span>
-                                  Order Acceptance Status: <strong>{isOpen ? 'OPEN' : 'CLOSED'}</strong>
-                                </h4>
-                                <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                                  {isManuallyClosed 
-                                    ? 'Your shop is manually closed. Customers cannot place new orders.' 
-                                    : (!isOpen && statusInfo.reason === 'OUTSIDE_HOURS')
-                                      ? 'Your shop is currently closed as it is outside operating hours (Hours: 10:00 AM - 10:00 PM).'
-                                      : 'Your shop is open and actively accepting orders from customers (Hours: 10:00 AM - 10:00 PM).'
-                                  }
-                                </p>
-                                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: 'var(--color-primary)', fontWeight: '600', lineHeight: '1.4' }}>
-                                  💡 Notice: Your shop operates automatically between 10:00 AM and 10:00 PM. If you need to manually open or close your shop at any time, please use the button on the right.
-                                </p>
-                              </>
-                            );
-                          })()}
+                          <h4 style={{ margin: 0, fontSize: '15px', color: 'var(--color-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              background: matchedShop.isAcceptingOrders !== false ? 'var(--color-success)' : 'var(--color-danger)',
+                              boxShadow: '0 0 8px ' + (matchedShop.isAcceptingOrders !== false ? 'var(--color-success)' : 'var(--color-danger)')
+                            }}></span>
+                            Order Acceptance Status: <strong>{matchedShop.isAcceptingOrders !== false ? 'OPEN' : 'CLOSED'}</strong>
+                          </h4>
+                          <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: 'var(--color-text-muted)' }}>
+                            {matchedShop.isAcceptingOrders !== false
+                              ? `Your shop is open and actively accepting orders from customers (Hours: ${matchedShop.openTime || '09:00'} - ${matchedShop.closeTime || '22:00'}).`
+                              : 'Your shop is currently closed. Customers cannot place new orders.'}
+                          </p>
                         </div>
                         <button
                           className="neon-btn"
@@ -13052,164 +12304,6 @@ function App() {
         </div>
       )}
 
-      {/* Merchant Edit Shop Settings Modal */}
-      {isMerchantShopSettingsOpen && loggedInMerchantShop && (
-        <div className="modal-backdrop fade-in" onClick={() => setIsMerchantShopSettingsOpen(false)}>
-          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="modal-close-btn" onClick={() => setIsMerchantShopSettingsOpen(false)}>
-              <X size={20} />
-            </button>
-
-            <div className="profile-avatar-section">
-              <div className="profile-avatar-glow">
-                <Store size={40} style={{ color: 'var(--color-primary)' }} />
-              </div>
-              <h3 className="section-title-premium">Edit Shop Details</h3>
-              <p className="profile-sub">{loggedInMerchantShop.storeName || loggedInMerchantShop.name}</p>
-            </div>
-
-            {merchantEditError && (
-              <div className="auth-error-banner fade-in" style={{ marginBottom: '14px' }}>
-                <AlertCircle size={16} />
-                <span>{merchantEditError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveMerchantSettings} className="profile-form-premium">
-              <div className="form-group-premium">
-                <label className="form-label-premium">Contact Number (10-Digit Mobile)</label>
-                <div className="prefixed-phone-container-premium">
-                  <span className="phone-prefix-badge-premium">+91</span>
-                  <input
-                    type="text"
-                    maxLength={10}
-                    value={merchantEditPhone}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      setMerchantEditPhone(val);
-                    }}
-                    className="phone-numeric-input-premium"
-                    required
-                    disabled={isSavingMerchantEdit}
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group-premium">
-                <label className="form-label-premium">Email Address</label>
-                <input
-                  type="email"
-                  value={merchantEditEmail}
-                  className="custom-input-premium"
-                  required
-                  disabled={true}
-                  readOnly={true}
-                  autoComplete="off"
-                />
-                <small style={{ color: 'var(--color-text-muted)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
-                  This email address is linked to your shop dashboard and cannot be changed.
-                </small>
-              </div>
-
-              <div className="form-group-premium">
-                <label className="form-label-premium">Shop Address</label>
-                <textarea
-                  value={merchantEditAddress}
-                  onChange={(e) => setMerchantEditAddress(e.target.value)}
-                  className="custom-input-premium address-textarea-premium"
-                  rows="2"
-                  required
-                  disabled={isSavingMerchantEdit}
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="neon-btn auth-submit-btn-premium"
-                disabled={isSavingMerchantEdit}
-                style={{ width: '100%', marginTop: '8px' }}
-              >
-                {isSavingMerchantEdit ? 'Saving Details...' : 'Save Settings'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Rider Edit Settings Modal */}
-      {isRiderEditModalOpen && (
-        <div className="modal-backdrop fade-in" onClick={() => setIsRiderEditModalOpen(false)}>
-          <div className="profile-edit-modal-card glass-panel border-glow" onClick={(e) => e.stopPropagation()}>
-            <button type="button" className="modal-close-btn" onClick={() => setIsRiderEditModalOpen(false)}>
-              <X size={20} />
-            </button>
-
-            <div className="profile-avatar-section">
-              <div className="profile-avatar-glow">
-                <Bike size={40} style={{ color: 'var(--color-primary)' }} />
-              </div>
-              <h3 className="section-title-premium">Edit Rider Details</h3>
-              <p className="profile-sub">{user?.name || user?.email}</p>
-            </div>
-
-            {riderEditError && (
-              <div className="auth-error-banner fade-in" style={{ marginBottom: '14px' }}>
-                <AlertCircle size={16} />
-                <span>{riderEditError}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveRiderSettings} className="profile-form-premium">
-              <div className="form-group-premium">
-                <label className="form-label-premium">Contact Number (10-Digit Mobile)</label>
-                <div className="prefixed-phone-container-premium">
-                  <span className="phone-prefix-badge-premium">+91</span>
-                  <input
-                    type="text"
-                    maxLength={10}
-                    value={riderEditPhone}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      setRiderEditPhone(val);
-                    }}
-                    className="phone-numeric-input-premium"
-                    required
-                    disabled={isSavingRiderEdit}
-                    autoComplete="off"
-                  />
-                </div>
-              </div>
-
-              <div className="form-group-premium">
-                <label className="form-label-premium">Email Address</label>
-                <input
-                  type="email"
-                  value={riderEditEmail}
-                  className="custom-input-premium"
-                  required
-                  disabled={true}
-                  readOnly={true}
-                  autoComplete="off"
-                />
-                <small style={{ color: 'var(--color-text-muted)', fontSize: '11px', display: 'block', marginTop: '4px' }}>
-                  This email is linked to your rider access and cannot be changed.
-                </small>
-              </div>
-
-              <button
-                type="submit"
-                className="neon-btn auth-submit-btn-premium"
-                disabled={isSavingRiderEdit}
-                style={{ width: '100%', marginTop: '8px' }}
-              >
-                {isSavingRiderEdit ? 'Saving Details...' : 'Save Settings'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Profile Modal */}
       {isProfileOpen && (
         <div className="modal-backdrop fade-in" onClick={() => setIsProfileOpen(false)}>
@@ -13224,18 +12318,6 @@ function App() {
               </div>
               <h3 className="section-title-premium">Edit Profile Settings</h3>
               <p className="profile-sub">{user ? customerEmail : "Guest Account (Not Synced)"}</p>
-              
-              <button
-                type="button"
-                className="past-orders-trigger-btn-profile neon-btn"
-                onClick={() => {
-                  setIsProfileOpen(false);
-                  setIsPastOrdersOpen(true);
-                }}
-                style={{ marginTop: '12px', padding: '6px 12px', fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
-              >
-                <FileText size={14} /> View Order History
-              </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="profile-form-premium">
@@ -13260,14 +12342,12 @@ function App() {
                 />
               </div>
               <div className="form-group-premium">
-                <label className="form-label-premium">GPS Location Coordinates</label>
+                <label className="form-label-premium">Delivery Address Coordinates</label>
                 <textarea
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
                   className="custom-input-premium address-textarea-premium"
-                  rows="1"
-                  readOnly={true}
-                  style={{ cursor: 'not-allowed', background: 'rgba(255, 255, 255, 0.02)' }}
+                  rows="3"
                   required
                 />
                 <button
@@ -13275,7 +12355,7 @@ function App() {
                   className="auto-detect-btn"
                   onClick={() => handleAutoDetectLocation(setCustomerAddress)}
                   disabled={isLocating}
-                  style={{ marginTop: '8px', marginBottom: '8px' }}
+                  style={{ marginTop: '8px' }}
                 >
                   <Compass size={14} className={isLocating ? "spin" : ""} />
                   {isLocating ? "Detecting location..." : "🎯 Auto-Detect My Location"}
@@ -13313,12 +12393,7 @@ function App() {
             </div>
 
             <div className="past-orders-list-premium">
-              {isOrdersLoading ? (
-                <div className="no-past-orders-premium" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '20px' }}>
-                  <RefreshCw className="spin text-neon" size={30} />
-                  <p>Loading your order history...</p>
-                </div>
-              ) : orders.filter(o => {
+              {orders.filter(o => {
                 const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
                 return isUserOrder(o) && isFinished;
               }).length === 0 ? (
@@ -13330,61 +12405,27 @@ function App() {
                 orders.filter(o => {
                   const isFinished = o.status && (o.status.toUpperCase() === 'COMPLETED' || o.status.toUpperCase() === 'DELIVERED' || o.status.toUpperCase().startsWith('CANCEL'));
                   return isUserOrder(o) && isFinished;
-                }).map(o => {
-                  const isCancelled = o.status && o.status.toUpperCase().startsWith('CANCEL');
-                  return (
-                    <div key={o.id} className={`past-order-card-premium border-glow ${isCancelled ? 'cancelled' : ''}`}>
-                      <div className="past-order-header-premium">
-                        <div className="past-order-title-section">
-                          <span className="past-order-store-name">🏪 {o.merchantName || o.items?.[0]?.store || 'Pixo Go Hub'}</span>
-                          <span className="order-id-premium">ID: #{o.id}</span>
-                        </div>
-                        {isCancelled ? (
-                          <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <XCircle size={12} /> Cancelled
-                          </span>
-                        ) : (
-                          <span className="badge badge-success" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <CheckCircle2 size={12} /> Delivered
-                          </span>
-                        )}
-                      </div>
-                      <div className="past-order-body-premium">
-                        <div className="past-order-items-list">
-                          {o.items.map((item, idx) => (
-                            <div key={idx} className="past-order-item-row">
-                              <span className="past-order-item-bullet">🟢</span>
-                              <span className="past-order-item-name">
-                                {item.name}{item.specs ? ` (${item.specs})` : ''}
-                              </span>
-                              <span className="past-order-item-qty">x{item.quantity}</span>
-                            </div>
-                          ))}
-                        </div>
-                        
-                        <div className="order-meta-info-premium">
-                          <div className="meta-left">
-                            <span className="meta-date">📅 {new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                            <span className="meta-payment-method">💳 {o.paymentMethod || 'ONLINE'}</span>
-                          </div>
-                          <div className="meta-right">
-                            <span className="meta-amount-label">Paid: </span>
-                            <span className="meta-amount">₹{o.totalAmount}</span>
-                          </div>
-                        </div>
-
-                        <div className="past-order-actions">
-                          <button
-                            className="past-order-reorder-btn neon-btn"
-                            onClick={() => handleReorderItems(o.items)}
-                          >
-                            🔄 Reorder Items
-                          </button>
-                        </div>
+                }).map(o => (
+                  <div key={o.id} className="past-order-card-premium border-glow">
+                    <div className="past-order-header-premium">
+                      <span className="order-id-premium">Order ID: <strong>{o.id}</strong></span>
+                      {o.status && o.status.toUpperCase().startsWith('CANCEL') ? (
+                        <span className="badge badge-danger">Cancelled</span>
+                      ) : (
+                        <span className="badge badge-success">Delivered</span>
+                      )}
+                    </div>
+                    <div className="past-order-body-premium">
+                      <p className="order-items-summary-premium">
+                        {o.items.map(item => `${item.name}${item.specs ? ` (${item.specs})` : ''} (x${item.quantity})`).join(', ')}
+                      </p>
+                      <div className="order-meta-info-premium">
+                        <span>Paid: <strong>₹{o.totalAmount}</strong></span>
+                        <span>{new Date(o.createdAt).toLocaleDateString()}</span>
                       </div>
                     </div>
-                  );
-                })
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -14135,21 +13176,13 @@ function App() {
         <div className="drawer-backdrop fade-in" onClick={() => setIsTrackingDrawerOpen(false)}>
           <div className="cart-drawer glass-panel" onClick={(e) => e.stopPropagation()}>
             <div className="cart-header-row">
-              <h2 className="section-title"><Compass size={20} /> Order Details</h2>
+              <h2 className="section-title"><Compass size={20} /> Order Tracking</h2>
               <button className="close-drawer-btn" onClick={() => setIsTrackingDrawerOpen(false)}>
                 <X size={20} />
               </button>
             </div>
 
             {(() => {
-              if (isOrdersLoading) {
-                return (
-                  <div className="flex flex-col items-center justify-center p-8 text-center" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '40px' }}>
-                    <RefreshCw className="spin text-neon" size={32} />
-                    <p className="text-muted">Loading your order details...</p>
-                  </div>
-                );
-              }
               const trackedOrder = orders.find(o => o.id === currentOrderTracking);
               if (!trackedOrder) return <p className="text-muted">Order not found.</p>;
 
@@ -14170,7 +13203,6 @@ function App() {
                         trackedOrder.status === 'CANCELLED_BY_STORE' ? 'Cancelled by the Store' :
                           trackedOrder.status === 'CANCELLED_BY_RIDER' ? 'Cancelled by the Rider' :
                             trackedOrder.status === 'CANCELLED' || trackedOrder.status === 'CANCELLED_BY_ADMIN' ? 'Cancelled by Admin' :
-                              trackedOrder.status === 'CANCELLED_AUTO' ? 'Cancelled Automatically (Timeout)' :
                               ['ASSIGNED', 'OUT_FOR_DELIVERY', 'STARTED', 'DISPATCHED'].includes(trackedOrder.status) ? 'Arriving in few minutes' :
                                 trackedOrder.status === 'READY_FOR_PICKUP' ? 'Prepared, ready for pickup!' :
                                   trackedOrder.status === 'ACCEPTED' ? 'Preparing... (few minutes)' :
@@ -14242,6 +13274,23 @@ function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* Map */}
+                  <div className="leaflet-mock-map-sidebar border-glow">
+                    {(() => {
+                      const trackedOrderShop = shops.find(s => s.name === trackedOrder.storeName || s.storeName === trackedOrder.storeName || (trackedOrder.items && s.name === trackedOrder.items[0]?.store));
+                      const merchantCoords = trackedOrderShop ? { lat: trackedOrderShop.lat || 24.8887, lng: trackedOrderShop.lng || 74.6269 } : { lat: 24.8887, lng: 74.6269 };
+                      return (
+                        <LeafletMap
+                          riderCoords={liveRiderCoords}
+                          merchantCoords={merchantCoords}
+                          customerCoords={parseCoords(trackedOrder.customerLocation)}
+                          customerName={extractFriendlyAddress(trackedOrder.customerLocation)}
+                          merchantName={trackedOrder.items?.[0]?.store || 'Merchant'}
+                        />
+                      );
+                    })()}
+                  </div>
 
                   {/* Details Grid */}
                   <div className="sidebar-details-grid">
@@ -15255,32 +14304,9 @@ function App() {
                                 'Customer';
 
                         return (
-                          <div key={role} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <span className={`badge ${badgeClass}`} style={{ fontSize: '11px', padding: '4px 8px' }}>
-                              {label}
-                            </span>
-                            {roles.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleAdminDeleteUserRole(u, role)}
-                                style={{
-                                  background: 'rgba(239, 68, 68, 0.1)',
-                                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                                  borderRadius: '4px',
-                                  color: '#ef4444',
-                                  padding: '2px 4px',
-                                  fontSize: '10px',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                                title={`Delete ${label} Role`}
-                              >
-                                <Trash2 size={10} />
-                              </button>
-                            )}
-                          </div>
+                          <span key={role} className={`badge ${badgeClass}`} style={{ fontSize: '11px', padding: '4px 8px' }}>
+                            {label}
+                          </span>
                         );
                       })}
                     </div>
@@ -15695,24 +14721,14 @@ function App() {
                       />
                       <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
                         {activeShop.password ? (
-                          <>
-                            <button
-                              type="button"
-                              className="neon-btn small-btn"
-                              onClick={() => handleUpdateMerchantPassword(activeShop.email, activeShop.password, tempAuthPassword, activeShop.id)}
-                              style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(0, 255, 242, 0.1)', border: '1px solid var(--color-neon-cyan)', color: 'var(--color-neon-cyan)' }}
-                            >
-                              Update Password
-                            </button>
-                            <button
-                              type="button"
-                              className="neon-btn small-btn"
-                              onClick={() => handleCreateAuthAccount('merchant', activeShop.email, tempAuthPassword || activeShop.password, activeShop.id)}
-                              style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(104, 166, 0, 0.1)', border: '1px solid var(--color-primary)', color: 'var(--color-primary)' }}
-                            >
-                              Re-register Login Account
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            className="neon-btn small-btn"
+                            onClick={() => handleUpdateMerchantPassword(activeShop.email, activeShop.password, tempAuthPassword, activeShop.id)}
+                            style={{ padding: '8px 12px', fontSize: '12px', background: 'rgba(0, 255, 242, 0.1)', border: '1px solid var(--color-neon-cyan)', color: 'var(--color-neon-cyan)' }}
+                          >
+                            Update Password
+                          </button>
                         ) : (
                           <button
                             type="button"
@@ -16080,7 +15096,7 @@ function App() {
             <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
 
             <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN', 'CANCELLED_AUTO'].includes(selectedOrderDetails.status?.toUpperCase()) && (
+              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN'].includes(selectedOrderDetails.status?.toUpperCase()) && (
                 <button
                   className="neon-btn"
                   onClick={() => handleAdminCancelOrder(selectedOrderDetails.id)}
