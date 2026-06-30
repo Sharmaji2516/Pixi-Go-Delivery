@@ -7,54 +7,36 @@ service cloud.firestore {
     }
 
     match /orders/{orderId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        isAdmin() || 
-        (
-          resource.data.merchantId != null &&
-          exists(/databases/$(database)/documents/merchants/$(resource.data.merchantId)) &&
-          (
-            get(/databases/$(database)/documents/merchants/$(resource.data.merchantId)).data.authUid == request.auth.uid ||
-            get(/databases/$(database)/documents/merchants/$(resource.data.merchantId)).data.email == request.auth.token.email
-          )
-        ) ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'deliveryPartnerId', 'deliveryPartnerName'])
-      );
-      allow delete: if request.auth != null && isAdmin();
+      allow read, write: if true;
     }
 
     match /products/{productId} {
       allow read: if true;
-      allow create, update: if request.auth != null; 
+      allow create, update: if true; 
       allow delete: if request.auth != null && isAdmin();
     }
 
     match /shops/{shopId} {
       allow read: if true;
-      allow create, update: if request.auth != null;
+      allow create, update: if true;
       allow delete: if request.auth != null && isAdmin();
     }
     
     match /merchants/{merchantId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        isAdmin() || 
-        resource.data.authUid == request.auth.uid ||
-        resource.data.email == request.auth.token.email
-      );
+      allow create: if true;
+      allow update: if (request.auth != null && isAdmin()) || 
+        (request.auth != null && (resource.data.authUid == request.auth.uid || resource.data.email == request.auth.token.email)) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAcceptingOrders', 'openTime', 'closeTime']);
       allow delete: if request.auth != null && isAdmin();
     }
 
     match /delivery_boys/{riderId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        isAdmin() || 
-        resource.data.authUid == request.auth.uid ||
-        resource.data.email == request.auth.token.email
-      );
+      allow create: if true;
+      allow update: if (request.auth != null && isAdmin()) || 
+        (request.auth != null && (resource.data.authUid == request.auth.uid || resource.data.email == request.auth.token.email)) ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline', 'lat', 'lng', 'status', 'totalDeliveries', 'pendingPayout', 'updatedAt']);
       allow delete: if request.auth != null && isAdmin();
     }
 
