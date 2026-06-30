@@ -13296,8 +13296,8 @@ function App() {
               const getStatusStepIndex = (status) => {
                 const s = status?.toUpperCase() || '';
                 if (s === 'COMPLETED' || s === 'DELIVERED') return 4;
-                if (['PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY', 'DISPATCHED'].includes(s)) return 3;
-                if (['ACCEPTED', 'READY_FOR_PICKUP', 'ASSIGNED'].includes(s)) return 2;
+                if (['ASSIGNED', 'PICKED_UP', 'STARTED', 'OUT_FOR_DELIVERY', 'DISPATCHED'].includes(s)) return 3;
+                if (['ACCEPTED', 'READY_FOR_PICKUP'].includes(s)) return 2;
                 return 1;
               };
 
