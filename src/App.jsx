@@ -14,36 +14,9 @@ import { ref as rtdbRef, set as rtdbSet, onValue as rtdbOnValue, remove as rtdbR
 import { getDistance, calculateDeliveryRates, fetchRoadDistance, getPromotionalDeliveryFee, getCartTotalWeight, getCartSummary } from './distanceUtils';
 
 // Initial Mock Data with Premium Image URLs & Emoji Fallbacks
-const INITIAL_PRODUCTS = [
-  { id: 'p1', name: 'Fresh Kirana Atta (5kg)', price: 280, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=300&auto=format&fit=crop&q=60', emoji: '🌾', isVeg: true },
-  { id: 'p2', name: 'Organic Mustard Oil (1L)', price: 175, category: 'General Store', store: 'Pooja Kirana Store', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=300&auto=format&fit=crop&q=60', emoji: '🛢️', isVeg: true },
-  { id: 'p3', name: 'Fresh Farm Tomatoes (1kg)', price: 40, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=300&auto=format&fit=crop&q=60', emoji: '🍅', isVeg: true },
-  { id: 'p4', name: 'Alphonso Mangoes (1kg)', price: 250, category: 'Vegetable', store: 'Green Farms Veggies', image: 'https://images.unsplash.com/photo-1553279768-865429fa0078?w=300&auto=format&fit=crop&q=60', emoji: '🥭', isVeg: true },
-  { id: 'p5', name: 'Creamy Paneer (200g)', price: 90, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=300&auto=format&fit=crop&q=60', emoji: '🥛', isVeg: true },
-  { id: 'p6', name: 'Amul Salted Butter (100g)', price: 56, category: 'Dairy', store: 'Krishna Dairy', image: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=300&auto=format&fit=crop&q=60', emoji: '🧈', isVeg: true },
-  { id: 'p7', name: 'Chocolate Fudge Cake', price: 650, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=300&auto=format&fit=crop&q=60', emoji: '🎂', isVeg: true },
-  { id: 'p8', name: 'Garlic Bread Sticks', price: 120, category: 'Bakery', store: 'Bake House', image: 'https://images.unsplash.com/photo-1544982503-9f984c14501a?w=300&auto=format&fit=crop&q=60', emoji: '🥖', isVeg: true },
-  { id: 'p9', name: 'Crispy Veg Burger', price: 140, category: 'Fast Food', store: 'Burger Club', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=300&auto=format&fit=crop&q=60', emoji: '🍔', isVeg: true },
-  { id: 'p10', name: 'Cheese Pizza (Medium)', price: 320, category: 'Fast Food', store: 'Pizza Corner', image: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=300&auto=format&fit=crop&q=60', emoji: '🍕', isVeg: true },
-  { id: 'p11', name: 'Butter Chicken with Butter Naan', price: 380, category: 'Restaurant Cafe', store: 'Grand Plaza Restaurant', image: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=300&auto=format&fit=crop&q=60', emoji: '🍛', isVeg: false },
-  { id: 'p12', name: 'Belgian Chocolate Waffle', price: 190, category: 'Restaurant Cafe', store: 'Sweet Treat Cafe', image: 'https://images.unsplash.com/photo-1562376502-6f769499887d?w=300&auto=format&fit=crop&q=60', emoji: '🧇', isVeg: true },
-  { id: 'p13', name: 'Double Chocolate Ice Cream', price: 150, category: 'Icecream and dessert', store: 'Gelato Heaven', image: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=300&auto=format&fit=crop&q=60', emoji: '🍨', isVeg: true },
-  { id: 'p14', name: 'Premium Multi-vitamins (60 Caps)', price: 890, category: 'Medical and fitness', store: 'Apollo Wellness', image: 'https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=300&auto=format&fit=crop&q=60', emoji: '💊', isVeg: true },
-  { id: 'p15', name: 'Fresh Orange Juice (500ml)', price: 110, category: 'Juice and drink', store: 'Juice Junction', image: 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=300&auto=format&fit=crop&q=60', emoji: '🍹', isVeg: true },
-  { id: 'p16', name: 'Masala Chai Mix (250g)', price: 180, category: 'Snacks and breakfast', store: 'Tea Valley', image: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=300&auto=format&fit=crop&q=60', emoji: '☕', isVeg: true },
-  { id: 'p17', name: 'PixiGo Instant Noodles (Pack of 4)', price: 60, category: 'PixiGo Store', store: 'PixiGo Store', image: 'https://images.unsplash.com/photo-1612966608967-3e2b7e7ab7e9?w=300&auto=format&fit=crop&q=60', emoji: '🍜', isVeg: true },
-  { id: 'p18', name: 'PixiGo Premium Fresh Milk (1L)', price: 70, category: 'PixiGo Store', store: 'PixiGo Store', image: 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=300&auto=format&fit=crop&q=60', emoji: '🥛', isVeg: true },
-  { id: 'p19', name: 'PixiGo Energy Drink (250ml)', price: 110, category: 'PixiGo Store', store: 'PixiGo Store', emoji: '⚡', isVeg: true }
-];
+const INITIAL_PRODUCTS = [];
 
-const INITIAL_SHOPS = [
-  { id: 'merch_bake_house', storeName: 'Bake House', name: 'Bake House', category: 'Bakery', phone: '9251054064', email: 'lavsharma.it25@gmail.com', address: 'Collectorate Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '23:00', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_pooja_kirana', storeName: 'Pooja Kirana Store', name: 'Pooja Kirana Store', category: 'General Store', phone: '9251054064', address: 'Bojunda, Chittorgarh', verified: true, docs: 'Approved', openTime: '07:00', closeTime: '22:00', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_krishna_dairy', storeName: 'Krishna Dairy', name: 'Krishna Dairy', category: 'Dairy', phone: '9251054064', address: 'Police Line, Chittorgarh', verified: true, docs: 'Approved', openTime: '06:00', closeTime: '21:00', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_grand_plaza', storeName: 'Grand Plaza Restaurant', name: 'Grand Plaza Restaurant', category: 'Restaurant Cafe', phone: '9251054064', address: 'Birla Hospital Road, Chittorgarh', verified: true, docs: 'Approved', openTime: '11:00', closeTime: '23:30', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_green_farms', storeName: 'Green Farms Veggies', name: 'Green Farms Veggies', category: 'Vegetable', phone: '9251054064', address: 'Pauta Chowk, Chittorgarh', verified: true, docs: 'Approved', openTime: '08:00', closeTime: '20:00', lat: 24.8887, lng: 74.6269 },
-  { id: 'merch_pixigo_store', storeName: 'PixiGo Store', name: 'PixiGo Store', category: 'PixiGo Store', phone: '9251054064', email: 'pixigodelivery@gmail.com', address: 'Central Hub, Chittorgarh', verified: true, docs: 'Approved', openTime: '00:00', closeTime: '23:59', lat: 24.8887, lng: 74.6269 }
-];
+const INITIAL_SHOPS = [];
 
 const INITIAL_DELIVERY_PARTNERS = [];
 
@@ -892,9 +865,9 @@ function App() {
       netProfit: todayOrders.reduce((acc, o) => {
         const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
         if (isCancelled) return acc;
+        const merchantPayout = o.netMerchantEarning || 0;
         const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
-        const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
-        return acc + ((o.commissionAmount || 0) - riderPayout - discountPixigo);
+        return acc + ((o.totalAmount || 0) - merchantPayout - riderPayout);
       }, 0)
     };
 
@@ -1405,7 +1378,7 @@ function App() {
 
           const adminDocRef = doc(db, "admins", currentUser.uid);
           const adminSnap = await getDoc(adminDocRef);
-          const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+          const hardcodedAdmins = [];
           const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
 
           if (adminSnap.exists() || isHardcodedAdmin) {
@@ -1509,6 +1482,11 @@ function App() {
     const currentUser = auth.currentUser;
     const nameVal = currentUser.displayName || currentUser.email.split('@')[0];
 
+    // Default to null to avoid ReferenceError
+    const authAdminData = null;
+    const authMerchantData = null;
+    const authRiderData = null;
+
     const hardcodedAdmins = [];
     const isHardcodedAdmin = currentUser.email && hardcodedAdmins.includes(currentUser.email.trim().toLowerCase());
     const isAdmin = authAdminData || isHardcodedAdmin;
@@ -1566,7 +1544,7 @@ function App() {
         });
       }
     }
-  }, [activeTab, authAdminData, authMerchantData, authRiderData]);
+  }, [activeTab]);
 
   // Global interceptor for native alert() calls to style them like our custom warningModal
   useEffect(() => {
@@ -2397,7 +2375,7 @@ function App() {
   const getRoleForEmail = (email) => {
     if (!email) return null;
     const cleanEmail = email.trim().toLowerCase();
-    const hardcodedAdmins = ['pixigodelivery@gmail.com', 'lavsharma.it25@gmail.com', 'shaktisinghnarela150@gmail.com'];
+    const hardcodedAdmins = [];
     if (hardcodedAdmins.includes(cleanEmail)) {
       return 'admin';
     }
@@ -2734,9 +2712,9 @@ function App() {
       const isCancelled = o.status?.toUpperCase().startsWith('CANCEL');
       if (isCancelled) return acc;
       // Net Profit = Total Commission - Total Delivery Boy Payouts - PixiGo Sponsored discounts
+      const merchantPayout = o.netMerchantEarning || 0;
       const riderPayout = o.status === 'COMPLETED' ? (o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge) : 0;
-      const discountPixigo = o.couponSponsor === 'pixigo' ? (o.discountAmount || 0) : 0;
-      return acc + (o.commissionAmount - riderPayout - discountPixigo);
+      return acc + ((o.totalAmount || 0) - merchantPayout - riderPayout);
     }, 0)
   };
 
@@ -4424,7 +4402,18 @@ function App() {
 
         let collectionName = '';
         if (role === 'admin') collectionName = 'admins';
-        else if (role === 'merchant') collectionName = 'merchants';
+        else if (role === 'merchant') {
+          collectionName = 'merchants';
+          const shopName = user.name || user.storeName || user.username;
+          const productsToDelete = products.filter(p => p.store === shopName && p.firestoreId);
+          for (const p of productsToDelete) {
+            try {
+              await deleteDoc(doc(db, "products", p.firestoreId));
+            } catch (err) {
+              console.error(`Error deleting product ${p.name} during user cascade deletion:`, err);
+            }
+          }
+        }
         else if (role === 'rider') collectionName = 'delivery_boys';
         else if (role === 'customer') collectionName = 'customers';
 
@@ -7983,7 +7972,7 @@ function App() {
                                             <span style={{ fontSize: '11px', color: 'var(--color-danger)' }}>Cancelled (₹0.00 earnings)</span>
                                           ) : (
                                             <>
-                                              <div style={{ fontSize: '12px' }}>Net Profit: <strong>₹{Number(o.netAdminEarning !== undefined ? o.netAdminEarning : (o.totalAmount || 0) * 0.1).toFixed(2)}</strong></div>
+                                              <div style={{ fontSize: '12px' }}>Net Profit: <strong>₹{Number((o.totalAmount || 0) - (o.netMerchantEarning || 0) - (o.riderPayout !== undefined ? o.riderPayout : (o.deliveryCharge || 0))).toFixed(2)}</strong></div>
                                               <div style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>Rider: ₹{Number(o.riderPayout || 0).toFixed(2)}</div>
                                             </>
                                           )}
@@ -15178,7 +15167,7 @@ function App() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', borderTop: '1px dashed rgba(255,255,255,0.08)', paddingTop: '6px', marginTop: '2px' }}>
                       <span style={{ color: 'var(--color-text-muted)' }}>Net Profit (Admin):</span>
                       <strong style={{ color: 'var(--color-primary)' }}>
-                        {formatINR(selectedOrderDetails.status?.startsWith('CANCELLED') ? 0 : (selectedOrderDetails.netAdminEarning !== undefined ? selectedOrderDetails.netAdminEarning : (selectedOrderDetails.totalAmount || 0) * 0.1))}
+                        {formatINR(selectedOrderDetails.status?.startsWith('CANCELLED') ? 0 : ((selectedOrderDetails.totalAmount || 0) - (selectedOrderDetails.netMerchantEarning || 0) - (selectedOrderDetails.riderPayout !== undefined ? selectedOrderDetails.riderPayout : (selectedOrderDetails.deliveryCharge || 0))))}
                       </strong>
                     </div>
                   </div>
