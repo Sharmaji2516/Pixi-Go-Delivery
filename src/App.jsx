@@ -11245,25 +11245,6 @@ function App() {
                                 </div>
                               ) : (
                                 <>
-                                  <div className="rider-tracking-controls" style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                                    {riderTrackingOrderId === o.id ? (
-                                      <button
-                                        className="neon-btn"
-                                        style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', flexGrow: 1 }}
-                                        onClick={handleStopRiderTracking}
-                                      >
-                                        🔴 Stop Live GPS Tracking
-                                      </button>
-                                    ) : (
-                                      <button
-                                        className="neon-btn"
-                                        style={{ flexGrow: 1 }}
-                                        onClick={() => handleStartRiderTracking(o.id)}
-                                      >
-                                        🟢 Start Live Ride Tracking
-                                      </button>
-                                    )}
-                                  </div>
 
                                   <div className="job-otp-form" style={{ marginTop: '20px' }}>
                                     <input
