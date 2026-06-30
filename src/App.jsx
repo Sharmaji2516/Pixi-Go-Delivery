@@ -7325,7 +7325,7 @@ function App() {
                                 <span>OTP: <strong>{trackedOrder.otp}</strong></span>
                               </div>
                             </div>
-                          ) : (
+                          ) : trackedOrder.status?.startsWith('CANCEL') ? null : (
                             <div className="rider-pending-sidebar">
                               <RefreshCw size={14} className="spin" />
                               <span>Assigning courier...</span>
@@ -13358,7 +13358,8 @@ function App() {
                         <div className="timeline-content">
                           <h4>Courier Dispatched</h4>
                           <p>
-                            {getStatusStepIndex(trackedOrder.status) >= 3
+                            {trackedOrder.status?.startsWith('CANCEL') ? "Order Cancelled" : 
+                             getStatusStepIndex(trackedOrder.status) >= 3
                               ? `Your order is on the way! (Rider: ${trackedOrder.deliveryPartnerName || 'Partner'})`
                               : "Waiting to assign courier..."}
                           </p>
@@ -13578,7 +13579,7 @@ function App() {
                         )}
                       </div>
                     );
-                  })() : (
+                  })() : trackedOrder.status?.startsWith('CANCEL') ? null : (
                     <div className="rider-pending-sidebar">
                       <RefreshCw size={14} className="spin" />
                       <span>Assigning courier...</span>
