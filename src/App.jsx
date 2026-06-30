@@ -5294,13 +5294,30 @@ function App() {
     return matchQuery && matchCat && matchVeg;
   });
 
-  // Compute active orders for the current customer (excluding completed, delivered, and cancelled ones)
+  // Compute active orders for the current customer (includes recent completed/cancelled so UI can show the status)
   const activeCustomerOrders = orders.filter(o => {
-    const isActive = o.status &&
-      o.status.toUpperCase() !== 'COMPLETED' &&
-      o.status.toUpperCase() !== 'DELIVERED' &&
-      !o.status.toUpperCase().startsWith('CANCEL');
-    return isUserOrder(o) && isActive;
+    if (!isUserOrder(o)) return false;
+    
+    const isCompletedOrCancelled = o.status && (
+      o.status.toUpperCase() === 'COMPLETED' ||
+      o.status.toUpperCase() === 'DELIVERED' ||
+      o.status.toUpperCase().startsWith('CANCEL')
+    );
+    
+    if (isCompletedOrCancelled) {
+      // If it's completed or cancelled, only show it if it happened within the last 12 hours
+      const timestamp = o.completedAt || o.cancelledAt || o.createdAt;
+      if (timestamp) {
+        const orderTime = new Date(timestamp).getTime();
+        const now = new Date().getTime();
+        const hoursDiff = (now - orderTime) / (1000 * 60 * 60);
+        if (hoursDiff > 12) {
+          return false; // Hide if older than 12 hours
+        }
+      }
+    }
+    
+    return true;
   });
 
   const trackingOrderIdForHook = currentOrderTracking || activeCustomerOrders[0]?.id;
