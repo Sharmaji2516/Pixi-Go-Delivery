@@ -3588,7 +3588,13 @@ function App() {
   };
 
   const handleRiderAcceptJob = async (orderId) => {
-    let rider = deliveryPartners.find(d => d.id === user?.uid || (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase()));
+    const currentRiderSessionId = localStorage.getItem('pixigo_rider_session');
+    let rider = deliveryPartners.find(d => 
+      (currentRiderSessionId && d.id === currentRiderSessionId) || 
+      (user && d.id === user.uid) || 
+      (d.email && user?.email && d.email.toLowerCase() === user.email.toLowerCase())
+    );
+    
     if (!rider && user) {
       // Fallback rider object for Admin/Tester accounts
       rider = {
@@ -3618,6 +3624,7 @@ function App() {
       if (o.id === orderId) {
         return {
           ...o,
+          status: 'ASSIGNED',
           deliveryPartnerId: targetRiderId,
           deliveryPartnerName: rider.name,
           riderAccepted: true
@@ -3630,6 +3637,7 @@ function App() {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
         await updateDoc(orderRef, {
+          status: 'ASSIGNED',
           deliveryPartnerId: targetRiderId,
           deliveryPartnerName: rider.name,
           riderId: targetRiderId,
