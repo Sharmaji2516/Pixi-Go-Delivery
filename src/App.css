@@ -7255,3 +7255,108 @@
     display: block;
   }
 }
+
+/* --- Sales Dashboard Light Theme Scope --- */
+.sales-dashboard-light-theme {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.sales-dashboard-light-theme h2,
+.sales-dashboard-light-theme h3 {
+  color: #111827 !important;
+}
+
+/* Retain white text for gradients */
+.sales-dashboard-light-theme .analytics-card {
+  color: #ffffff !important;
+}
+
+/* Toggle Buttons */
+.sales-dashboard-light-theme .nav-link {
+  background: #f3f4f6 !important;
+  color: #4b5563 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.sales-dashboard-light-theme .nav-link.active {
+  background: #111827 !important;
+  color: #ffffff !important;
+  border: 1px solid #111827 !important;
+}
+
+/* Search Box Wrapper */
+.sales-dashboard-light-theme .admin-search-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.sales-dashboard-light-theme .admin-search-wrapper input {
+  color: #111827 !important;
+}
+
+.sales-dashboard-light-theme .admin-search-wrapper input::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Light Mode Performance Tables */
+.sales-dashboard-light-theme .order-log-table,
+.sales-dashboard-light-theme .analytics-table {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+/* Detailed Orders Log Inner Toggle (Today / All Time) */
+.sales-dashboard-light-theme .sales-toggle-wrapper {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 20px;
+  padding: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.sales-dashboard-light-theme .sales-toggle-btn {
+  background: transparent;
+  border: none;
+  color: #4b5563;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sales-dashboard-light-theme .sales-toggle-btn.active {
+  background: #111827;
+  color: #ffffff;
+}
+
+.sales-dashboard-light-theme th,
+.sales-dashboard-light-theme .order-log-table th,
+.sales-dashboard-light-theme .analytics-table th {
+  background: #f9fafb !important;
+  color: #374151 !important;
+  border-bottom: 2px solid #e5e7eb !important;
+}
+
+.sales-dashboard-light-theme td,
+.sales-dashboard-light-theme .order-log-table td,
+.sales-dashboard-light-theme .analytics-table td {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.sales-dashboard-light-theme tr:hover td {
+  background: #f3f4f6 !important;
+}
+
+/* Reset inner panel backgrounds for light theme */
+.sales-dashboard-light-theme .analytics-grid-one-col {
+  background: #ffffff !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+  border: 1px solid #e5e7eb !important;
+}

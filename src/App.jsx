@@ -3,7 +3,7 @@ import {
   ShoppingCart, User, Shield, Compass, Bike, Store, Trash2, Package,
   FileText, Check, X, ArrowRight, Download, Search, Tag,
   MessageCircle, AlertCircle, AlertTriangle, Plus, MapPin, DollarSign, Activity, Eye, EyeOff, Phone, RefreshCw, Menu,
-  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell
+  Mail, Settings, ChevronDown, Users, Info, Code, Edit, Bell, Clock
 } from 'lucide-react';
 import './App.css';
 import { auth, db, rtdb, googleProvider, firebaseConfig } from './firebase';
@@ -444,6 +444,50 @@ const AdminImageCell = ({ productId, initialValue }) => {
   );
 };
 
+// --- Order SLA Timer Component ---
+const OrderSLATimer = ({ startTime }) => {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!startTime) return;
+    const updateElapsed = () => {
+      setElapsed(Math.floor((Date.now() - new Date(startTime).getTime()) / 1000));
+    };
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  if (!startTime) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-muted)' }}>
+        <Clock size={14} /> N/A
+      </div>
+    );
+  }
+
+  const mins = Math.floor(elapsed / 60);
+  const secs = elapsed % 60;
+  const formatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+  let colorClass = 'sla-safe';
+  let color = '#4ade80'; // Green
+
+  if (elapsed >= 90 && elapsed < 180) {
+    color = '#f97316'; // Orange
+    colorClass = 'sla-warning';
+  } else if (elapsed >= 180) {
+    color = 'var(--color-danger)'; // Red
+    colorClass = 'sla-critical';
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: 'bold', color }} className={colorClass}>
+      <Clock size={14} /> {formatted}
+    </div>
+  );
+};
+
 function App() {
   // --- STATE DECLARATIONS ---
   const [activeTab, setActiveTab] = useState('customer'); // customer | admin | delivery | merchant
@@ -634,6 +678,14 @@ function App() {
   const [merchantEditProductCategory, setMerchantEditProductCategory] = useState('General Store');
   const [merchantEditProductIsVeg, setMerchantEditProductIsVeg] = useState(true);
   const [merchantEditProductImage, setMerchantEditProductImage] = useState('');
+
+  // Merchant Profile Settings
+  const [isMerchantSettingsOpen, setIsMerchantSettingsOpen] = useState(false);
+  const [merchantSettingsStoreName, setMerchantSettingsStoreName] = useState('');
+  const [merchantSettingsPhone, setMerchantSettingsPhone] = useState('');
+  const [merchantSettingsAddress, setMerchantSettingsAddress] = useState('');
+  const [merchantSettingsLat, setMerchantSettingsLat] = useState('');
+  const [merchantSettingsLng, setMerchantSettingsLng] = useState('');
 
   // Admin catalog additions state variables
   const [adminNewProductName, setAdminNewProductName] = useState('');
@@ -900,14 +952,14 @@ function App() {
 
     // Aggregate from orders
     orders.forEach(o => {
-      const mName = o.merchantName || o.storeName || (o.items && o.items[0]?.store);
+      const mName = o.merchantName || o.storeName || (o.items && o.items?.[0]?.store);
       if (!mName) return;
 
       if (!merchantStatsMap[mName]) {
         merchantStatsMap[mName] = {
           id: o.merchantId || `merch_unknown`,
           name: mName,
-          category: (o.items && o.items[0]?.category) || 'N/A',
+          category: (o.items && o.items?.[0]?.category) || 'N/A',
           phone: 'N/A',
           completedCount: 0,
           activeCount: 0,
@@ -1195,6 +1247,29 @@ function App() {
   };
 
   // --- SIDE EFFECTS (useEffect) ---
+
+  // SLA Auto-Timeout Watchdog
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      orders.forEach(async (o) => {
+        // Merchant Timeout
+        if (['PLACED', 'PENDING'].includes(o.status) && o.createdAt) {
+          const elapsed = (now - new Date(o.createdAt).getTime()) / 1000;
+          if (elapsed >= 300 && o.firestoreId) {
+            try {
+              await updateDoc(doc(db, "orders", o.firestoreId), {
+                status: 'CANCELLED_AUTO',
+                cancelReason: 'Merchant failed to accept order within 5 minutes SLA.',
+                completedAt: new Date().toISOString()
+              });
+            } catch (err) { console.error("SLA Watchdog Error:", err); }
+          }
+        }
+      });
+    }, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [orders]);
 
   // Automatically trigger auto-detect location on load
   useEffect(() => {
@@ -1649,7 +1724,7 @@ function App() {
         where("status", "==", "READY_FOR_PICKUP")
       ));
     } else if (userRole === 'customer' && user) {
-      q = query(ordersRef, where("customerId", "==", user.uid), orderBy("createdAt", "desc"));
+      q = query(ordersRef, where("customerId", "==", user.uid));
     } else {
       // Guest / Anonymous user
       if (guestOrderIds && guestOrderIds.length > 0) {
@@ -2364,7 +2439,8 @@ function App() {
           showToast(`🔔 New order received for your shop! Order ID: ${latestOrder.id}`);
 
           setTimeout(() => {
-            alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nAmount: ${formatINR(latestOrder.totalAmount)}\nPlease accept the order to prepare it.`);
+            const notifEarning = latestOrder.netMerchantEarning || (latestOrder.totalAmount - (latestOrder.deliveryCharge || 0));
+            alert(`🔔 New Order Received!\nOrder ID: ${latestOrder.id}\nCustomer: ${latestOrder.customerName}\nAmount: ${formatINR(notifEarning)}\nPlease accept the order to prepare it.`);
           }, 100);
         }
       }
@@ -2799,7 +2875,7 @@ function App() {
       (o.id && o.id.toLowerCase().includes(queryLower)) ||
       (o.customerName && o.customerName.toLowerCase().includes(queryLower)) ||
       (o.customerPhone && o.customerPhone.toLowerCase().includes(queryLower)) ||
-      (o.items && o.items[0]?.store && o.items[0].store.toLowerCase().includes(queryLower)) ||
+      (o.items && o.items?.[0]?.store && o.items?.[0].store.toLowerCase().includes(queryLower)) ||
       (o.merchantName && o.merchantName.toLowerCase().includes(queryLower)) ||
       (o.deliveryPartnerName && o.deliveryPartnerName.toLowerCase().includes(queryLower))
     );
@@ -3165,8 +3241,8 @@ function App() {
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
 
-    if (cartSubtotal < 149) {
-      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹149 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
+    if (cartSubtotal < 0) {
+      setWarningModal({ isOpen: true, title: "Minimum Order Amount", message: `Minimum order value of ₹0 is required to place an order. Your current total is ₹${cartSubtotal}. Please add more items.`, iconType: "cart" });
       return;
     }
 
@@ -3299,13 +3375,14 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    const nowIso = new Date().toISOString();
     // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED', acceptedAt: nowIso } : o));
 
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { status: 'ACCEPTED' });
+        await updateDoc(orderRef, { status: 'ACCEPTED', acceptedAt: nowIso });
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
       }
@@ -3381,11 +3458,12 @@ function App() {
       status: rider ? 'ASSIGNED' : 'ACCEPTED',
       merchantId: shop.id,
       merchantName: shop.storeName || shop.name,
-      routingOption: 'Option 2 (Managed)', // default to managed for manual re-routing
+      routingOption: 'Option 2 (Managed)',
       deliveryPartnerId: rider ? rider.id : null,
       deliveryPartnerName: rider ? rider.name : '',
       riderId: rider ? rider.id : null,
-      reroutedAt: new Date().toISOString()
+      reroutedAt: new Date().toISOString(),
+      ...(rider ? {} : { acceptedAt: new Date().toISOString() })
     };
 
     // Update local state first
@@ -3478,13 +3556,14 @@ function App() {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    const nowIso = new Date().toISOString();
     // Update local state first
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED' } : o));
+    setOrders(orders.map(o => o.id === orderId ? { ...o, status: 'ACCEPTED', acceptedAt: nowIso } : o));
 
     if (order.firestoreId) {
       try {
         const orderRef = doc(db, "orders", order.firestoreId);
-        await updateDoc(orderRef, { status: 'ACCEPTED' });
+        await updateDoc(orderRef, { status: 'ACCEPTED', acceptedAt: nowIso });
         showToast(`Order ${orderId} Accepted!`);
       } catch (err) {
         console.error("Error updating order status in Firestore:", err);
@@ -3960,6 +4039,28 @@ function App() {
     } catch (err) {
       console.error("Error submitting rider onboarding request:", err);
       alert(`Failed to submit request: ${err.message}`);
+    }
+  };
+
+  // Merchant: Update Settings
+  const handleUpdateMerchantSettings = async (e) => {
+    e.preventDefault();
+    if (!loggedInMerchantShop) return;
+    try {
+      const docRef = doc(db, "merchants", loggedInMerchantShop.firestoreId);
+      await updateDoc(docRef, {
+        storeName: merchantSettingsStoreName.trim(),
+        name: merchantSettingsStoreName.trim(), // keeping name in sync if used elsewhere
+        phone: merchantSettingsPhone.trim(),
+        address: merchantSettingsAddress.trim(),
+        lat: merchantSettingsLat !== '' ? parseFloat(merchantSettingsLat) : null,
+        lng: merchantSettingsLng !== '' ? parseFloat(merchantSettingsLng) : null,
+      });
+      alert("Shop settings updated successfully!");
+      setIsMerchantSettingsOpen(false);
+    } catch (error) {
+      console.error("Error updating settings:", error);
+      alert("Failed to update settings: " + error.message);
     }
   };
 
@@ -4832,7 +4933,7 @@ function App() {
     const headers = ['Order ID,Customer,Email,Location,Shop Name,Items,Total Amount,Payment,Status,OTP,Date\n'];
     const rows = orders.map(o => {
       const itemsList = o.items.map(i => `${i.name}${i.specs ? ` (${i.specs})` : ''} (${i.quantity})`).join(' | ');
-      return `"${o.id}","${o.customerName}","${o.customerEmail}","${o.customerLocation}","${o.items[0]?.store || 'Store'}","${itemsList}",${o.totalAmount},"${o.paymentMethod}","${o.status}","${o.otp}","${o.createdAt}"\n`;
+      return `"${o.id}","${o.customerName}","${o.customerEmail}","${o.customerLocation}","${o.items?.[0]?.store || 'Store'}","${itemsList}",${o.totalAmount},"${o.paymentMethod}","${o.status}","${o.otp}","${o.createdAt}"\n`;
     });
 
     const blob = new Blob([headers.concat(rows).join('')], { type: 'text/csv;charset=utf-8;' });
@@ -5546,7 +5647,7 @@ function App() {
     const customerCoords = parseCoords(customerAddress);
 
     const cartSubtotal = cart.reduce((acc, i) => acc + (getProductFinalPrice(i) * i.quantity), 0);
-    const isUnderMinimumOrder = cart.length > 0 && cartSubtotal < 149;
+    const isUnderMinimumOrder = cart.length > 0 && cartSubtotal < 0;
 
     let dist = null;
     let isOutOfRange = false;
@@ -5703,7 +5804,7 @@ function App() {
               }}>
                 <AlertCircle size={18} style={{ flexShrink: 0 }} />
                 <span>
-                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹149 is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
+                  <strong>Minimum Order Required:</strong> A minimum cart value of ₹0 is required to place an order. Your current total is ₹{cartSubtotal}. Please add more items.
                 </span>
               </div>
             )}
@@ -5953,7 +6054,7 @@ function App() {
                   return;
                 }
                 if (isUnderMinimumOrder) {
-                  showToast(`⚠️ Minimum cart value of ₹149 is required to place an order.`);
+                  showToast(`⚠️ Minimum cart value of ₹0 is required to place an order.`);
                   return;
                 }
                 handlePlaceOrder();
@@ -5969,7 +6070,7 @@ function App() {
               {isOutOfRange ? (
                 <>Out of Delivery Range ({dist?.toFixed(1)} km) <X size={18} /></>
               ) : isUnderMinimumOrder ? (
-                <>Min. Order ₹149 Required (Current: ₹{cartSubtotal}) <X size={18} /></>
+                <>Min. Order ₹0 Required (Current: ₹{cartSubtotal}) <X size={18} /></>
               ) : isDistanceLoading ? (
                 <>Calculating Route... <RefreshCw size={18} className="spin" /></>
               ) : (
@@ -7497,7 +7598,7 @@ function App() {
               ) : (() => {
                 const analytics = getAnalytics();
                 return (
-                  <div className="analytics-dashboard-container fade-in">
+                  <div className="analytics-dashboard-container fade-in sales-dashboard-light-theme">
                     <div className="panel-header">
                       <h2>Sales & Operations Dashboard</h2>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -7828,38 +7929,18 @@ function App() {
                                   <h3 style={{ margin: 0 }}>📋 Detailed Orders Performance Log</h3>
 
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                                    <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.05)', borderRadius: '20px', padding: '2px', border: '1px solid var(--color-border)' }}>
+                                    <div className="sales-toggle-wrapper">
                                       <button
                                         type="button"
                                         onClick={() => setSalesLogFilter('today')}
-                                        style={{
-                                          background: salesLogFilter === 'today' ? 'var(--color-primary)' : 'transparent',
-                                          border: 'none',
-                                          color: '#fff',
-                                          padding: '6px 16px',
-                                          borderRadius: '20px',
-                                          fontSize: '12px',
-                                          fontWeight: 'bold',
-                                          cursor: 'pointer',
-                                          transition: 'all 0.2s'
-                                        }}
+                                        className={`sales-toggle-btn ${salesLogFilter === 'today' ? 'active' : ''}`}
                                       >
                                         Today
                                       </button>
                                       <button
                                         type="button"
                                         onClick={() => setSalesLogFilter('all')}
-                                        style={{
-                                          background: salesLogFilter === 'all' ? 'var(--color-primary)' : 'transparent',
-                                          border: 'none',
-                                          color: '#fff',
-                                          padding: '6px 16px',
-                                          borderRadius: '20px',
-                                          fontSize: '12px',
-                                          fontWeight: 'bold',
-                                          cursor: 'pointer',
-                                          transition: 'all 0.2s'
-                                        }}
+                                        className={`sales-toggle-btn ${salesLogFilter === 'all' ? 'active' : ''}`}
                                       >
                                         All Time
                                       </button>
@@ -8074,7 +8155,10 @@ function App() {
                               className="clickable-row"
                             >
                               <td>
-                                <strong>{o.id}</strong>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <strong>{o.id}</strong>
+                                  {(o.status === 'PLACED' || o.status === 'PENDING') && <OrderSLATimer startTime={o.createdAt} />}
+                                </div>
                                 <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                   <span className={`badge ${routing === 'Option 1 (Shop-Direct)' ? 'badge-primary' : 'badge-info'}`} style={{ fontSize: '9px', padding: '2px 6px', width: 'fit-content' }}>
                                     {routing}
@@ -8100,8 +8184,8 @@ function App() {
                                 <div className="sub-text">{o.customerPhone}</div>
                               </td>
                               <td>
-                                <div>{o.items[0]?.store}</div>
-                                <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category}</div>
+                                <div>{o.items?.[0]?.store}</div>
+                                <div className="sub-text">Category: {products.find(p => p.id === o.items?.[0]?.id)?.category}</div>
                               </td>
                               <td>{formatINR(o.totalAmount)}</td>
                               <td>
@@ -8130,7 +8214,7 @@ function App() {
                                       const rPhone = assignedRider?.phone || '919251054064';
                                       return (
                                         <a
-                                          href={`https://wa.me/${rPhone}?text=${encodeURIComponent(`Hi ${o.deliveryPartnerName}, you have been assigned Order ${o.id} from ${o.items[0]?.store || 'Store'} on PixiGo. Please open your Rider Console to start delivery: http://localhost:5173/delivery`)}`}
+                                          href={`https://wa.me/${rPhone}?text=${encodeURIComponent(`Hi ${o.deliveryPartnerName}, you have been assigned Order ${o.id} from ${o.items?.[0]?.store || 'Store'} on PixiGo. Please open your Rider Console to start delivery: http://localhost:5173/delivery`)}`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="whatsapp-link-btn"
@@ -8244,7 +8328,7 @@ function App() {
                                   </button>
                                 )}
                                 <a
-                                  href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
+                                  href={`https://wa.me/${o.customerPhone}?text=Hi%20${o.customerName},%20your%20PixiGo%20Order%20from%20${o.items?.[0]?.store}%20is%20assigned.%20Your%20delivery%20OTP%20is%20${o.otp}.`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="whatsapp-link-btn"
@@ -8328,8 +8412,8 @@ function App() {
                                   <div className="sub-text">{o.customerPhone}</div>
                                 </td>
                                 <td>
-                                  <div>{o.items[0]?.store}</div>
-                                  <div className="sub-text">Category: {products.find(p => p.id === o.items[0]?.id)?.category || 'N/A'}</div>
+                                  <div>{o.items?.[0]?.store}</div>
+                                  <div className="sub-text">Category: {products.find(p => p.id === o.items?.[0]?.id)?.category || 'N/A'}</div>
                                 </td>
                                 <td>{formatINR(o.totalAmount)}</td>
                                 <td>
@@ -10960,8 +11044,10 @@ function App() {
                         <div key={o.id} className="job-card glass-panel" style={{ marginBottom: '20px', border: '1px solid var(--color-primary-glow-strong)' }}>
                           <div className="job-header">
                             <div style={{ textAlign: 'left' }}>
-                              <h3 style={{ margin: 0 }}>Order {o.id}</h3>
-                              <span className="badge badge-success" style={{ marginTop: '4px', display: 'inline-block' }}>READY FOR PICKUP</span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <h3 style={{ margin: 0 }}>Order {o.id}</h3>
+                              </div>
+                              <span className="badge badge-success" style={{ display: 'inline-block' }}>READY FOR PICKUP</span>
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Your Earning</div>
@@ -10974,7 +11060,7 @@ function App() {
                           <div className="job-info-grid">
                             <div className="job-meta-box" style={{ textAlign: 'left' }}>
                               <h4>🏪 Merchant Pickup</h4>
-                              <p><strong>Shop:</strong> {o.merchantName || o.items[0]?.store}</p>
+                              <p><strong>Shop:</strong> {o.merchantName || o.items?.[0]?.store}</p>
                               <p><strong>Location:</strong> {shopAddress}</p>
                               <a
                                 href={shopMapsUrl}
@@ -11060,7 +11146,7 @@ function App() {
                             {/* Pickup Details: Merchant Name, Shop Name, Contact Number, Address */}
                             <div className="job-meta-box" style={{ textAlign: 'left' }}>
                               <h4>🏪 Pickup Details</h4>
-                              <p><strong>Shop Name:</strong> {o.merchantName || o.items[0]?.store}</p>
+                              <p><strong>Shop Name:</strong> {o.merchantName || o.items?.[0]?.store}</p>
                               <p><strong>Merchant Name:</strong> {matchedShop?.name || matchedShop?.storeName || 'Store Owner'}</p>
                               <p><strong>Contact Number:</strong> {matchedShop?.phone || '9251054064'}</p>
                               <p><strong>Shop Address:</strong> {shopAddress}</p>
@@ -11125,7 +11211,7 @@ function App() {
                                       textAlign: 'center',
                                       fontWeight: '600'
                                     }}>
-                                      ⏳ Kitchen is preparing order...
+                                      ⏳ The order is preparing...
                                     </div>
                                   ) : (
                                     <div style={{
@@ -11235,7 +11321,7 @@ function App() {
                           <div style={{ textAlign: 'left' }}>
                             <h4 style={{ margin: 0, color: 'var(--color-text-main)' }}>Order {o.id}</h4>
                             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                              Store: {o.items[0]?.store} | Customer: {o.customerName}
+                              Store: {o.items?.[0]?.store} | Customer: {o.customerName}
                             </span>
                           </div>
                           <div style={{ textAlign: 'right' }}>
@@ -11412,9 +11498,27 @@ function App() {
 
                 {/* Associated Shop Welcome */}
                 <div style={{ textAlign: 'left', marginBottom: '24px', borderBottom: '1px solid var(--color-border)', paddingBottom: '16px' }}>
-                  <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)' }}>
-                    Welcome, {currentMerchantShopName || 'Merchant Shop'}
-                  </h2>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--color-text-main)', margin: 0 }}>
+                      Welcome, {currentMerchantShopName || 'Merchant Shop'}
+                    </h2>
+                    {loggedInMerchantShop && (
+                      <button
+                        className="neon-btn small-btn"
+                        onClick={() => {
+                          setMerchantSettingsStoreName(loggedInMerchantShop.storeName || loggedInMerchantShop.name || '');
+                          setMerchantSettingsPhone(loggedInMerchantShop.phone || '');
+                          setMerchantSettingsAddress(loggedInMerchantShop.address || '');
+                          setMerchantSettingsLat(loggedInMerchantShop.lat || '');
+                          setMerchantSettingsLng(loggedInMerchantShop.lng || '');
+                          setIsMerchantSettingsOpen(true);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', padding: '6px 12px' }}
+                      >
+                        <Settings size={14} /> Edit Settings
+                      </button>
+                    )}
+                  </div>
                   {(() => {
                     const matchedShop = loggedInMerchantShop || shops.find(s => s.name === currentMerchantShopName || s.storeName === currentMerchantShopName);
                     const activeShopCommission = (matchedShop && matchedShop.commissionPercent !== undefined) ? matchedShop.commissionPercent : commissionPercent;
@@ -11523,7 +11627,10 @@ function App() {
                       {pendingMerchantOrders.map(o => (
                         <div key={o.id} className="job-card glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ textAlign: 'left' }}>
-                            <h4 style={{ margin: 0, color: 'var(--color-text-main)' }}>Order {o.id}</h4>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <h4 style={{ margin: 0, color: 'var(--color-text-main)' }}>Order {o.id}</h4>
+                              <OrderSLATimer startTime={o.createdAt} />
+                            </div>
                             <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
                               Customer: {o.customerName} | Address: {o.customerLocation}
                             </span>
@@ -15199,12 +15306,23 @@ function App() {
                   </div>
                 </div>
               )}
+
+              {selectedOrderDetails.status?.startsWith('CANCELLED') && selectedOrderDetails.cancelReason && (
+                <div style={{ marginTop: '8px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '8px' }}>
+                  <h4 style={{ fontSize: '13px', color: 'var(--color-danger)', fontWeight: 'bold', marginBottom: '4px' }}>
+                    <AlertCircle size={14} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Cancellation Reason
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-text-main)' }}>
+                    {selectedOrderDetails.cancelReason}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="divider" style={{ margin: '16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}></div>
 
             <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN'].includes(selectedOrderDetails.status?.toUpperCase()) && (
+              {!['COMPLETED', 'DELIVERED', 'CANCELLED', 'CANCELLED_BY_STORE', 'CANCELLED_BY_RIDER', 'CANCELLED_BY_ADMIN', 'CANCELLED_AUTO'].includes(selectedOrderDetails.status?.toUpperCase()) && (
                 <button
                   className="neon-btn"
                   onClick={() => handleAdminCancelOrder(selectedOrderDetails.id)}
@@ -15297,7 +15415,7 @@ function App() {
                   <tbody>
                     {(() => {
                       const merchantOrders = orders.filter(o => {
-                        const mName = o.merchantName || o.storeName || (o.items && o.items[0]?.store);
+                        const mName = o.merchantName || o.storeName || (o.items && o.items?.[0]?.store);
                         return mName === selectedAnalyticsMerchant.name;
                       });
 
@@ -15619,6 +15737,103 @@ function App() {
                 <span style={{ fontSize: '11px', fontWeight: '800', letterSpacing: '0.8px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)' }}>Developed & Maintained By ChittorTech</span>
               </a>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merchant Settings Edit Modal */}
+      {isMerchantSettingsOpen && (
+        <div className="modal-backdrop fade-in" style={{ zIndex: 10000 }} onClick={() => setIsMerchantSettingsOpen(false)}>
+          <div className="profile-edit-modal-card glass-panel" style={{ maxWidth: '500px', width: '90%', padding: '24px' }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ color: 'var(--color-text-main)', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings size={20} /> Update Shop Settings
+            </h2>
+            <form onSubmit={handleUpdateMerchantSettings}>
+              <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--color-text-muted)' }}>Store Name</label>
+                <input
+                  type="text"
+                  required
+                  value={merchantSettingsStoreName}
+                  onChange={(e) => setMerchantSettingsStoreName(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
+                />
+              </div>
+              <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--color-text-muted)' }}>Phone Number</label>
+                <input
+                  type="tel"
+                  required
+                  value={merchantSettingsPhone}
+                  onChange={(e) => setMerchantSettingsPhone(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
+                />
+              </div>
+              <div style={{ marginBottom: '16px', textAlign: 'left' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--color-text-muted)' }}>Complete Address</label>
+                <textarea
+                  required
+                  value={merchantSettingsAddress}
+                  onChange={(e) => setMerchantSettingsAddress(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', minHeight: '80px', resize: 'vertical' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '16px', marginBottom: '20px' }}>
+                <div style={{ flex: 1, textAlign: 'left' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--color-text-muted)' }}>Latitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={merchantSettingsLat}
+                    onChange={(e) => setMerchantSettingsLat(e.target.value)}
+                    placeholder="e.g. 24.8887"
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
+                  />
+                </div>
+                <div style={{ flex: 1, textAlign: 'left' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', color: 'var(--color-text-muted)' }}>Longitude</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={merchantSettingsLng}
+                    onChange={(e) => setMerchantSettingsLng(e.target.value)}
+                    placeholder="e.g. 74.6269"
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff' }}
+                  />
+                </div>
+              </div>
+              <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+                <button
+                  type="button"
+                  className="neon-btn small-btn"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                          setMerchantSettingsLat(position.coords.latitude);
+                          setMerchantSettingsLng(position.coords.longitude);
+                        },
+                        (error) => alert("Failed to detect location: " + error.message),
+                        { enableHighAccuracy: true }
+                      );
+                    } else {
+                      alert("Geolocation is not supported by your browser.");
+                    }
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid #3b82f6', color: '#60a5fa' }}
+                >
+                  <MapPin size={16} /> Auto-detect Current Location
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button type="button" className="neon-btn outline" onClick={() => setIsMerchantSettingsOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="neon-btn">
+                  Save Changes
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -135,6 +135,18 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--color-text-muted);
 }
 
+@keyframes timer-flash {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.sla-critical {
+  animation: timer-flash 1s infinite alternate;
+  color: var(--color-danger) !important;
+  font-weight: 800 !important;
+}
+
 /* Custom interactive input elements */
 .custom-input {
   background: rgba(15, 23, 42, 0.03);
