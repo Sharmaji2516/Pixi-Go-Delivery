@@ -6364,26 +6364,7 @@ function App() {
               </form>
             )}
 
-            {portalName === 'Admin Console' && (
-              <>
-                <div className="divider"></div>
-                <button
-                  className="google-auth-btn-premium"
-                  onClick={() => {
-                    setAuthError('');
-                    signInWithPopup(auth, googleProvider)
-                      .then((result) => {
-                        showToast(`Logged in successfully as ${result.user.displayName || result.user.email}!`);
-                      })
-                      .catch((error) => {
-                        setAuthError(getFriendlyAuthError(error.message));
-                      });
-                  }}
-                >
-                  <span className="google-icon-premium">G</span> Sign In with Google
-                </button>
-              </>
-            )}
+
 
             {portalName === 'Delivery Rider' ? (
               <p className="auth-toggle-text-premium">
