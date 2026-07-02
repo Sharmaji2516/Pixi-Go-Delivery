@@ -6735,13 +6735,12 @@ function App() {
 
           <div className="header-logo">
             <div className="logo-text">
-              <div className="logo-brand-name">
-                <span className="brand-logo-highlight">PIXI</span><span className="brand-logo-light">go</span>
+              <div className="logo-brand-name" style={{ display: 'flex', alignItems: 'center' }}>
+                <img src="/Pixigo Text.jpeg" alt="PIXIGO" style={{ height: '68px', objectFit: 'contain', mixBlendMode: 'multiply' }} />
                 {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
                 {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Manager Console</span>}
                 {activeTab === 'merchant' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Merchant Shop Console</span>}
               </div>
-              <p className="tagline">Quick Home Delivery Service</p>
             </div>
           </div>
 
