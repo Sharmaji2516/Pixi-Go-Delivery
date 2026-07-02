@@ -63,6 +63,23 @@
   gap: 12px;
 }
 
+@media (min-width: 769px) {
+  .header-logo {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .header-logo img {
+    height: 75px !important; /* Increase logo size for desktop */
+  }
+  
+  .app-header {
+    position: relative;
+    justify-content: flex-end; /* Push other elements like the cart to the right */
+  }
+}
+
 .header-nav {
   display: flex;
   background: rgba(15, 23, 42, 0.04);
@@ -7351,10 +7368,230 @@
 .sales-dashboard-light-theme tr:hover td {
   background: #f3f4f6 !important;
 }
+  }
+}
+
+@keyframes app-promo-glow-badge {
+  from {
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  }
+  to {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+  }
+}
+
+.footer-chittortech-logo-img:hover {
+  transform: scale(1.06) translateY(-1px);
+  opacity: 1 !important;
+  filter: drop-shadow(0 4px 12px rgba(255, 255, 255, 0.15));
+}
+
+/* Responsive adjustments for Play Store promotion modal on smaller screens */
+@media (max-height: 780px) {
+  .app-promo-card {
+    padding: 20px 16px !important;
+  }
+  .app-promo-badge-glow {
+    margin-bottom: 12px !important;
+    width: 70px !important;
+    height: 70px !important;
+  }
+  .app-promo-ring-pulse {
+    width: 50px !important;
+    height: 50px !important;
+  }
+  .app-promo-logo-img {
+    width: 44px !important;
+    height: 44px !important;
+  }
+  .app-promo-badges {
+    margin-bottom: 12px !important;
+  }
+  .app-promo-title {
+    font-size: 20px !important;
+    margin-bottom: 6px !important;
+  }
+  .app-promo-subtitle {
+    margin-bottom: 10px !important;
+    font-size: 13px !important;
+  }
+  .app-promo-tagline {
+    margin-bottom: 12px !important;
+    font-size: 12.5px !important;
+  }
+  .app-promo-features-grid {
+    margin-bottom: 14px !important;
+    gap: 6px 10px !important;
+  }
+  .app-promo-dev-footer {
+    margin-top: 14px !important;
+    padding-top: 12px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-promo-card {
+    width: 92% !important;
+    padding: 20px 16px !important;
+  }
+  .app-promo-title {
+    font-size: 20px !important;
+  }
+  .app-promo-features-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    max-width: 260px !important;
+  }
+}
+
+/* Make storefront banner background bleed edge-to-edge on mobile screens */
+@media (max-width: 768px) {
+  .custom-brand-banner-wrap {
+    background: linear-gradient(to right, #1F4E3D 50%, #ffffff 50%) !important;
+    margin: 0 -12px 16px -12px !important;
+    padding: 0 !important;
+    width: calc(100% + 24px) !important;
+    max-width: calc(100% + 24px) !important;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  
+  .custom-brand-banner-img {
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    display: block;
+  }
+}
+
+/* --- Sales Dashboard Light Theme Scope --- */
+.sales-dashboard-light-theme {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.sales-dashboard-light-theme h2,
+.sales-dashboard-light-theme h3 {
+  color: #111827 !important;
+}
+
+/* Retain white text for gradients */
+.sales-dashboard-light-theme .analytics-card {
+  color: #ffffff !important;
+}
+
+/* Toggle Buttons */
+.sales-dashboard-light-theme .nav-link {
+  background: #f3f4f6 !important;
+  color: #4b5563 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+.sales-dashboard-light-theme .nav-link.active {
+  background: #111827 !important;
+  color: #ffffff !important;
+  border: 1px solid #111827 !important;
+}
+
+/* Search Box Wrapper */
+.sales-dashboard-light-theme .admin-search-wrapper {
+  background: #ffffff !important;
+  border: 1px solid #d1d5db !important;
+}
+
+.sales-dashboard-light-theme .admin-search-wrapper input {
+  color: #111827 !important;
+}
+
+.sales-dashboard-light-theme .admin-search-wrapper input::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Light Mode Performance Tables */
+.sales-dashboard-light-theme .order-log-table,
+.sales-dashboard-light-theme .analytics-table {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+/* Detailed Orders Log Inner Toggle (Today / All Time) */
+.sales-dashboard-light-theme .sales-toggle-wrapper {
+  display: flex;
+  background: #f3f4f6;
+  border-radius: 20px;
+  padding: 4px;
+  border: 1px solid #e5e7eb;
+}
+
+.sales-dashboard-light-theme .sales-toggle-btn {
+  background: transparent;
+  border: none;
+  color: #4b5563;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sales-dashboard-light-theme .sales-toggle-btn.active {
+  background: #111827;
+  color: #ffffff;
+}
+
+.sales-dashboard-light-theme th,
+.sales-dashboard-light-theme .order-log-table th,
+.sales-dashboard-light-theme .analytics-table th {
+  background: #f9fafb !important;
+  color: #374151 !important;
+  border-bottom: 2px solid #e5e7eb !important;
+}
+
+.sales-dashboard-light-theme td,
+.sales-dashboard-light-theme .order-log-table td,
+.sales-dashboard-light-theme .analytics-table td {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+}
+
+.sales-dashboard-light-theme tr:hover td {
+  background: #f3f4f6 !important;
+}
 
 /* Reset inner panel backgrounds for light theme */
 .sales-dashboard-light-theme .analytics-grid-one-col {
   background: #ffffff !important;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
   border: 1px solid #e5e7eb !important;
+}
+
+.custom-category-title {
+  text-align: center;
+  width: 100%;
+}
+
+@media (min-width: 769px) {
+  .custom-brand-banner-wrap {
+    margin-left: -24px !important;
+    margin-right: -24px !important;
+    width: calc(100% + 48px) !important;
+    max-width: none !important;
+    height: 650px; 
+    display: block;
+    overflow: hidden;
+  }
+  
+  .custom-brand-banner-img {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    object-fit: fill; /* Stretches image to fit completely without cropping */
+    border-radius: 0 !important;
+  }
 }
