@@ -1431,7 +1431,24 @@ function App() {
             }
           });
 
-          // 2. Removed auto-admin creation logic for security reasons
+          // 2. Sync with Admin collection if on admin page AND not already another role
+          if (currentTab === 'admin') {
+            if (existingRole === 'admin' || !existingRole) {
+              const adminDocRef = doc(db, "admins", currentUser.uid);
+              const adminSnap = await getDoc(adminDocRef);
+              if (!adminSnap.exists()) {
+                await setDoc(adminDocRef, {
+                  id: currentUser.uid,
+                  name: localName,
+                  email: localEmail,
+                  role: 'admin',
+                  createdAt: timestamp
+                });
+              }
+            } else {
+              console.warn("User already has another role: cannot sync as Admin", existingRole);
+            }
+          }
 
 
           const adminDocRef = doc(db, "admins", currentUser.uid);
@@ -6347,6 +6364,27 @@ function App() {
               </form>
             )}
 
+            {portalName === 'Admin Console' && (
+              <>
+                <div className="divider"></div>
+                <button
+                  className="google-auth-btn-premium"
+                  onClick={() => {
+                    setAuthError('');
+                    signInWithPopup(auth, googleProvider)
+                      .then((result) => {
+                        showToast(`Logged in successfully as ${result.user.displayName || result.user.email}!`);
+                      })
+                      .catch((error) => {
+                        setAuthError(getFriendlyAuthError(error.message));
+                      });
+                  }}
+                >
+                  <span className="google-icon-premium">G</span> Sign In with Google
+                </button>
+              </>
+            )}
+
             {portalName === 'Delivery Rider' ? (
               <p className="auth-toggle-text-premium">
                 {showSignUpForm ? 'Already registered?' : 'Need a new rider account?'} {' '}
@@ -6364,15 +6402,9 @@ function App() {
             ) : (
               <p className="auth-toggle-text-premium">
                 Need a new panel account? {' '}
-                <a 
-                  href="https://wa.me/917357681538?text=I%20want%20to%20request%20a%20new%20admin%20account" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="toggle-btn-link-premium"
-                  style={{ textDecoration: 'none' }}
-                >
+                <button type="button" className="toggle-btn-link-premium" onClick={() => setAuthError('Request is sent to the administrator. Please contact your Administrator for the Admin Account.')}>
                   Create New Admin Account
-                </a>
+                </button>
               </p>
             )}
 
@@ -6703,12 +6735,13 @@ function App() {
 
           <div className="header-logo">
             <div className="logo-text">
-              <div className="logo-brand-name" style={{ display: 'flex', alignItems: 'center' }}>
-                <img src="/Pixigo Text.jpeg" alt="PIXIGO" style={{ height: '50px', objectFit: 'contain', mixBlendMode: 'multiply' }} />
+              <div className="logo-brand-name">
+                <span className="brand-logo-highlight">PIXI</span><span className="brand-logo-light">go</span>
                 {activeTab === 'delivery' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Rider Console</span>}
                 {activeTab === 'admin' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Manager Console</span>}
                 {activeTab === 'merchant' && <span className="brand-light" style={{ fontSize: '15px', marginLeft: '12px', color: 'var(--color-primary)', fontWeight: 'bold' }}>Merchant Shop Console</span>}
               </div>
+              <p className="tagline">Quick Home Delivery Service</p>
             </div>
           </div>
 
@@ -10836,10 +10869,7 @@ function App() {
           const isPanUploaded = currentRider?.panUploaded || false;
           const isAllUploaded = isAadhaarUploaded && isDlUploaded && isRcUploaded && isPanUploaded;
 
-          const activeJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED') && o.status !== 'REJECTED' && o.status !== 'REJECTED_BY_RIDER');
-          
-          const rejectedRiderJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && (o.status?.startsWith('CANCELLED') || o.status === 'REJECTED' || o.status === 'REJECTED_BY_RIDER'));
-
+          const activeJobs = orders.filter(o => o.deliveryPartnerId === user?.uid && o.status !== 'COMPLETED' && !o.status?.startsWith('CANCELLED'));
           const completedJobs = orders.filter(o => {
             if (o.deliveryPartnerId !== user?.uid || o.status !== 'COMPLETED') return false;
             const dateVal = o.completedAt || o.createdAt;
@@ -11286,41 +11316,6 @@ function App() {
                     </div>
                   </div>
                 )}
-                {/* Rider Rejected / Cancelled Orders */}
-                {rejectedRiderJobs.length > 0 && (
-                  <div className="rider-orders-section" style={{ marginTop: '32px' }}>
-                    <h2 style={{ color: 'var(--color-danger)' }}>Cancelled / Rejected Runs ({rejectedRiderJobs.length})</h2>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {rejectedRiderJobs.map(o => (
-                        <div key={o.id} className="glass-panel" style={{
-                          padding: '14px 18px',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          borderRadius: '12px',
-                          border: '1px solid rgba(239, 68, 68, 0.2)',
-                          opacity: 0.8
-                        }}>
-                          <div style={{ textAlign: 'left' }}>
-                            <h4 style={{ margin: 0, color: 'var(--color-text-main)', textDecoration: 'line-through' }}>Order {o.id}</h4>
-                            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                              Store: {o.items?.[0]?.store} | Customer: {o.customerName}
-                            </span>
-                            <div style={{ marginTop: '4px' }}>
-                              <span className="badge badge-danger" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)', fontSize: '10px' }}>{o.status}</span>
-                            </div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>Expected Payout</div>
-                            <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--color-text-main)', textDecoration: 'line-through' }}>
-                              {formatINR(o.riderPayout !== undefined ? o.riderPayout : o.deliveryCharge || 0)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 {/* Contact Support Section */}
                 <div className="support-section glass-panel border-glow" style={{
@@ -11409,21 +11404,7 @@ function App() {
             const dateVal = o.completedAt || o.createdAt;
             if (!dateVal) return false;
             try {
-              const isToday = new Date(dateVal).toDateString() === new Date().toDateString();
-              const isRejected = o.status === 'REJECTED' || o.status === 'MERCHANT_REJECTED' || o.status?.startsWith('CANCELLED');
-              return isToday && !isRejected;
-            } catch (err) {
-              return false;
-            }
-          });
-
-          const rejectedMerchantOrders = merchantOrders.filter(o => {
-            const dateVal = o.completedAt || o.createdAt;
-            if (!dateVal) return false;
-            try {
-              const isToday = new Date(dateVal).toDateString() === new Date().toDateString();
-              const isRejected = o.status === 'REJECTED' || o.status === 'MERCHANT_REJECTED' || o.status?.startsWith('CANCELLED');
-              return isToday && isRejected;
+              return new Date(dateVal).toDateString() === new Date().toDateString();
             } catch (err) {
               return false;
             }
@@ -11713,35 +11694,6 @@ function App() {
                     </div>
                   )}
                 </div>
-
-                {/* Rejected / Cancelled Orders */}
-                {rejectedMerchantOrders.length > 0 && (
-                  <div className="merchant-orders-section" style={{ marginBottom: '32px' }}>
-                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', color: 'var(--color-danger)', textAlign: 'left' }}>Rejected / Cancelled Orders ({rejectedMerchantOrders.length})</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      {rejectedMerchantOrders.map(o => (
-                        <div key={o.id} className="job-card glass-panel" style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', opacity: 0.8, border: '1px solid rgba(239, 68, 68, 0.2)' }}>
-                          <div style={{ textAlign: 'left' }}>
-                            <h4 style={{ margin: 0, color: 'var(--color-text-main)', textDecoration: 'line-through' }}>Order {o.id}</h4>
-                            <span style={{ fontSize: '12px', color: 'var(--color-text-muted)' }}>
-                              Customer: {o.customerName}
-                            </span>
-                            <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--color-text-main)' }}>
-                              <strong>Items:</strong> {o.items?.map(i => `${i.name}${i.specs ? ` (${i.specs})` : ''} (${i.quantity})`).join(', ')}
-                            </div>
-                            <div style={{ marginTop: '4px' }}>
-                              <span className="badge badge-danger" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-danger)' }}>{o.status}</span>
-                            </div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>Amount</div>
-                            <div style={{ fontWeight: 'bold', color: 'var(--color-text-main)', fontSize: '16px', textDecoration: 'line-through' }}>{formatINR(o.totalAmount)}</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
 
                 <div className="divider" style={{ margin: '32px 0' }}></div>
 
